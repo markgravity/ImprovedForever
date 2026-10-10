@@ -1,7 +1,7 @@
 -- The Vibration tab, a tab of settings (IF.SettingsPage, SettingsPage.lua):
--- under Settings, vibration on / off and its strength; then the events by
--- category (Combat; Casting: spell, gathering, crafting; Wheel; Progress),
--- each a dropdown of patterns (a kind of cast: of ready-made sets for its
+-- under Settings, vibration on / off and its strength; under Events, the
+-- events in sections (Combat; Casting: spell, gathering, crafting; Wheel;
+-- Progress), each a dropdown of patterns (a kind of cast: of ready-made sets for its
 -- four moments: casting, interrupted, cancelled, pushed back). Choosing
 -- one sets it and plays it; Triangle plays it again.
 local IF = ImprovedForever
@@ -10,8 +10,10 @@ local menu = IF.Menu
 local V = IF.Vibe
 local Item, OnOff = IF.SettingsItem, IF.SettingsOnOff
 
-local GROUPS = { { key = "settings", label = "Settings" } }
-for _, g in ipairs(V.GROUPS) do GROUPS[#GROUPS + 1] = g end
+local GROUPS = { { key = "settings", label = "Settings" }, { key = "events", label = "Events" } }
+-- (each event's section: its group's name)
+local SECTION = {}
+for _, g in ipairs(V.GROUPS) do SECTION[g.key] = g.label end
 
 local function Enabled()
     if V.Settings().enabled then return true end
@@ -19,12 +21,16 @@ local function Enabled()
     return false
 end
 
--- An event's patterns: Off, then each (the actions' own patterns only come
--- with a cast's "Match the action")
-local function Patterns()
+-- An event's patterns: Off, its Match the... (Shooting: the weapon's),
+-- then each (the actions' own patterns only come with a cast's "Match the
+-- action"; the weapons' with Shooting)
+local function Patterns(event)
     local entries = { { action = "off", name = "Off" } }
+    if event.auto then entries[#entries + 1] = { action = "auto", name = event.auto } end
     for _, p in ipairs(V.PATTERNS) do
-        if not p.action then entries[#entries + 1] = { action = p.key, name = p.label } end
+        if not p.action or (p.weapon and event.auto) then
+            entries[#entries + 1] = { action = p.key, name = p.label }
+        end
     end
     return entries
 end
@@ -53,12 +59,20 @@ local ITEMS = {
     },
 }
 
-for _, rail in ipairs(V.RAIL) do
+-- (in the sections' order)
+local RAIL = {}
+for _, g in ipairs(V.GROUPS) do
+    for _, rail in ipairs(V.RAIL) do
+        if rail.group == g.key then RAIL[#RAIL + 1] = rail end
+    end
+end
+
+for _, rail in ipairs(RAIL) do
     if rail.castKind then
         -- A kind of cast: one of the ready-made sets
         local kind = rail.castKind
         ITEMS[#ITEMS + 1] = {
-            key = rail.key, group = rail.group, label = rail.label, tip = rail.tip,
+            key = rail.key, group = "events", section = SECTION[rail.group], label = rail.label, tip = rail.tip,
             value = function() return V.CastPreset(kind) end,
             text = function()
                 local preset = V.Preset(V.CastPreset(kind))
@@ -104,18 +118,25 @@ for _, rail in ipairs(V.RAIL) do
         -- An event: its pattern
         local event = rail.subs[1]
         ITEMS[#ITEMS + 1] = {
-            key = rail.key, group = rail.group, label = rail.label, tip = event.tip,
-            value = function() return V.EventPattern(event.key) or "off" end,
+            key = rail.key, group = "events", section = SECTION[rail.group], label = rail.label, tip = event.tip,
+            value = function() return V.EventChoice(event.key) end,
             text = function()
                 local pattern = V.Pattern(V.EventPattern(event.key))
-                return pattern and pattern.label or "|cffff7a5cOff|r"
+                if not pattern then return "|cffff7a5cOff|r" end
+                if V.EventChoice(event.key) == "auto" then
+                    return event.auto .. "|n|cffb9ab8cNow: " .. pattern.label .. "|r"
+                end
+                return pattern.label
             end,
-            options = Patterns,
+            options = function() return Patterns(event) end,
             choose = function(action)
                 V.SetEventPattern(event.key, action)
-                if action ~= "off" and V.Settings().enabled then V.Play(action) end
-                local pattern = V.Pattern(action)
-                menu.Toast(event.label .. ": " .. (pattern and pattern.label or "Off"))
+                local key = V.EventPattern(event.key)
+                if key and V.Settings().enabled then V.Play(key) end
+                local pattern = V.Pattern(key)
+                local name = action == "auto" and event.auto .. (pattern and " (" .. pattern.label .. ")" or "")
+                    or (pattern and pattern.label or "Off")
+                menu.Toast(event.label .. ": " .. name)
             end,
             -- (a state that lasts plays on; a critical hit: a run of them)
             try = function()
@@ -129,6 +150,10 @@ for _, rail in ipairs(V.RAIL) do
                     else
                         menu.Toast(event.label .. ": stopped")
                     end
+                elseif event.key == "shot" then
+                    V.SimulateShots(event.key, function(n)
+                        menu.Toast(event.label .. ": " .. V.Pattern(pattern).label .. (n > 1 and " x" .. n or ""))
+                    end)
                 elseif event.combo then
                     V.SimulateCombo(event.key, function(n)
                         menu.Toast(event.label .. (n > 1 and " x" .. n or ""))

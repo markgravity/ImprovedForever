@@ -93,6 +93,17 @@ V.PATTERNS = {
         steps = { { 0.08, 0.08, 0.3 }, { 0.15, 0.15, 0.3 }, { 0.25, 0.25, 0.3 }, { 0.12, 0.12, 0.2 } } },
     { key = "ritual", label = "Ritual", action = true,     -- summoning: deep slow beats
         steps = { { 0.6, 0.3, 0.15 }, { 0, 0, 0.35 }, { 0.35, 0.6, 0.15 }, { 0, 0, 0.35 } } },
+    -- Shots, by ranged weapon (Shooting's "Match the weapon")
+    { key = "string", label = "Bowstring", action = true, weapon = true, -- bow: the string's snap, buzzing out
+        steps = { { 0.2, 0.8, 0.1 }, { 0.1, 0.35, 0.1 }, { 0, 0.12, 0.1 } } },
+    { key = "latch", label = "Latch", action = true, weapon = true,      -- crossbow: the latch's clack, the limbs' thud
+        steps = { { 0.7, 0.5, 0.1 }, { 0, 0, 0.1 }, { 0.35, 0.2, 0.1 } } },
+    { key = "recoil", label = "Recoil", action = true, weapon = true,    -- gun: a hard kick, settling
+        steps = { { 1, 1, 0.12 }, { 0.45, 0.25, 0.1 }, { 0.15, 0.05, 0.12 } } },
+    { key = "zap", label = "Zap", action = true, weapon = true,          -- wand: a crackling spark
+        steps = { { 0.25, 0.5, 0.1 }, { 0.5, 0.2, 0.1 }, { 0.1, 0.3, 0.1 } } },
+    { key = "toss", label = "Toss", action = true, weapon = true,        -- thrown: the arm's swing, the let-go
+        steps = { { 0.15, 0.15, 0.1 }, { 0.5, 0.4, 0.12 }, { 0.08, 0.05, 0.1 } } },
 }
 -- Each pattern's icon, drawn in the radial menu's style (tools/make_vibe_icons.py)
 local VIBE_ICONS = "Interface\\AddOns\\ImprovedForever\\textures\\ic_vibe_"
@@ -112,12 +123,20 @@ V.GROUPS = {
     { key = "progress", label = "Progress" },
 }
 V.EVENTS = {
-    { key = "crit", group = "combat", label = "Critical hit", icon = EVENT_ICONS .. "crit", on = true, combo = true,
-        pattern = "tick", tip = "Your damage or healing lands a critical hit (in WoW Forever: your target"
-            .. " takes one, or a critical heal lands on you or it)." },
+    { key = "crit", group = "combat", label = "Critical hit: melee", icon = EVENT_ICONS .. "crit", on = true,
+        combo = true, pattern = "tick", tip = "Your melee lands a critical hit: a swing or a melee ability (in"
+            .. " WoW Forever: your target takes a critical physical hit while you aren't shooting)." },
+    { key = "critRanged", group = "combat", label = "Critical hit: ranged", icon = EVENT_ICONS .. "crit", on = false,
+        combo = true, pattern = "tick", tip = "A shot or a spell of yours lands a critical hit, or a heal"
+            .. " a critical heal (in WoW Forever: your target takes one while you shoot, a spell's, or a"
+            .. " critical heal lands on you or it). Off by default: Shooting and spell casts have their own." },
     { key = "critted", group = "combat", label = "Critical hit taken", icon = EVENT_ICONS .. "critted", on = true,
         combo = true,
         pattern = "double", tip = "An enemy lands a critical hit on you." },
+    { key = "shot", group = "combat", label = "Shooting", icon = EVENT_ICONS .. "shot", on = true,
+        pattern = "auto", auto = "Match the weapon", gap = 0.15, tip = "Each ranged shot you fire: Auto Shot,"
+            .. " Shoot (a wand, a bow, a gun), Throw, a hunter's instant shots. Match the weapon: a bow's"
+            .. " string, a crossbow's latch, a gun's recoil, a wand's zap, a throw." },
     { key = "lowHp", group = "combat", label = "Low health", icon = EVENT_ICONS .. "lowhp", on = true,
         pattern = "heart", loop = true, tip = "While your health is at 35% or less (the game's red"
             .. " low-health warning), its pattern plays over and over." },
@@ -208,7 +227,9 @@ V.CAST_PHASES = { "cast", "interrupted", "cancelled", "pushback" }
 V.CAST_KINDS = {
     { key = "spell", label = "Spell", icon = EVENT_ICONS .. "cast", preset = "auto", fallback = "sweep",
         tip = "Casting or channelling a spell or an ability. Match the action: fire, frost, healing,"
-            .. " Hearthstone... each its own; any other spell, Sweep." },
+            .. " Hearthstone... each its own feel. A cast builds up until the spell is released, then"
+            .. " fades as it flies off (Fireball). A channel hums and swells with each missile or tick"
+            .. " (Arcane Missiles, Drain Life)." },
     { key = "gather", label = "Gathering", icon = EVENT_ICONS .. "gather", preset = "auto",
         tip = "Herbalism, mining, skinning, fishing, opening a chest or a lock." },
     { key = "craft", label = "Crafting", icon = EVENT_ICONS .. "craft", preset = "auto",
@@ -250,7 +271,7 @@ function V.Settings()
             cfg = { on = e.on, pattern = e.pattern }
             s.events[e.key] = cfg
         end
-        if not PATTERN[cfg.pattern] then cfg.pattern = e.pattern end
+        if not (PATTERN[cfg.pattern] or (e.auto and cfg.pattern == "auto")) then cfg.pattern = e.pattern end
     end
     return s
 end
@@ -277,6 +298,26 @@ end
 V.castKind = "spell"
 V.castAction = nil
 
+-- Match the weapon: the ranged weapon equipped's pattern (a bow's when
+-- there is none to tell)
+local WEAPON_PATTERNS = { [2] = "string", [18] = "latch", [3] = "recoil", [19] = "zap", [16] = "toss" }
+
+local function WeaponPattern()
+    local id = GetInventoryItemID and GetInventoryItemID("player", INVSLOT_RANGED or 18)
+    local info = C_Item and C_Item.GetItemInfoInstant or GetItemInfoInstant
+    if id and info then
+        local classID, subclassID = select(6, info(id))
+        if classID == 2 and WEAPON_PATTERNS[subclassID] then return WEAPON_PATTERNS[subclassID] end
+    end
+    return "string"
+end
+
+-- An event's choice: a pattern, "auto" (its Match the...) or "off"
+function V.EventChoice(eventKey)
+    local cfg = V.Settings().events[eventKey]
+    return cfg and cfg.on and cfg.pattern or "off"
+end
+
 -- An event's pattern, or nil when it is off (a cast's moments: from the
 -- set of the kind of cast going on)
 function V.EventPattern(eventKey)
@@ -288,8 +329,10 @@ function V.EventPattern(eventKey)
         end
         return preset and preset[PHASE[eventKey]] or nil
     end
-    local cfg = V.Settings().events[eventKey]
-    return cfg and cfg.on and cfg.pattern or nil
+    local choice = V.EventChoice(eventKey)
+    if choice == "off" then return nil end
+    if choice == "auto" then return WeaponPattern() end
+    return choice
 end
 
 -- A pattern for an event ("off": none)
@@ -362,11 +405,51 @@ local function later(delay, fn)
     end
 end
 
+-- A loop picked up again (after a pattern played over it); set below
+local Resume
+
+-- A shaped vibration: fn(now) gives the low and high motors (0 to 1, before
+-- the set strength) at that moment, nil once done. Sent every 0.05 s, so it
+-- rises and falls smoothly. once: a one-off; when done, the loop under it
+-- (V.looping) goes on.
+local shaper = CreateFrame("Frame")
+shaper:Hide()
+local shapeFn, shapeOnce, shapeSent = nil, false, 0
+
+local function StopShape()
+    shapeFn = nil
+    shaper:Hide()
+end
+
 function V.Stop()
+    StopShape()
     for _, t in ipairs(timers) do t:Cancel() end
     wipe(timers)
     if C_GamePad and C_GamePad.StopVibration then C_GamePad.StopVibration() end
 end
+
+local function StartShape(fn, once)
+    V.Stop()
+    shapeFn, shapeOnce, shapeSent = fn, once, 0
+    shaper:Show()
+end
+
+shaper:SetScript("OnUpdate", function()
+    if not shapeFn then return shaper:Hide() end
+    local now = GetTime()
+    if now - shapeSent < 0.05 then return end
+    shapeSent = now
+    local low, high = shapeFn(now)
+    if not low then
+        local resume = shapeOnce and V.looping
+        StopShape()
+        C_GamePad.StopVibration()
+        if resume then Resume(resume) end
+        return
+    end
+    local gain = V.Settings().intensity
+    motors(math.min(1, low * gain), math.min(1, high * gain))
+end)
 
 -- A hold under way (a "Hold to" bar): a rumble on the left grip rising with
 -- its progress (0 to 1), both grips at full strength once full; the caller sends it every
@@ -435,9 +518,134 @@ function V.Play(key, loop, shape)
         later(t, function()
             C_GamePad.StopVibration()
             -- Over a looping event (a cast still going): back to its loop
-            if V.looping then V.Play(V.looping.pattern, true) end
+            if V.looping then Resume(V.looping) end
         end)
     end
+end
+
+-- A loop: its shape (a spell's, below) or its pattern, over and over
+Resume = function(loop)
+    if loop.shape then
+        StartShape(loop.shape)
+    else
+        V.Play(loop.pattern, true)
+    end
+end
+
+---------------------------------------------------------------------------
+-- A spell's own feel (a spell cast's "Match the action"). A cast builds up
+-- with its progress until the spell is released, then fades out as it flies
+-- off (Fireball). A channel hums, and swells and fades again with each
+-- missile or tick (Arcane Missiles, Drain Life). The spell's family pattern
+-- (fire, frost...) ripples through it.
+---------------------------------------------------------------------------
+-- The cast in progress: its timing ({ start, finish: GetTime seconds;
+-- channel; interval: seconds between ticks; texture: family pattern }),
+-- whether it has a shape (shaped), and how it ended
+local cast = {}
+
+-- A spell's name, in the game's language
+local function SpellName(id)
+    if C_Spell and C_Spell.GetSpellName then return C_Spell.GetSpellName(id) end
+    return GetSpellInfo and (GetSpellInfo(id))
+end
+
+local BUILD_FROM, BUILD_TO = 0.1, 0.8                 -- a cast's start, its release
+local RELEASE_PEAK, RELEASE_HOLD, RELEASE_FADE = 1, 0.1, 0.6
+local HUM = 0.1                                       -- a channel between ticks
+local SWELL_PEAK, SWELL_RISE, SWELL_FALL = 0.75, 0.15, 0.5
+local releasedAt = -math.huge
+
+-- A pattern's motors at t seconds into it (looped), each a share of its
+-- strongest step
+local function Texture(key, t)
+    local p = PATTERN[key]
+    if not p then return 1, 1 end
+    if not p.length then
+        local length, top = 0, 0
+        for _, step in ipairs(p.steps) do
+            length = length + step[3]
+            top = math.max(top, step[1], step[2])
+        end
+        p.length, p.top = length, top > 0 and top or 1
+    end
+    t = t % p.length
+    for _, step in ipairs(p.steps) do
+        if t < step[3] then return step[1] / p.top, step[2] / p.top end
+        t = t - step[3]
+    end
+    return 0, 0
+end
+
+-- The family's ripple over a strength: never below 70% of it
+local function Rippled(env, t)
+    local tl, th = Texture(cast.timing.texture, t)
+    return env * (0.7 + 0.3 * tl), env * (0.7 + 0.3 * th)
+end
+
+-- What is left of the last release d seconds on (0 once faded)
+local function ReleaseEnv(d)
+    if d < 0 or d >= RELEASE_HOLD + RELEASE_FADE then return 0 end
+    if d < RELEASE_HOLD then return RELEASE_PEAK end
+    return RELEASE_PEAK * (1 - (d - RELEASE_HOLD) / RELEASE_FADE) ^ 1.5
+end
+
+-- A cast: slow at first, steeper toward the release (a cast that runs
+-- past its end holds at the top); a release just before still fading
+local function BuildUp(now)
+    local t = cast.timing
+    local span = t.finish - t.start
+    local p = span > 0 and math.max(0, math.min(1, (now - t.start) / span)) or 1
+    local low, high = Rippled(BUILD_FROM + (BUILD_TO - BUILD_FROM) * p ^ 1.5, now - t.start)
+    local tail = ReleaseEnv(now - releasedAt)
+    return math.max(low, tail), math.max(high, tail)
+end
+
+-- A channel: a hum, and a swell with each tick (the first one interval in),
+-- leaning left and right by turns, as missiles fly from either hand
+local function Missiles(now)
+    local t = cast.timing
+    local since = now - t.start
+    local ticks = math.floor(since / t.interval)
+    local low, high = Rippled(HUM, since)
+    if ticks >= 1 then
+        local d = since - ticks * t.interval
+        local swell = d < SWELL_RISE and d / SWELL_RISE or math.max(0, 1 - (d - SWELL_RISE) / SWELL_FALL)
+        swell = SWELL_PEAK * swell
+        local left, right = 1, 0.7
+        if ticks % 2 == 0 then left, right = 0.7, 1 end
+        low, high = low + swell * left, high + swell * right
+    end
+    local tail = ReleaseEnv(now - releasedAt)
+    return math.max(low, tail), math.max(high, tail)
+end
+
+local function Release(now)
+    local d = now - releasedAt
+    if d >= RELEASE_HOLD + RELEASE_FADE then return nil end
+    local env = ReleaseEnv(d)
+    return env, env
+end
+
+-- The cast in progress' shape, or nil: its own pattern loops instead (a
+-- set other than Match the action, gathering, crafting, a channel whose
+-- ticks we don't know, a cast whose timing is hidden)
+local function CastShape()
+    local t = cast.timing
+    if V.castKind ~= "spell" or not t then return nil end
+    local preset = PRESET[V.CastPreset("spell")]
+    if not (preset and preset.auto) then return nil end
+    if t.channel and not t.interval then return nil end
+    t.texture = V.EventPattern("cast")
+    return t.channel and Missiles or BuildUp
+end
+
+-- The spell is released (a cast done, a channel run to its end): a strong
+-- rumble, fading out as it flies off
+function V.Release()
+    if not (C_GamePad and C_GamePad.SetVibration and IF.db and V.Settings().enabled) then return end
+    releasedAt = GetTime()
+    StartShape(Release, true)
 end
 
 -- Combo events (critical hits, given or taken): one soon after another
@@ -496,9 +704,10 @@ function V.Fire(eventKey)
     if not (s.enabled and pattern) then return end
     if EVENT[eventKey].loop then
         V.EndLoop(eventKey)
-        V.looping = { key = eventKey, pattern = pattern }
+        V.looping = { key = eventKey, pattern = pattern, shape = eventKey == "cast" and CastShape() or nil }
+        if eventKey == "cast" then cast.shaped = V.looping.shape ~= nil end
         loops[#loops + 1] = V.looping
-        V.Play(pattern, true)
+        Resume(V.looping)
         return
     end
     local now = GetTime()
@@ -518,7 +727,7 @@ function V.EndLoop(eventKey)
     if V.looping and V.looping.key == eventKey then
         V.looping = loops[#loops]
         if V.looping then
-            V.Play(V.looping.pattern, true)
+            Resume(V.looping)
         else
             V.Stop()
         end
@@ -527,7 +736,8 @@ end
 
 -- Try it on Spell cast: a cast played out with its four patterns, as a
 -- real one would (casting, interrupted; casting, cancelled; casting, pushed
--- back, casting on to its end). onStep(label) as each part starts.
+-- back, casting on to its end; a spell's own feel: a cast released, a
+-- channel's missiles). onStep(label) as each part starts.
 local sim = {}
 
 function V.StopSimulation()
@@ -575,6 +785,21 @@ function V.SimulateCombo(eventKey, onStep)
     sim[#sim + 1] = C_Timer.NewTimer(t, function() wipe(sim) end)
 end
 
+-- Try it on Shooting: three shots, as an Auto Shot or a wand would fire
+-- them (quicker, to feel them sooner). onStep(n) as shot n goes.
+function V.SimulateShots(eventKey, onStep)
+    V.StopSimulation()
+    V.ResetLast(eventKey)
+    for n = 1, 3 do
+        local shot = n
+        sim[#sim + 1] = C_Timer.NewTimer((n - 1) * 0.8, function()
+            onStep(shot)
+            V.Fire(eventKey)
+        end)
+    end
+    sim[#sim + 1] = C_Timer.NewTimer(2.4, function() wipe(sim) end)
+end
+
 function V.SimulateCast(onStep, kind, action)
     V.StopSimulation()
     V.castKind = kind or "spell"
@@ -591,8 +816,11 @@ function V.SimulateCast(onStep, kind, action)
     local function play(key, loop)
         local pattern = V.EventPattern(key)
         if not pattern then return end
-        if loop then V.looping = { key = key, pattern = pattern } end
-        V.Play(pattern, loop)
+        if loop then
+            V.looping = { key = key, pattern = pattern, shape = key == "cast" and CastShape() or nil }
+            return Resume(V.looping)
+        end
+        V.Play(pattern)
     end
     local function casting()
         onStep(EVENT.cast.label)
@@ -602,6 +830,47 @@ function V.SimulateCast(onStep, kind, action)
         V.EndLoop("cast")
         onStep(EVENT[key].label)
         play(key)
+    end
+    local function finish()
+        V.EndLoop("cast")
+        wipe(sim)
+        V.castKind, V.castAction = "spell", nil
+        cast.timing = nil
+        onStep(nil)
+    end
+    -- A spell, Match the action: a Fireball pushed back, then released;
+    -- Arcane Missiles, three of them; a Frostbolt interrupted
+    local preset = PRESET[V.CastPreset(V.castKind)]
+    if V.castKind == "spell" and preset and preset.auto then
+        local name
+        local function begin(id, actionKey, seconds, interval)
+            local now = GetTime()
+            V.castAction = actionKey
+            cast.timing = { start = now, finish = now + seconds, channel = interval ~= nil, interval = interval }
+            cast.ended = false
+            name = SpellName(id) or EVENT.cast.label
+            onStep(name)
+            play("cast", true)
+        end
+        local function released()
+            V.EndLoop("cast")
+            cast.ended = true
+            onStep(name .. ": released")
+            V.Release()
+        end
+        begin(133, "fire", 2.5)
+        at(1.2, function()
+            cast.timing.finish = cast.timing.finish + 0.5
+            onStep(EVENT.pushback.label)
+            play("pushback")
+        end)
+        at(3, released)
+        at(4, function() begin(5143, "arcaneSpells", 3, 1) end)
+        at(7, released)
+        at(8, function() begin(116, "frostSpells", 2.5) end)
+        at(9.4, function() ended("interrupted") end)
+        at(10.4, finish)
+        return
     end
     -- Each cast 2 s, then how it ends; a second's pause before the next
     casting()
@@ -614,12 +883,7 @@ function V.SimulateCast(onStep, kind, action)
         onStep(EVENT.pushback.label)
         play("pushback")
     end)
-    at(10, function()
-        V.EndLoop("cast")
-        wipe(sim)
-        V.castKind, V.castAction = "spell", nil
-        onStep(nil)
-    end)
+    at(10, finish)
 end
 
 ---------------------------------------------------------------------------
@@ -636,6 +900,22 @@ local CRIT_ARG = {
     SPELL_HEAL = 18, SPELL_PERIODIC_HEAL = 18,
 }
 local HEALS = { SPELL_HEAL = true, SPELL_PERIODIC_HEAL = true }
+local PHYSICAL = 1
+
+-- Shooting now or just now (Auto Shot or a wand repeating; a shot in the
+-- last RANGED_WINDOW seconds, its arrow maybe still flying): a physical
+-- crit is the shot's, not a swing's
+local RANGED_WINDOW = 1.5
+local ranged = { auto = false, shot = -math.huge }
+
+local function Shooting()
+    return ranged.auto or GetTime() - ranged.shot < RANGED_WINDOW
+end
+
+-- Your crit: melee, or ranged (a shot, a spell, a heal)
+local function YourCrit(isRanged)
+    V.Fire(isRanged and "critRanged" or "crit")
+end
 
 -- WoW Forever takes the combat log away from addons (no
 -- CombatLogGetCurrentEventInfo), so there the crits come from UNIT_COMBAT,
@@ -653,22 +933,32 @@ local function CombatLog()
     local player = UnitGUID("player")
     if secret(info[4]) or secret(info[8]) then return end
     if info[4] == player then
-        V.Fire("crit")
+        local school = sub ~= "SWING_DAMAGE" and sub ~= "RANGE_DAMAGE" and info[14] or nil
+        if secret(school) then school = nil end
+        YourCrit(sub == "RANGE_DAMAGE" or HEALS[sub]
+            or (sub ~= "SWING_DAMAGE" and ((school and school ~= PHYSICAL) or Shooting())))
     elseif info[8] == player and not HEALS[sub] then
         V.Fire("critted")
     end
 end
 
-local function UnitCombat(unit, action, flag)
+-- (a wound's school, unless hidden: physical is a swing's or a shot's,
+-- any other a spell's)
+local function UnitCombat(unit, action, flag, _, school)
     if secret(action) or secret(flag) or flag ~= "CRITICAL" then return end
+    if secret(school) then school = nil end
     if unit == "player" then
         if action == "WOUND" then
             V.Fire("critted")
         elseif action == "HEAL" then
-            V.Fire("crit")
+            YourCrit(true)
         end
-    elseif unit == "target" and (action == "WOUND" or action == "HEAL") then
-        V.Fire("crit")
+    elseif unit == "target" then
+        if action == "HEAL" then
+            YourCrit(true)
+        elseif action == "WOUND" then
+            YourCrit((school and school ~= PHYSICAL) or Shooting())
+        end
     end
 end
 
@@ -679,8 +969,6 @@ local hasCombatLog = type(CombatLogGetCurrentEventInfo) == "function"
 -- channel's natural end has none either: its end time tells them apart).
 -- Each cast's end counts once (a channel stopping says so twice, in
 -- either order: a stop with no interrupter waits a moment for one).
-local cast = {}
-
 local function interrupter(by)
     return secret(by) or (by ~= nil and by ~= "")
 end
@@ -694,15 +982,32 @@ local GATHER_IDS = {
     fishing = { 7620, 7731, 7732, 18248 },
     opening = { 3365, 6247, 6477, 6478, 21651, 1804 },
 }
-local function SpellName(id)
-    if C_Spell and C_Spell.GetSpellName then return C_Spell.GetSpellName(id) end
-    return GetSpellInfo and (GetSpellInfo(id))
-end
-
-local gatherByName, craftByName, spellByName
+-- Channels that fire a missile or tick every so many seconds (a swell
+-- each): Arcane Missiles, Mind Flay, Drain Life, Drain Mana, Drain Soul,
+-- Health Funnel, Blizzard, Hurricane, Tranquility, Rain of Fire, Hellfire,
+-- Volley
+local CHANNEL_TICKS = {
+    [5143] = 1, [15407] = 1, [689] = 1, [5138] = 1, [1120] = 3, [755] = 1,
+    [10] = 1, [16914] = 1, [740] = 2, [5740] = 2, [1949] = 1, [1510] = 1,
+}
+-- Shots (Shooting): Auto Shot, Shoot (a wand; a bow, gun or crossbow),
+-- Throw, and a hunter's instant shots and stings
+local SHOT_IDS = {
+    75, 5019, 3018, 2480, 7918, 7919, 2764,
+    3044, 2643, 5116, 1978, 3043, 3034, 19386, 19503, 20736, 19801,
+}
+local gatherByName, craftByName, spellByName, ticksByName, shotByName
 local function Names()
     if gatherByName then return end
-    gatherByName, craftByName = {}, {}
+    gatherByName, craftByName, ticksByName, shotByName = {}, {}, {}, {}
+    for _, id in ipairs(SHOT_IDS) do
+        local name = SpellName(id)
+        if name then shotByName[name] = true end
+    end
+    for id, interval in pairs(CHANNEL_TICKS) do
+        local name = SpellName(id)
+        if name then ticksByName[name] = interval end
+    end
     for action, ids in pairs(GATHER_IDS) do
         for _, id in ipairs(ids) do
             local name = SpellName(id)
@@ -752,14 +1057,47 @@ local function CastKind(spellID)
     return "spell", nil
 end
 
-local function CastStarted(event, _, _, spellID)
+-- A ranged shot (every rank shares its name)
+local function IsShot(spellID)
+    if not spellID or secret(spellID) then return false end
+    Names()
+    local name = SpellName(spellID)
+    return name ~= nil and not secret(name) and shotByName[name] == true
+end
+
+-- A channel's seconds between ticks (nil: not one we know)
+local function ChannelTicks(spellID)
+    if not spellID or secret(spellID) then return nil end
+    local name = SpellName(spellID)
+    return name and not secret(name) and ticksByName[name] or nil
+end
+
+-- The cast or channel in progress' start and end (GetTime seconds), unless
+-- hidden
+local function CastTimes(channel)
+    local info = channel and UnitChannelInfo or UnitCastingInfo
+    if not info then return nil end
+    local startMs, endMs = select(4, info("player"))
+    if not (startMs and endMs) or secret(startMs) or secret(endMs) then return nil end
+    return startMs / 1000, endMs / 1000
+end
+
+-- An event about this cast (another one's attempt failing doesn't count;
+-- hidden or missing IDs: it does)
+local function SameCast(guid)
+    if guid == nil or cast.guid == nil or secret(guid) or secret(cast.guid) then return true end
+    return guid == cast.guid
+end
+
+local function CastStarted(event, _, guid, spellID)
     V.castKind, V.castAction = CastKind(spellID)
-    cast.ended = false
-    cast.channelEnd = nil
-    if event == "UNIT_SPELLCAST_CHANNEL_START" and UnitChannelInfo then
-        local endMs = select(5, UnitChannelInfo("player"))
-        if endMs and not secret(endMs) then cast.channelEnd = endMs / 1000 end
-    end
+    cast.ended, cast.shaped = false, false
+    cast.guid = guid
+    local channel = event == "UNIT_SPELLCAST_CHANNEL_START"
+    local start, finish = CastTimes(channel)
+    cast.channelEnd = channel and finish or nil
+    cast.timing = start and { start = start, finish = finish, channel = channel,
+        interval = channel and ChannelTicks(spellID) or nil } or nil
     V.Fire("cast")
 end
 
@@ -768,6 +1106,14 @@ local function CastEnded(how)
     if cast.ended then return end
     cast.ended = true
     V.Fire(how)
+end
+
+-- Done as it should: the spell flies off (with its own feel only)
+local function CastReleased()
+    V.EndLoop("cast")
+    if cast.ended then return end
+    cast.ended = true
+    if cast.shaped then V.Release() end
 end
 
 local CAST_HANDLERS = {
@@ -779,32 +1125,52 @@ local CAST_HANDLERS = {
     UNIT_SPELLCAST_CHANNEL_STOP = function(_, _, _, _, by)
         if interrupter(by) then return CastEnded("interrupted") end
         V.EndLoop("cast")
-        if cast.channelEnd and GetTime() < cast.channelEnd - 0.25 then
+        if not cast.channelEnd then return end
+        if GetTime() < cast.channelEnd - 0.25 then
             C_Timer.After(0.1, function()
                 if not cast.ended then CastEnded("cancelled") end
             end)
+        else
+            -- Run to its end: the last missile flies off
+            CastReleased()
         end
     end,
-    -- A cast's end; how it ended comes with UNIT_SPELLCAST_INTERRUPTED
+    -- A cast's end; how it ended comes with UNIT_SPELLCAST_INTERRUPTED, or
+    -- UNIT_SPELLCAST_SUCCEEDED (either order)
     UNIT_SPELLCAST_STOP = function() V.EndLoop("cast") end,
-    UNIT_SPELLCAST_FAILED = function() V.EndLoop("cast") end,
+    UNIT_SPELLCAST_FAILED = function(_, _, guid)
+        if SameCast(guid) then V.EndLoop("cast") end
+    end,
+    -- (a channel's start says so too: not its end)
+    UNIT_SPELLCAST_SUCCEEDED = function(_, _, guid, spellID)
+        if IsShot(spellID) then
+            ranged.shot = GetTime()
+            return V.Fire("shot")
+        end
+        if cast.timing and not cast.timing.channel and SameCast(guid) then CastReleased() end
+    end,
     UNIT_SPELLCAST_DELAYED = function()
-        if not cast.ended then V.Fire("pushback") end
+        if cast.ended then return end
+        local start, finish = CastTimes(false)
+        if start and cast.timing then cast.timing.start, cast.timing.finish = start, finish end
+        V.Fire("pushback")
     end,
     UNIT_SPELLCAST_CHANNEL_UPDATE = function()
         if cast.ended then return end
-        local endMs = UnitChannelInfo and select(5, UnitChannelInfo("player"))
-        if endMs and not secret(endMs) then
-            local newEnd = endMs / 1000
+        local _, newEnd = CastTimes(true)
+        if newEnd then
             -- Shortened by a hit (not lengthened)
             if cast.channelEnd and newEnd < cast.channelEnd - 0.05 then V.Fire("pushback") end
             cast.channelEnd = newEnd
+            if cast.timing then cast.timing.finish = newEnd end
         end
     end,
 }
 
 local events = CreateFrame("Frame")
 events:RegisterEvent("PLAYER_LEVEL_UP")
+events:RegisterEvent("START_AUTOREPEAT_SPELL")
+events:RegisterEvent("STOP_AUTOREPEAT_SPELL")
 for event in pairs(CAST_HANDLERS) do events:RegisterUnitEvent(event, "player") end
 if hasCombatLog then
     events:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED")
@@ -815,6 +1181,10 @@ events:SetScript("OnEvent", function(_, event, ...)
     if not IF.db then return end
     if event == "PLAYER_LEVEL_UP" then
         V.Fire("levelUp")
+    elseif event == "START_AUTOREPEAT_SPELL" or event == "STOP_AUTOREPEAT_SPELL" then
+        -- (stopped: its last shot may still be flying)
+        ranged.auto = event == "START_AUTOREPEAT_SPELL"
+        ranged.shot = GetTime()
     elseif CAST_HANDLERS[event] then
         CAST_HANDLERS[event](event, ...)
     elseif event == "UNIT_COMBAT" then

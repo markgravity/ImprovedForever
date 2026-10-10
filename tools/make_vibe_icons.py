@@ -453,8 +453,70 @@ def spells():
     render(path("ic_vibe_ritual"), [(ring, RED), (st, GOLD)])
 
 
+def weapons():
+    """Shots, one per ranged weapon (Shooting's Match the weapon)"""
+    # Bowstring (bow): a bow just loosed, its string still buzzing
+    bow = icon.mask(); d = icon.draw(bow)
+    icon.arc(d, 30, 64, 56, -64, 64, 10)
+    st = icon.mask(); d = icon.draw(st)
+    icon.stroke(d, [(54 + (4 if i % 2 else -4) if 0 < i < 12 else 54, 14 + i * 100 / 12) for i in range(13)], 3)
+    hum = icon.mask(); d = icon.draw(hum)
+    waves(d, 92, 64, 2, 16, 14, 6, 40)
+    render(path("ic_vibe_string"), [(st, GREY), (bow, LEATHER), (hum, GOLD)])
+
+    # Latch (crossbow): a stock, its limbs across, a bolt on it
+    stock = icon.mask(); d = icon.draw(stock)
+    icon.stroke(d, [(18, 96), (92, 50)], 12)
+    limbs = icon.mask(); d = icon.draw(limbs)
+    icon.arc(d, 80, 58, 40, 150, 300, 9)
+    bolt = icon.mask(); d = icon.draw(bolt)
+    icon.stroke(d, [(52, 74), (110, 38)], 5)
+    icon.polygon(d, [(104, 30), (122, 28), (114, 46)])
+    render(path("ic_vibe_latch"), [(stock, LEATHER), (limbs, STEEL), (bolt, GOLD)])
+
+    # Recoil (gun): a blunderbuss, a muzzle flash
+    barrel = icon.mask(); d = icon.draw(barrel)
+    icon.polygon(d, [(30, 52), (94, 52), (100, 44), (100, 70), (94, 64), (30, 64)])
+    grip = icon.mask(); d = icon.draw(grip)
+    icon.polygon(d, [(12, 54), (34, 50), (40, 64), (30, 98), (12, 92)])
+    flash = icon.mask(); d = icon.draw(flash)
+    icon.star(d, 112, 57, 16, 6, 6, turn=0)
+    render(path("ic_vibe_recoil"), [(grip, LEATHER), (barrel, STEEL), (flash, RED)])
+
+    # Zap (wand): a wand, a spark at its tip
+    wand = icon.mask(); d = icon.draw(wand)
+    icon.stroke(d, [(18, 110), (76, 52)], 10)
+    spark = icon.mask(); d = icon.draw(spark)
+    icon.star(d, 90, 38, 28, 9, 4, turn=-90)
+    render(path("ic_vibe_zap"), [(wand, LEATHER), (spark, BLUE)])
+
+    # Toss (thrown): a throwing knife, spinning
+    blade = icon.mask(); d = icon.draw(blade)
+    icon.polygon(d, [(64, 14), (76, 58), (64, 70), (52, 58)])
+    hilt = icon.mask(); d = icon.draw(hilt)
+    icon.stroke(d, [(44, 72), (84, 72)], 7)
+    icon.stroke(d, [(64, 74), (64, 100)], 8)
+    spin = icon.mask(); d = icon.draw(spin)
+    icon.arc(d, 64, 64, 54, 200, 300, 7)
+    icon.arc(d, 64, 64, 54, 20, 120, 7)
+    render(path("ic_vibe_toss"), [(spin, GOLD), (blade, STEEL), (hilt, LEATHER)])
+
+    # Shooting (the event): a target, a shot streaking into it
+    ring = icon.mask(); d = icon.draw(ring)
+    icon.arc(d, 74, 64, 44, 0, 360, 8)
+    icon.arc(d, 74, 64, 24, 0, 360, 7)
+    core = icon.mask(); d = icon.draw(core)
+    icon.circle(d, 74, 64, 9)
+    streak = icon.mask(); d = icon.draw(streak)
+    icon.stroke(d, [(8, 64), (58, 64)], 7)
+    icon.stroke(d, [(14, 46), (44, 52)], 4)
+    icon.stroke(d, [(14, 82), (44, 76)], 4)
+    render(path("ic_event_shot"), [(ring, STEEL), (core, RED), (streak, GOLD)])
+
+
 if __name__ == "__main__":
     patterns()
     actions()
     spells()
+    weapons()
     events()

@@ -20,6 +20,7 @@ local SIDE_W = 200
 local ROW_H, ROW_GAP = 50, 4          -- a row's least height (it grows with its description)
 local LINE_TOP, ROW_PAD = 29, 10     -- the description's top in a row, the room under it
 local CONTROL_W = 280
+local HEAD_H = 30                     -- a section's title over its fields
 local DROP_ROWS, DROP_ROW_H = 12, 20
 
 
@@ -29,9 +30,10 @@ local function Resolve(v)
 end
 
 ---------------------------------------------------------------------------
--- The fields. Each item = { key, group (its category), label, tip,
--- note (a short line under its name), disabled, hidden, try (Triangle: feel
--- it) } and one way to be changed:
+-- The fields. Each item = { key, group (its category), section (a title
+-- over it and the fields after it with the same one), label, tip, note (a
+-- short line under its name), disabled, hidden, try (Triangle: feel it) }
+-- and one way to be changed:
 --   a toggle:   IF.SettingsOnOff(get, set, label)
 --   a dropdown: value() (the chosen action), text() (its name), options() ->
 --               { { action, name } or { header } }, choose(action);
@@ -522,6 +524,22 @@ function IF.SettingsPage(tab, GROUPS, ITEMS, hooks)
         return r
     end
 
+    -- A section's title: gold, a rule running on to the right
+    function G:Head(i)
+        local f = self.frame
+        f.heads = f.heads or {}
+        if f.heads[i] then return f.heads[i] end
+        local hd = K.NewFrame("Frame", nil, f.list)
+        hd.text = K.Text(hd, 14, KC.title)
+        hd.text:SetPoint("BOTTOMLEFT", 4, 6)
+        hd.rule = K.Solid(hd, KC.line1, 1, "ARTWORK")
+        hd.rule:SetHeight(1)
+        hd.rule:SetPoint("LEFT", hd.text, "RIGHT", 10, 0)
+        hd.rule:SetPoint("RIGHT", hd, "RIGHT", -4, 0)
+        f.heads[i] = hd
+        return hd
+    end
+
     function G:SetGroup(i)
         self.group = (i - 1) % #GROUPS + 1
         self.zone = "fields"
@@ -792,51 +810,80 @@ function IF.SettingsPage(tab, GROUPS, ITEMS, hooks)
         f.status:SetText(group.label .. (group.note and ("  ·  " .. Resolve(group.note)) or "")
             .. "  ·  " .. #fields .. (#fields == 1 and " setting" or " settings"))
 
-        -- The fields, each as tall as its description, as many as fit from
-        -- the top one; scrolled (by rows) to keep the focused one in view
+        -- The fields, each as tall as its description, under their
+        -- sections' titles; as many lines as fit from the top one, scrolled
+        -- (by lines) to keep the focused field, and its title when it is
+        -- its section's first, in view
         local h = f.list:GetHeight()
         if not h or h <= 0 then h = 360 end
         local w = f.list:GetWidth()
         if not w or w <= 0 then w = 760 end
+        local lines, at, section = {}, {}, nil
+        for i, it in ipairs(fields) do
+            if it.section and it.section ~= section then lines[#lines + 1] = { head = it.section } end
+            section = it.section
+            lines[#lines + 1] = { slot = i }
+            at[i] = #lines
+        end
         local heights = {}
-        for i, it in ipairs(fields) do heights[i] = self:Height(it, w) end
+        for i, line in ipairs(lines) do
+            heights[i] = line.head and HEAD_H or self:Height(fields[line.slot], w)
+        end
         local function Span(from, to)
             local total = 0
             for i = from, to do total = total + heights[i] + (i > from and ROW_GAP or 0) end
             return total
         end
+        local want = at[index] or 1
+        local first = (lines[want - 1] and lines[want - 1].head) and want - 1 or want
         self.top = self.top or {}
-        local top = math.max(1, math.min(self.top[self.group] or 1, index))
-        while top < index and Span(top, index) > h do top = top + 1 end
+        local top = math.max(1, math.min(self.top[self.group] or 1, first))
+        while top < want and Span(top, want) > h do top = top + 1 end
         -- (pulled back up while the rows under the last still leave room)
-        while top > 1 and Span(top - 1, #fields) <= h do top = top - 1 end
+        while top > 1 and Span(top - 1, #lines) <= h do top = top - 1 end
         self.top[self.group] = top
-        local y, shown = 0, 0
-        for slot = top, #fields do
-            if y + heights[slot] > h and slot > top then break end
-            shown = shown + 1
-            local r = self:Row(shown)
-            local it = fields[slot]
-            r:ClearAllPoints()
-            r:SetPoint("TOPLEFT", f.list, "TOPLEFT", 0, -y)
-            r:SetPoint("RIGHT", f.list, "RIGHT", 0, 0)
-            r:SetHeight(heights[slot])
-            r:Show()
-            r.slot = slot
-            local on = slot == index
-            local disabled = Resolve(it.disabled)
-            r.name:SetText(it.label)
-            r.name:SetTextColor(unpack(disabled and KC.disabled or (on and KC.focusText or KC.cream)))
-            r.line:SetText(self:Line(it))
-            r:SetControl(it, Kind(it), on and self.zone ~= "dropdown", on and self.zone == "dropdown")
-            r.focus:Light(on, self.zone ~= "fields")
-            y = y + heights[slot] + ROW_GAP
+        local y, shown, heads, drawn = 0, 0, 0, 0
+        for n = top, #lines do
+            if y + heights[n] > h and n > top then break end
+            drawn = drawn + 1
+            local line = lines[n]
+            if line.head then
+                heads = heads + 1
+                local hd = self:Head(heads)
+                hd:ClearAllPoints()
+                hd:SetPoint("TOPLEFT", f.list, "TOPLEFT", 0, -y)
+                hd:SetPoint("RIGHT", f.list, "RIGHT", 0, 0)
+                hd:SetHeight(heights[n])
+                hd.text:SetText(line.head)
+                hd:Show()
+                y = y + heights[n] + ROW_GAP
+            else
+                local slot = line.slot
+                shown = shown + 1
+                local r = self:Row(shown)
+                local it = fields[slot]
+                r:ClearAllPoints()
+                r:SetPoint("TOPLEFT", f.list, "TOPLEFT", 0, -y)
+                r:SetPoint("RIGHT", f.list, "RIGHT", 0, 0)
+                r:SetHeight(heights[n])
+                r:Show()
+                r.slot = slot
+                local on = slot == index
+                local disabled = Resolve(it.disabled)
+                r.name:SetText(it.label)
+                r.name:SetTextColor(unpack(disabled and KC.disabled or (on and KC.focusText or KC.cream)))
+                r.line:SetText(self:Line(it))
+                r:SetControl(it, Kind(it), on and self.zone ~= "dropdown", on and self.zone == "dropdown")
+                r.focus:Light(on, self.zone ~= "fields")
+                y = y + heights[n] + ROW_GAP
+            end
         end
         for i = shown + 1, #f.rows do f.rows[i]:Hide() end
+        for i = heads + 1, #(f.heads or {}) do f.heads[i]:Hide() end
         f.moreUp:SetShown(top > 1)
-        f.moreDown:SetShown(top + shown - 1 < #fields)
+        f.moreDown:SetShown(top + drawn - 1 < #lines)
         local placed = 0
-        for i = top, index do placed = placed + heights[i] + ROW_GAP end
+        for i = top, want do placed = placed + heights[i] + ROW_GAP end
 
         -- The dropdown, under its field's control
         local open = self.zone == "dropdown" and item and item.options
