@@ -21,14 +21,17 @@ local function Enabled()
     return false
 end
 
--- An event's patterns: Off, its Match the... (Shooting: the weapon's),
--- then each (the actions' own patterns only come with a cast's "Match the
--- action"; the weapons' with Shooting)
+-- An event's patterns: Off, its Match the... (Shooting: the weapon's;
+-- Abilities: the move's), its family's patterns, then the general ones (the
+-- actions' own only come with a cast's "Match the action")
 local function Patterns(event)
     local entries = { { action = "off", name = "Off" } }
     if event.auto then entries[#entries + 1] = { action = "auto", name = event.auto } end
     for _, p in ipairs(V.PATTERNS) do
-        if not p.action or (p.weapon and event.auto) then
+        if event.family and p[event.family] then entries[#entries + 1] = { action = p.key, name = p.label } end
+    end
+    for _, p in ipairs(V.PATTERNS) do
+        if not p.action then
             entries[#entries + 1] = { action = p.key, name = p.label }
         end
     end
@@ -121,17 +124,20 @@ for _, rail in ipairs(RAIL) do
             key = rail.key, group = "events", section = SECTION[rail.group], label = rail.label, tip = event.tip,
             value = function() return V.EventChoice(event.key) end,
             text = function()
+                local choice = V.EventChoice(event.key)
+                if choice == "auto" and event.family == "move" then
+                    return event.auto .. "|n|cffb9ab8cEach ability its own feel|r"
+                end
                 local pattern = V.Pattern(V.EventPattern(event.key))
                 if not pattern then return "|cffff7a5cOff|r" end
-                if V.EventChoice(event.key) == "auto" then
-                    return event.auto .. "|n|cffb9ab8cNow: " .. pattern.label .. "|r"
-                end
+                if choice == "auto" then return event.auto .. "|n|cffb9ab8cNow: " .. pattern.label .. "|r" end
                 return pattern.label
             end,
             options = function() return Patterns(event) end,
             choose = function(action)
                 V.SetEventPattern(event.key, action)
-                local key = V.EventPattern(event.key)
+                -- (Match the move: felt with the moves' run, Triangle)
+                local key = not (action == "auto" and event.family == "move") and V.EventPattern(event.key)
                 if key and V.Settings().enabled then V.Play(key) end
                 local pattern = V.Pattern(key)
                 local name = action == "auto" and event.auto .. (pattern and " (" .. pattern.label .. ")" or "")
@@ -142,7 +148,12 @@ for _, rail in ipairs(RAIL) do
             try = function()
                 if not Enabled() then return end
                 local pattern = V.EventPattern(event.key)
-                if not pattern then
+                if event.family == "move" and V.EventChoice(event.key) ~= "off" then
+                    V.SimulateMoves(event.key, function(name)
+                        local feel = V.Pattern(V.EventPattern(event.key))
+                        menu.Toast(name .. (feel and ": " .. feel.label or ""))
+                    end)
+                elseif not pattern then
                     menu.Toast(event.label .. " is off", true)
                 elseif event.loop then
                     if V.SimulateLoop(event.key, 6) then

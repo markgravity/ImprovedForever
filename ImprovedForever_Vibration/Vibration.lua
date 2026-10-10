@@ -104,6 +104,78 @@ V.PATTERNS = {
         steps = { { 0.25, 0.5, 0.1 }, { 0.5, 0.2, 0.1 }, { 0.1, 0.3, 0.1 } } },
     { key = "toss", label = "Toss", action = true, weapon = true,        -- thrown: the arm's swing, the let-go
         steps = { { 0.15, 0.15, 0.1 }, { 0.5, 0.4, 0.12 }, { 0.08, 0.05, 0.1 } } },
+    -- Moves, by what an ability does (Abilities' "Match the move")
+    { key = "slash", label = "Slash", action = true, move = true,     -- a heavy blow brought down: wind-up, chop, rebound
+        steps = { { 0.15, 0.1, 0.1 }, { 1, 0.9, 0.14 }, { 0.3, 0.2, 0.1 } } },
+    { key = "cleave", label = "Cleave", action = true, move = true,   -- a wide swing, left to right
+        steps = { { 0.9, 0.2, 0.12 }, { 0.6, 0.6, 0.1 }, { 0.2, 0.9, 0.12 } } },
+    { key = "stab", label = "Stab", action = true, move = true,       -- a quick thrust
+        steps = { { 0.6, 0.8, 0.1 }, { 0.1, 0.15, 0.1 } } },
+    { key = "rend", label = "Rend", action = true, move = true,       -- a ragged tear: claws, a blade dragged
+        steps = { { 0.5, 0.2, 0.1 }, { 0.2, 0.5, 0.1 }, { 0.45, 0.25, 0.1 }, { 0.1, 0.1, 0.1 } } },
+    { key = "slam", label = "Slam", action = true, move = true,       -- the ground struck, a shock wave rolling out
+        steps = { { 1, 1, 0.15 }, { 0.55, 0.55, 0.12 }, { 0.3, 0.3, 0.12 }, { 0.12, 0.12, 0.12 } } },
+    { key = "bash", label = "Bash", action = true, move = true,       -- a shield, a fist, a hammer: a knock that stuns
+        steps = { { 1, 0.6, 0.12 }, { 0, 0, 0.1 }, { 0.3, 0.15, 0.1 } } },
+    { key = "charge", label = "Charge", action = true, move = true,   -- a rush, faster and faster, then the crash
+        steps = { { 0.15, 0.15, 0.1 }, { 0.3, 0.3, 0.1 }, { 0.5, 0.5, 0.1 }, { 1, 1, 0.15 }, { 0.2, 0.2, 0.1 } } },
+    { key = "whirl", label = "Whirl", action = true, move = true,     -- a spin, the blade going round
+        steps = { { 0.8, 0, 0.1 }, { 0.4, 0.4, 0.1 }, { 0, 0.8, 0.1 }, { 0.4, 0.4, 0.1 }, { 0.8, 0, 0.1 },
+            { 0.15, 0.15, 0.1 } } },
+    { key = "flurry", label = "Flurry", action = true, move = true,   -- a finisher: blow on blow, the last the hardest
+        steps = { { 0.5, 0.35, 0.1 }, { 0, 0, 0.1 }, { 0.35, 0.5, 0.1 }, { 0, 0, 0.1 }, { 1, 1, 0.14 } } },
+    { key = "shock", label = "Shock", action = true, move = true,     -- an instant spell's jolt
+        steps = { { 0.7, 0.3, 0.1 }, { 0.2, 0.6, 0.1 }, { 0.1, 0.1, 0.1 } } },
+    { key = "burst", label = "Burst", action = true, move = true,     -- a nova or a shout, spreading out from you
+        steps = { { 0.9, 0.9, 0.12 }, { 0.45, 0.45, 0.12 }, { 0.2, 0.2, 0.15 } } },
+    { key = "seal", label = "Seal", action = true, move = true,       -- a seal or a blessing: light gathering, settling
+        steps = { { 0.1, 0.1, 0.1 }, { 0.3, 0.3, 0.1 }, { 0.5, 0.5, 0.12 }, { 0.25, 0.25, 0.12 }, { 0.1, 0.1, 0.12 } } },
+    { key = "judge", label = "Judgement", action = true, move = true, -- a seal let loose: a bright strike
+        steps = { { 0.3, 0.3, 0.1 }, { 1, 1, 0.12 }, { 0.5, 0.5, 0.1 }, { 0.2, 0.2, 0.12 } } },
+    { key = "ward", label = "Ward", action = true, move = true,       -- a shield raised around you
+        steps = { { 0.2, 0.2, 0.12 }, { 0.4, 0.4, 0.15 }, { 0.2, 0.2, 0.12 } } },
+    { key = "hex", label = "Hex", action = true, move = true,         -- a curse, a poison, a mark: something creeping in
+        steps = { { 0.3, 0.05, 0.12 }, { 0.1, 0, 0.12 }, { 0.25, 0.05, 0.12 }, { 0.05, 0, 0.12 } } },
+}
+
+-- The instant abilities each move matches (every rank shares its name: the
+-- first's ID names them)
+V.MOVES = {
+    -- Heroic Strike, Mortal Strike, Execute, Overpower, Revenge, Bloodthirst,
+    -- Mocking Blow, Stormstrike, Maul, Ravage, Raptor Strike, Mongoose Bite
+    slash = { 78, 12294, 5308, 7384, 6572, 23881, 694, 17364, 6807, 6785, 2973, 1495 },
+    cleave = { 845, 779 },                                  -- Cleave, Swipe
+    -- Sinister Strike, Backstab, Ambush, Ghostly Strike, Riposte, Hemorrhage
+    stab = { 1752, 53, 8676, 14278, 14251, 16511 },
+    -- Rend, Hamstring, Sunder Armor, Garrote, Rupture, Expose Armor, Claw,
+    -- Rake, Shred, Rip, Wing Clip
+    rend = { 772, 1715, 7386, 703, 1943, 8647, 1082, 1822, 5221, 1079, 2974 },
+    slam = { 6343, 26573 },                                 -- Thunder Clap, Consecration
+    -- Shield Bash, Shield Slam, Pummel, Concussion Blow, Disarm, Kick, Gouge,
+    -- Kidney Shot, Cheap Shot, Sap, Hammer of Justice, Bash
+    bash = { 72, 23922, 6552, 12809, 676, 1766, 1776, 408, 1833, 6770, 853, 5211 },
+    charge = { 100, 20252, 9005, 1953 },                    -- Charge, Intercept, Pounce, Blink
+    whirl = { 1680, 12292, 13877 },                         -- Whirlwind, Sweeping Strikes, Blade Flurry
+    flurry = { 2098, 22568, 5171 },                         -- Eviscerate, Ferocious Bite, Slice and Dice
+    -- Earth, Flame and Frost Shock, Fire Blast, Holy Shock, Death Coil,
+    -- Shadowburn, Conflagrate, Counterspell, Moonfire
+    shock = { 8042, 8050, 8056, 2136, 20473, 6789, 17877, 17962, 2139, 8921 },
+    -- Arcane Explosion, Frost Nova, Cone of Cold, Blast Wave, Holy Nova,
+    -- Psychic Scream; Battle, Demoralizing and Intimidating Shout, Piercing
+    -- Howl, Bloodrage, Berserker Rage
+    burst = { 1449, 122, 120, 11113, 15237, 8122, 6673, 1160, 5246, 12323, 2687, 18499 },
+    -- The seals (Righteousness, the Crusader, Command, Light, Wisdom,
+    -- Justice), the blessings, Inner Fire, Renew, Lightning Shield
+    seal = { 20154, 21082, 20375, 20165, 20166, 20164, 19740, 19742, 20217, 1044, 1038, 20911, 19977, 588, 139,
+        324 },
+    judge = { 20271, 20066 },                               -- Judgement, Repentance
+    -- Power Word: Shield, Divine Shield, Divine Protection, Blessing of
+    -- Protection, Holy Shield, Ice Barrier, Ice Block, Mana Shield, Shield
+    -- Block, Shield Wall, Evasion
+    ward = { 17, 642, 498, 1022, 20925, 11426, 11958, 1463, 2565, 871, 5277 },
+    -- Shadow Word: Pain, Corruption, the curses, Siphon Life, Life Tap,
+    -- Hunter's Mark, Faerie Fire, Insect Swarm
+    hex = { 589, 172, 980, 702, 704, 1714, 1490, 17862, 18265, 1454, 1130, 770, 5570 },
 }
 -- Each pattern's icon, drawn in the radial menu's style (tools/make_vibe_icons.py)
 local VIBE_ICONS = "Interface\\AddOns\\ImprovedForever\\textures\\ic_vibe_"
@@ -134,7 +206,7 @@ V.EVENTS = {
         combo = true,
         pattern = "double", tip = "An enemy lands a critical hit on you." },
     { key = "shot", group = "combat", label = "Shooting", icon = EVENT_ICONS .. "shot", on = true,
-        pattern = "auto", auto = "Match the weapon", gap = 0.15, tip = "Each ranged shot you fire: Auto Shot,"
+        pattern = "auto", auto = "Match the weapon", family = "weapon", gap = 0.15, tip = "Each ranged shot you fire: Auto Shot,"
             .. " Shoot (a wand, a bow, a gun), Throw, a hunter's instant shots. Match the weapon: a bow's"
             .. " string, a crossbow's latch, a gun's recoil, a wand's zap, a throw." },
     { key = "lowHp", group = "combat", label = "Low health", icon = EVENT_ICONS .. "lowhp", on = true,
@@ -152,6 +224,11 @@ V.EVENTS = {
     { key = "pushback", group = "combat", parent = "spellcast", label = "Pushed back", icon = EVENT_ICONS .. "pushback",
         on = true, pattern = "micro", tip = "A hit while you cast or channel costs you cast time: the"
             .. " cast slows, or the channel shortens." },
+    { key = "instant", group = "casting", label = "Abilities", icon = EVENT_ICONS .. "instant", on = true,
+        pattern = "auto", auto = "Match the move", family = "move", gap = 0.15, tip = "Each instant ability you"
+            .. " use (Heroic Strike, Sinister Strike, a seal, a shock...). Match the move: each its own feel (a"
+            .. " slash, a stab, a bash, a charge, a whirl, a seal's light, a Judgement...); any other: none. A"
+            .. " pattern: every instant ability." },
     { key = "wheelTick", group = "wheel", label = "Slot change", icon = EVENT_ICONS .. "wheel", on = true,
         pattern = "micro", gap = 0.03, tip = "In an open wheel, the pick moves to another slot (stick,"
             .. " D-pad or a new page)." },
@@ -331,7 +408,10 @@ function V.EventPattern(eventKey)
     end
     local choice = V.EventChoice(eventKey)
     if choice == "off" then return nil end
-    if choice == "auto" then return WeaponPattern() end
+    if choice == "auto" then
+        if eventKey == "shot" then return WeaponPattern() end
+        return V.instantMove
+    end
     return choice
 end
 
@@ -800,6 +880,23 @@ function V.SimulateShots(eventKey, onStep)
     sim[#sim + 1] = C_Timer.NewTimer(2.4, function() wipe(sim) end)
 end
 
+-- Try it on Abilities: a warrior's and a paladin's moves in turn. onStep(name)
+-- as each one goes.
+local DEMO_MOVES = { 100, 78, 845, 1680, 20154, 20271 }
+
+function V.SimulateMoves(eventKey, onStep)
+    V.StopSimulation()
+    V.ResetLast(eventKey)
+    for n, id in ipairs(DEMO_MOVES) do
+        sim[#sim + 1] = C_Timer.NewTimer((n - 1) * 1.1, function()
+            V.instantMove = V.MoveOf(id)
+            onStep(SpellName(id) or tostring(id))
+            V.Fire(eventKey)
+        end)
+    end
+    sim[#sim + 1] = C_Timer.NewTimer(#DEMO_MOVES * 1.1, function() wipe(sim) end)
+end
+
 function V.SimulateCast(onStep, kind, action)
     V.StopSimulation()
     V.castKind = kind or "spell"
@@ -996,10 +1093,16 @@ local SHOT_IDS = {
     75, 5019, 3018, 2480, 7918, 7919, 2764,
     3044, 2643, 5116, 1978, 3043, 3034, 19386, 19503, 20736, 19801,
 }
-local gatherByName, craftByName, spellByName, ticksByName, shotByName
+local gatherByName, craftByName, spellByName, ticksByName, shotByName, moveByName
 local function Names()
     if gatherByName then return end
-    gatherByName, craftByName, ticksByName, shotByName = {}, {}, {}, {}
+    gatherByName, craftByName, ticksByName, shotByName, moveByName = {}, {}, {}, {}, {}
+    for move, ids in pairs(V.MOVES) do
+        for _, id in ipairs(ids) do
+            local name = SpellName(id)
+            if name then moveByName[name] = move end
+        end
+    end
     for _, id in ipairs(SHOT_IDS) do
         local name = SpellName(id)
         if name then shotByName[name] = true end
@@ -1057,6 +1160,14 @@ local function CastKind(spellID)
     return "spell", nil
 end
 
+-- An instant ability's move (nil: none we know)
+function V.MoveOf(spellID)
+    if not spellID or secret(spellID) then return nil end
+    Names()
+    local name = SpellName(spellID)
+    return name and not secret(name) and moveByName[name] or nil
+end
+
 -- A ranged shot (every rank shares its name)
 local function IsShot(spellID)
     if not spellID or secret(spellID) then return false end
@@ -1082,6 +1193,9 @@ local function CastTimes(channel)
     return startMs / 1000, endMs / 1000
 end
 
+-- Auto attack's spell (turning it on is no ability)
+local ATTACK = 6603
+
 -- An event about this cast (another one's attempt failing doesn't count;
 -- hidden or missing IDs: it does)
 local function SameCast(guid)
@@ -1094,6 +1208,7 @@ local function CastStarted(event, _, guid, spellID)
     cast.ended, cast.shaped = false, false
     cast.guid = guid
     local channel = event == "UNIT_SPELLCAST_CHANNEL_START"
+    cast.casting = not channel
     local start, finish = CastTimes(channel)
     cast.channelEnd = channel and finish or nil
     cast.timing = start and { start = start, finish = finish, channel = channel,
@@ -1147,7 +1262,19 @@ local CAST_HANDLERS = {
             ranged.shot = GetTime()
             return V.Fire("shot")
         end
-        if cast.timing and not cast.timing.channel and SameCast(guid) then CastReleased() end
+        -- The cast in progress, done
+        if cast.timing and not cast.timing.channel and not cast.ended and SameCast(guid) then
+            return CastReleased()
+        end
+        -- (a cast whose timing is hidden; a channel starting; Attack)
+        if cast.casting and not cast.ended and SameCast(guid) then
+            cast.ended = true
+            return
+        end
+        if UnitChannelInfo and UnitChannelInfo("player") then return end
+        if not secret(spellID) and spellID == ATTACK then return end
+        V.instantMove = V.MoveOf(spellID)
+        V.Fire("instant")
     end,
     UNIT_SPELLCAST_DELAYED = function()
         if cast.ended then return end

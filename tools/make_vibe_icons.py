@@ -514,9 +514,156 @@ def weapons():
     render(path("ic_event_shot"), [(ring, STEEL), (core, RED), (streak, GOLD)])
 
 
+def blade(d, x0, y0, x1, y1, width=10):
+    """A sword's blade from hilt (x0, y0) to point (x1, y1)"""
+    icon.stroke(d, [(x0, y0), (x1, y1)], width)
+
+
+def moves():
+    """Moves, one per kind of instant ability (Abilities' Match the move)"""
+    # Slash (Heroic Strike): a blade brought down, its arc behind it
+    arc = icon.mask(); d = icon.draw(arc)
+    icon.arc(d, 40, 88, 64, -80, -10, 8)
+    sw = icon.mask(); d = icon.draw(sw)
+    blade(d, 30, 98, 98, 30)
+    hilt = icon.mask(); d = icon.draw(hilt)
+    icon.stroke(d, [(18, 88), (40, 110)], 8)
+    icon.stroke(d, [(14, 114), (26, 102)], 9)
+    render(path("ic_vibe_slash"), [(arc, GOLD), (sw, STEEL), (hilt, LEATHER)])
+
+    # Cleave: a wide sweep, an axe head at its end
+    arc = icon.mask(); d = icon.draw(arc)
+    icon.arc(d, 64, 96, 54, 200, 340, 9)
+    head = icon.mask(); d = icon.draw(head)
+    icon.polygon(d, [(96, 26), (122, 40), (112, 70), (98, 52)])
+    render(path("ic_vibe_cleave"), [(arc, GOLD), (head, STEEL)])
+
+    # Stab: a dagger thrust forward, speed lines behind
+    sw = icon.mask(); d = icon.draw(sw)
+    icon.polygon(d, [(54, 56), (116, 64), (54, 72)])
+    hilt = icon.mask(); d = icon.draw(hilt)
+    icon.stroke(d, [(50, 44), (50, 84)], 7)
+    icon.stroke(d, [(28, 64), (50, 64)], 9)
+    lines = icon.mask(); d = icon.draw(lines)
+    for y in (40, 88):
+        icon.stroke(d, [(10, y), (38, y)], 5)
+    render(path("ic_vibe_stab"), [(lines, GOLD), (sw, STEEL), (hilt, LEATHER)])
+
+    # Rend: three claw marks
+    m = icon.mask(); d = icon.draw(m)
+    for dx in (-26, 0, 26):
+        icon.stroke(d, [(48 + dx, 18), (64 + dx, 64), (72 + dx, 110)], 8)
+    render(path("ic_vibe_rend"), [(m, RED)])
+
+    # Slam (Thunder Clap): a fist on the ground, the shock rolling out
+    ground = icon.mask(); d = icon.draw(ground)
+    icon.stroke(d, [(8, 104), (120, 104)], 6)
+    fist = icon.mask(); d = icon.draw(fist)
+    icon.polygon(d, [(46, 54), (82, 54), (82, 94), (46, 94)])
+    wave = icon.mask(); d = icon.draw(wave)
+    waves(d, 64, 94, 2, 34, 16, 6, 40)
+    render(path("ic_vibe_slam"), [(ground, GREY), (fist, STEEL), (wave, GOLD)])
+
+    # Bash (Shield Bash, Hammer of Justice): a round shield, a star of impact
+    shield = icon.mask(); d = icon.draw(shield)
+    icon.circle(d, 52, 68, 36)
+    boss = icon.mask(); d = icon.draw(boss)
+    icon.circle(d, 52, 68, 10)
+    hit = icon.mask(); d = icon.draw(hit)
+    icon.star(d, 98, 36, 22, 9, 6)
+    render(path("ic_vibe_bash"), [(icon.cut(shield, boss), STEEL), (boss, GOLD), (hit, RED)])
+
+    # Charge: an arrow rushing in, speed lines, a hit at its end
+    m = icon.mask(); d = icon.draw(m)
+    icon.polygon(d, [(34, 50), (88, 50), (88, 34), (118, 64), (88, 94), (88, 78), (34, 78)])
+    lines = icon.mask(); d = icon.draw(lines)
+    for y in (42, 64, 86):
+        icon.stroke(d, [(8, y), (24, y)], 5)
+    render(path("ic_vibe_charge"), [(lines, GOLD), (m, RED)])
+
+    # Whirl (Whirlwind): two blades going round
+    m = icon.mask(); d = icon.draw(m)
+    icon.arc(d, 64, 64, 46, 20, 160, 8)
+    icon.arc(d, 64, 64, 46, 200, 340, 8)
+    tips = icon.mask(); d = icon.draw(tips)
+    icon.polygon(d, [(16, 46), (30, 58), (8, 64)])
+    icon.polygon(d, [(112, 82), (98, 70), (120, 64)])
+    render(path("ic_vibe_whirl"), [(m, GOLD), (tips, STEEL)])
+
+    # Flurry (Eviscerate): combo points, the last one big
+    m = icon.mask(); d = icon.draw(m)
+    for x, r in ((20, 8), (42, 10), (66, 12)):
+        icon.circle(d, x, 64, r)
+    big = icon.mask(); d = icon.draw(big)
+    icon.star(d, 100, 64, 24, 10, 8)
+    render(path("ic_vibe_flurry"), [(m, GOLD), (big, RED)])
+
+    # Shock: a jagged bolt into a burst
+    bolt = icon.mask(); d = icon.draw(bolt)
+    icon.stroke(d, [(10, 30), (44, 52), (36, 70), (78, 84)], 8)
+    hit = icon.mask(); d = icon.draw(hit)
+    icon.star(d, 94, 90, 24, 10, 8)
+    render(path("ic_vibe_shock"), [(bolt, BLUE), (hit, GOLD)])
+
+    # Burst (Frost Nova, shouts): rings spreading out from a point
+    core = icon.mask(); d = icon.draw(core)
+    icon.circle(d, 64, 64, 12)
+    rings = icon.mask(); d = icon.draw(rings)
+    icon.arc(d, 64, 64, 32, 0, 360, 7)
+    icon.arc(d, 64, 64, 52, 0, 360, 5)
+    render(path("ic_vibe_burst"), [(rings, BLUE), (core, GOLD)])
+
+    # Seal (Seal of Righteousness): a seal's ring, light inside
+    ring = icon.mask(); d = icon.draw(ring)
+    icon.arc(d, 64, 64, 46, 0, 360, 8)
+    light = icon.mask(); d = icon.draw(light)
+    icon.star(d, 64, 64, 30, 10, 4)
+    render(path("ic_vibe_seal"), [(ring, GOLD), (light, GOLD)])
+
+    # Judgement: a hammer of light coming down
+    handle = icon.mask(); d = icon.draw(handle)
+    icon.stroke(d, [(28, 106), (70, 60)], 9)
+    head = icon.mask(); d = icon.draw(head)
+    icon.polygon(d, [(58, 30), (88, 58), (104, 42), (74, 14)])
+    rays = icon.mask(); d = icon.draw(rays)
+    for a in (-20, 20, 60):
+        r = math.radians(a)
+        icon.stroke(d, [(96 + 16 * math.cos(r), 70 + 16 * math.sin(r)), (96 + 28 * math.cos(r), 70 + 28 * math.sin(r))], 5)
+    render(path("ic_vibe_judge"), [(handle, LEATHER), (head, GOLD), (rays, GOLD)])
+
+    # Ward (shields): a dome over a figure's ground
+    dome = icon.mask(); d = icon.draw(dome)
+    icon.arc(d, 64, 96, 50, 180, 360, 8)
+    ground = icon.mask(); d = icon.draw(ground)
+    icon.stroke(d, [(8, 98), (120, 98)], 6)
+    glint = icon.mask(); d = icon.draw(glint)
+    icon.star(d, 48, 66, 12, 4, 4)
+    render(path("ic_vibe_ward"), [(dome, BLUE), (ground, GREY), (glint, GOLD)])
+
+    # Hex (curses, poisons): a drip of venom, a spiral
+    drop = icon.mask(); d = icon.draw(drop)
+    pts = [(64 + 26 * math.cos(math.radians(a)), 82 + 26 * math.sin(math.radians(a))) for a in range(-30, 211, 6)]
+    icon.polygon(d, pts + [(64, 16)])
+    sw = icon.mask(); d = icon.draw(sw)
+    pts = [(64 + (2 + t * 0.6) * math.cos(math.radians(t * 18)), 82 + (2 + t * 0.6) * math.sin(math.radians(t * 18)))
+           for t in range(0, 26)]
+    icon.stroke(d, pts, 4)
+    render(path("ic_vibe_hex"), [(icon.cut(drop, sw), GREEN), (sw, GREY)])
+
+    # Abilities (the event): a sword and a fist of light crossed
+    sw = icon.mask(); d = icon.draw(sw)
+    blade(d, 30, 100, 104, 26)
+    hilt = icon.mask(); d = icon.draw(hilt)
+    icon.stroke(d, [(18, 88), (42, 112)], 8)
+    spark = icon.mask(); d = icon.draw(spark)
+    icon.star(d, 92, 92, 22, 8, 4)
+    render(path("ic_event_instant"), [(sw, STEEL), (hilt, LEATHER), (spark, GOLD)])
+
+
 if __name__ == "__main__":
     patterns()
     actions()
     spells()
     weapons()
+    moves()
     events()
