@@ -135,10 +135,10 @@ end
 
 -- Consumable subclasses (item class 0) in display order; others go last.
 -- Consumable subclasses: 1 potion, 2 elixir, 3 flask, 4 scroll, 5 food &
--- drink, 7 bandage. Food and drink lead, then potions.
-local SUBCLASS_ORDER = { [5] = 1, [1] = 2, [7] = 3, [2] = 4, [3] = 5, [4] = 6 }
+-- drink, 7 bandage. Food and drink lead, then potions, bandages and scrolls.
+local SUBCLASS_ORDER = { [5] = 1, [1] = 2, [7] = 3, [4] = 4, [2] = 5, [3] = 6 }
 -- The first page's kinds (the rest go on the next)
-local FIRST_PAGE = { [5] = true, [1] = true }
+local FIRST_PAGE = { [5] = true, [1] = true, [7] = true, [4] = true }
 
 local function ContainerSlots(bag)
     if C_Container and C_Container.GetContainerNumSlots then
@@ -203,7 +203,7 @@ local function BuildConsumables()
     for i = #items, MAX_SLOTS + 1, -1 do
         items[i] = nil
     end
-    -- Pages by kind: food, drink and potions first, the rest after
+    -- Pages by kind: food, drink, potions, bandages and scrolls first, the rest after
     local first, rest = {}, {}
     for _, item in ipairs(items) do
         local list = FIRST_PAGE[item.subclass] and first or rest

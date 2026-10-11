@@ -154,7 +154,7 @@ function MW.Wheels()
             info = "Your class buffs to start with: change any slot. Three pages of eight.",
             reset = IF.ResetBuffSlots, resetLabel = "Class defaults" },
         { key = "consumables", label = IF.RING_LABELS.consumables, builtin = true, max = IF.MAX_SLOTS,
-            info = "Fills itself from your bags: potions, food and drink, bandages, elixirs, flasks and scrolls,"
+            info = "Fills itself from your bags: food and drink, potions, bandages, scrolls, elixirs and flasks,"
                 .. " best kinds first. Nothing to set here but its hotkey." },
         { key = "emotes", label = IF.RING_LABELS.emotes, builtin = true, slots = IF.GetEmoteSlots(), max = 8,
             lists = { EMOTES, MACROS },

@@ -123,7 +123,9 @@ end
 
 local function Scan()
     local byKey, list = {}, {}
-    for bag = 0, NUM_BAG_SLOTS or 4 do
+    -- (the reagent bag too: the slot past the four bags)
+    local last = NUM_TOTAL_EQUIPPED_BAG_SLOTS or ((NUM_BAG_SLOTS or 4) + (NUM_REAGENTBAG_SLOTS or 1))
+    for bag = 0, last do
         local n = C_Container.GetContainerNumSlots(bag) or 0
         for slot = 1, n do
             local info = C_Container.GetContainerItemInfo(bag, slot)
