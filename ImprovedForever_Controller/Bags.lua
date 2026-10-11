@@ -11,11 +11,23 @@ end
 
 local owner = CreateFrame("Frame", "ImprovedForeverBagsOwner")
 local sortButton = CreateFrame("Button", "ImprovedForeverSortBags", UIParent)
-sortButton:RegisterForClicks("AnyUp")
+sortButton:RegisterForClicks("AnyDown", "AnyUp")
 sortButton:Hide()
 
 local bound = false
 local pending = false
+
+-- A shoulder or trigger held (or a key modifier): the press is another's
+-- (L2 + L3: L2 is the game's Shift, and an override binding on L3 alone
+-- also answers SHIFT-L3 when nothing has that)
+local SHOULDERS = { "PADLSHOULDER", "PADRSHOULDER", "PADLTRIGGER", "PADRTRIGGER" }
+local function Modified()
+    if IsModifierKeyDown and IsModifierKeyDown() then return true end
+    for _, key in ipairs(SHOULDERS) do
+        if IsKeyDown and IsKeyDown(key) then return true end
+    end
+    return false
+end
 
 local function SortAllBags()
     if C_Container and C_Container.SortBags then
@@ -29,7 +41,22 @@ local function SortAllBags()
     PlaySound(SOUNDKIT and SOUNDKIT.UI_BAG_SORTING_01 or 852)
 end
 
-sortButton:SetScript("OnClick", SortAllBags)
+-- Sorts on the release; bound to one button alone, not when the press
+-- began with one held under it (told on the press: the shoulder may be let
+-- go first)
+local modifiedPress = false
+sortButton:SetScript("OnClick", function(_, _, down)
+    if down then
+        modifiedPress = not IF.BagSortKey():find("+", 1, true) and Modified()
+        return
+    end
+    if down == nil and not IF.BagSortKey():find("+", 1, true) and Modified() then return end
+    if modifiedPress then
+        modifiedPress = false
+        return
+    end
+    SortAllBags()
+end)
 
 local bagFrames = {}
 

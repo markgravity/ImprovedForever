@@ -3,10 +3,10 @@
 1. QuestieDB (vendor/QuestieDB) moved to its latest master: drops, vendors,
    quests, NPCs and objects for Forever, with its corrections (its own
    exporter, tools/export-forever.lua, run with a Lua 5.1).
-2. LibraryRecipes.lua rebuilt from Forever's own client tables on wago.tools
+2. RecipeData.lua (core) rebuilt from Forever's own client tables on wago.tools
    (tools/make_library.py: the newest 1.16+ build, whatever product it's
    listed under).
-3. LibraryData.lua rebuilt (tools/make_library_data.py).
+3. WorldData.lua (core) rebuilt (tools/make_library_data.py).
 4. The IDs and names written into the code checked against Forever's data:
    Tasks' vendor reagents, Vibration's spells (moves, food and drink),
    Gather's node names.
@@ -156,7 +156,7 @@ def check_code():
 
 
 def check_lua():
-    for f in ("ImprovedForever_Library/LibraryRecipes.lua", "ImprovedForever_Library/LibraryData.lua"):
+    for f in ("ImprovedForever/RecipeData.lua", "ImprovedForever/WorldData.lua"):
         run(["luajit", "-bl", f, "/dev/null"])
     run(["luajit", "tools/loadcheck.lua", "each"])
 
@@ -181,7 +181,7 @@ def main():
     step("Lua checks")
     check_lua()
     step("Changed")
-    run(["git", "status", "--short", "--", "ImprovedForever_Library", "vendor"])
+    run(["git", "status", "--short", "--", "ImprovedForever/RecipeData.lua", "ImprovedForever/WorldData.lua", "vendor"])
     if problems:
         sys.exit(2)
 

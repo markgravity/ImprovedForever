@@ -9,7 +9,7 @@ move-folders:
   ImprovedForever/ImprovedForever_Gather: ImprovedForever_Gather
   ImprovedForever/ImprovedForever_Map: ImprovedForever_Map
   ImprovedForever/ImprovedForever_Auction: ImprovedForever_Auction
-  ImprovedForever/ImprovedForever_Destroy: ImprovedForever_Destroy
+  ImprovedForever/ImprovedForever_Junk: ImprovedForever_Junk
   ImprovedForever/ImprovedForever_Library: ImprovedForever_Library
 
 manual-changelog:

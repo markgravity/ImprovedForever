@@ -1,18 +1,20 @@
--- Destroy: with the bags open, R2 + R3 (or the button(s) bound in the
--- Controller tab) opens a panel listing what is safe to throw away; so does
--- Triangle in the loot window once the bags are full, where Cross swaps:
--- the junk goes, the loot that didn't fit comes in its place. What it lists: junk (grey items, white
--- "junk") and cheap white gear; with no junk, every white item that can
--- go (gear, food, trade goods), the least useful first. With auction
--- prices scanned (Auction.lua), what sells better there than to a vendor
--- is left out, and each card shows its auction worth; an upgrade for the
--- character (Upgrades.lua) is never offered. Laid out as
--- Forever's loot window: a list of item cards, the picked one's tooltip
--- beside it. Holding Cross
--- until the picked card has filled, then letting go, destroys it; holding
--- Square and letting go destroys them all, Circle closes, R3 shows / hides
--- the tooltip. From the loot window Cross swaps and Triangle destroys only
--- (both held); at a vendor Triangle sells.
+-- Destroy (the Junk module's panel): with the bags open, R2 + R3 (or the
+-- button(s) bound in the Controller tab) opens a panel listing what is safe
+-- to throw away; so does Triangle in the loot window once the bags are
+-- full, where Cross swaps: the junk goes, the loot that didn't fit comes in
+-- its place. What it lists: the junk, by the core's verdict (ImprovedForever's
+-- ItemValue.lua: greys, the player's marks, gear the class can't use or has
+-- outgrown, cheap white gear; never what sells better at the auction house,
+-- a quest's item, an upgrade, a reagent of the character's professions);
+-- with no junk, every white item a vendor would take, the least useful
+-- first. Each card shows its auction worth when priced (Auction.lua). Laid
+-- out as Forever's loot window: a list of item cards, the picked one's
+-- tooltip beside it. Holding Cross until the picked card has filled, then
+-- letting go, destroys it; holding Square and letting go destroys them all
+-- (at a vendor: sells them all); R1 marks the picked one junk / not junk
+-- (Junk.lua, remembered); Circle closes, R3 shows / hides the tooltip. From
+-- the loot window Cross swaps and Triangle destroys only (both held); at a
+-- vendor Triangle sells.
 -- Never in combat.
 local IF = ImprovedForever
 
@@ -27,19 +29,9 @@ local HOLD_ONE = 0.6          -- Cross (or Triangle) held this long, then let go
 local DEFAULT_KEY = "PADRTRIGGER+PADRSTICK"   -- one button, or "held+pressed"
 
 ---------------------------------------------------------------------------
--- Finding what to throw away
+-- Finding what to throw away: the core's verdict (ItemValue.lua)
 ---------------------------------------------------------------------------
--- Item classes never offered: containers, reagents, projectiles,
--- quivers, recipes, quest items, keys
-local KEEP_CLASS = { [1] = true, [5] = true, [6] = true, [9] = true, [11] = true, [12] = true, [13] = true }
--- Offered only with no junk at all: consumables (food, potions...) and
--- trade goods (cloth, leather, herbs...), the things kept for later
-local SPARE_CLASS = { [0] = true, [7] = true }
-
-local function ItemInfo(id)
-    if C_Item and C_Item.GetItemInfo then return C_Item.GetItemInfo(id) end
-    return GetItemInfo(id)
-end
+local IV = IF.ItemValue
 
 local function SlotInfo(bag, slot)
     if C_Container and C_Container.GetContainerItemInfo then
@@ -47,133 +39,28 @@ local function SlotInfo(bag, slot)
     end
 end
 
-local function NumSlots(bag)
-    if C_Container and C_Container.GetContainerNumSlots then return C_Container.GetContainerNumSlots(bag) end
-    return GetContainerNumSlots and GetContainerNumSlots(bag) or 0
+local function Card(e)
+    return {
+        bag = e.bag, slot = e.slot, itemID = e.itemID, link = e.link, icon = e.icon, count = e.count,
+        quality = e.quality or 0, value = e.value, ah = e.ah, reason = e.tag or "Junk", rank = e.rank,
+        sellable = e.sellable, junk = e.verdict == "junk", why = e.why,
+    }
 end
 
--- Both scale with the player's level: white gear sells for about its
--- level squared in copper, and a few levels matter more early on
-local function PlayerLevel()
-    return math.max(1, UnitLevel("player") or 1)
-end
-
--- A stack worth less than this (copper) is "Cheap": 1 silver at level 10,
--- 9 at 30, 36 at 60 (never under 20 copper)
-local function Cheap()
-    local level = PlayerLevel()
-    return math.max(20, level * level)
-end
-
--- At or under this item level is "Low level": a quarter of the player's
--- level under it (at least 3): 7 at level 10, 23 at 30, 45 at 60
-local function LowLevel()
-    local level = PlayerLevel()
-    return level - math.max(3, math.ceil(level / 4))
-end
-
--- "Requires Level %d": the one red tooltip line that only means "later"
-local MIN_LEVEL = ITEM_MIN_LEVEL and ("^" .. ITEM_MIN_LEVEL:gsub("%%d", "%%d+") .. "$")
-
--- A red line on its tooltip (a class, an armour or weapon type the player
--- can't use), its level apart
-local function Unusable(bag, slot)
-    local tips = C_TooltipInfo
-    if not (tips and tips.GetBagItem) then return false end
-    local ok, data = pcall(tips.GetBagItem, bag, slot)
-    if not ok or not data or not data.lines then return false end
-    for _, line in ipairs(data.lines) do
-        local c, text = line.leftColor, line.leftText
-        if c and c.r and c.r > 0.9 and c.g < 0.2 and c.b < 0.2 and text and text ~= ""
-            and not (MIN_LEVEL and text:match(MIN_LEVEL)) then
-            return true
-        end
-    end
-    return false
-end
-
--- Why an item can go, its rank (lower goes first) and whether it is a
--- spare (consumable, trade good), or nil.
--- Junk: greys, white "junk". White gear and odds and ends (sellable, no
--- Use; never the classes kept) and spares: "Unusable", "Low level",
--- "Cheap" (a stack worth less than Cheap()), or just "Common"
-local function Reason(info, bag, slot)
-    local _, _, quality, itemLevel, minLevel, _, _, _, _, _, sellPrice, classID, subclassID = ItemInfo(info.itemID)
-    -- (not cached yet: its class is known at once all the same)
-    if not classID and C_Item and C_Item.GetItemInfoInstant then
-        classID, subclassID = select(6, C_Item.GetItemInfoInstant(info.itemID))
-    end
-    quality = quality or info.quality
-    if quality == nil then return nil end
-    if quality == 0 then return "Junk", 0 end
-    if quality ~= 1 or not classID or KEEP_CLASS[classID] then return nil end
-    sellPrice = sellPrice or 0
-    local spare = SPARE_CLASS[classID] or false
-    -- Never something that can't be sold (quest-like, special), nor gear or
-    -- odds and ends with a Use (Hearthstone...): a spare's Use is what it is
-    local getSpell = (C_Item and C_Item.GetItemSpell) or GetItemSpell
-    if info.hasNoValue or sellPrice == 0 or (not spare and getSpell and getSpell(info.itemID)) then return nil end
-    if classID == 15 and subclassID == 0 then return "Junk", 0 end
-    if not spare and classID ~= 2 and classID ~= 4 and classID ~= 15 then return nil end
-    if classID == 2 or classID == 4 then
-        if Unusable(bag, slot) then return "Unusable", 1, spare end
-    end
-    if classID ~= 15 then
-        -- (trade goods have an item level but no use level: theirs alone isn't "low")
-        local level = (minLevel and minLevel > 1) and minLevel or (classID ~= 7 and itemLevel)
-        if level and level > 0 and level <= LowLevel() then return "Low level", 2, spare end
-    end
-    if sellPrice * (info.stackCount or 1) < Cheap() then return "Cheap", 3, spare end
-    return "Common", 4, spare
-end
-
--- What a stack brings at the auction house after its cut, at its usual
--- price there (Auction.lua's scans; nil: unknown, or not wanted)
-local function AuctionWorth(itemID, count)
-    local A = IF.Auction
-    if not (A and A.Settings().buy and A.Settings().destroy) then return nil end
-    local unit = A.UnitNet(itemID)
-    return unit and math.floor(unit * count) or nil
-end
-
--- Junk, and the white gear worth least; with no junk at all, every white
--- item that can go, food and trade goods too: the unusable first, then
--- the low level, the cheapest first in each
+-- The junk, the least useful first (the cheapest first in each); with no
+-- junk at all, every white item a vendor would take (food and trade goods
+-- too: never what sells better at the auction house, nor what's kept)
 function DS.Scan()
-    local list, junk = {}, false
-    local last = NUM_BAG_SLOTS or 4
-    for bag = 0, last do
-        for slot = 1, NumSlots(bag) do
-            local info = SlotInfo(bag, slot)
-            if info and info.itemID and not info.isLocked then
-                local reason, rank, spare = Reason(info, bag, slot)
-                -- (better than what is worn: kept, Upgrades.lua)
-                if reason and IF.Upgrades and IF.Upgrades.IsBagUpgrade(bag, slot) then reason = nil end
-                local sellPrice = reason and select(11, ItemInfo(info.itemID)) or 0
-                local count = info.stackCount or 1
-                local ah = reason and AuctionWorth(info.itemID, count)
-                -- Worth more at the auction house than to a vendor (and not
-                -- next to nothing there either): kept, for selling there
-                if ah and ah > sellPrice * count and ah >= Cheap() then reason = nil end
-                if reason then
-                    junk = junk or rank == 0
-                    list[#list + 1] = {
-                        bag = bag, slot = slot, itemID = info.itemID, link = info.hyperlink,
-                        icon = info.iconFileID, count = count, quality = info.quality or 0,
-                        value = sellPrice * count, ah = ah, reason = reason, rank = rank, spare = spare,
-                        sellable = sellPrice > 0 and not info.hasNoValue,
-                    }
-                end
-            end
+    local list = {}
+    for _, e in ipairs(IV.Bags(function(e) return e.verdict == "junk" end)) do list[#list + 1] = Card(e) end
+    if #list == 0 then
+        for _, e in ipairs(IV.Bags(function(e) return e.verdict == "vendor" and e.quality <= 1 end)) do
+            list[#list + 1] = Card(e)
         end
     end
-    if junk then
-        -- With junk to throw away, only the white gear worth next to nothing
-        local kept = {}
-        for _, e in ipairs(list) do
-            if e.rank == 0 or (not e.spare and e.value < Cheap()) then kept[#kept + 1] = e end
-        end
-        list = kept
+    for i = #list, 1, -1 do
+        local info = SlotInfo(list[i].bag, list[i].slot)
+        if not info or info.isLocked then table.remove(list, i) end
     end
     table.sort(list, function(a, b)
         if a.rank ~= b.rank then return a.rank < b.rank end
@@ -415,22 +302,7 @@ function DS.CancelPress()
     ShowFill(nil)
 end
 
--- 10350 -> "1 [gold] 3 [silver] 50 [copper]", with the game's coin icons
-local COINS = {
-    { 10000, "Interface\\MoneyFrame\\UI-GoldIcon" },
-    { 100, "Interface\\MoneyFrame\\UI-SilverIcon" },
-    { 1, "Interface\\MoneyFrame\\UI-CopperIcon" },
-}
-local function Money(copper)
-    copper = math.floor(copper or 0)
-    local parts = {}
-    for _, coin in ipairs(COINS) do
-        local n = math.floor(copper / coin[1])
-        copper = copper - n * coin[1]
-        if n > 0 then parts[#parts + 1] = n .. " |T" .. coin[2] .. ":0:0:2:0|t" end
-    end
-    return #parts > 0 and table.concat(parts, " ") or ("0 |T" .. COINS[3][2] .. ":0:0:2:0|t")
-end
+local Money = IV.Money
 
 local function Glyph(key)
     return IF.GlyphText(key, 24)
@@ -519,7 +391,11 @@ function DS.Render()
     elseif swap then
         press = press .. "   " .. Glyph("Y") .. " Hold to Destroy"
     end
-    local all = swap and " Hold to Swap All   " or " Hold to Destroy All   "
+    local all = swap and " Hold to Swap All   " or DS.AtVendor() and " Hold to Sell All   "
+        or " Hold to Destroy All   "
+    if picked and IF.Junk then
+        all = all .. Glyph("RB") .. (picked.junk and " Not Junk   " or " Mark Junk   ")
+    end
     -- (L2 or R2, by the side it's on: the pad to the window it was opened from)
     local label, key = DS.switch:Behind()
     local back = label and (Glyph(key) .. " " .. label .. "   ") or ""
@@ -546,7 +422,7 @@ end
 local KEYS = {
     PADDUP = "UP", PADDDOWN = "DOWN", PADDLEFT = "LEFT", PADDRIGHT = "RIGHT",
     PAD1 = "A", PAD2 = "B", PAD3 = "X", PAD4 = "Y", ESCAPE = "B",
-    PADLTRIGGER = "LT", PADRTRIGGER = "RT", PADRSTICK = "TIP",
+    PADLTRIGGER = "LT", PADRTRIGGER = "RT", PADRSTICK = "TIP", PADRSHOULDER = "MARK",
 }
 -- Kept while the bags have the focus: the way back
 local SWITCH_KEYS = { PADLTRIGGER = true, PADRTRIGGER = true }
@@ -580,8 +456,18 @@ function DS.Press(name, down)
         end
         return
     end
+    -- R1: the picked one junk / not junk (Junk.lua: remembered)
+    if name == "MARK" then
+        local e = DS.items[DS.index]
+        if down and e and IF.Junk then
+            DS.CancelPress()
+            IF.Junk.Toggle(e.bag, e.slot)
+            C_Timer.After(0.15, DS.Refresh)
+        end
+        return
+    end
     if name == "X" then
-        -- Hold, then let go: all of them
+        -- Hold, then let go: all of them (at a vendor: sold)
         if down then
             DS.holdStart = GetTime()
             holdBar:Show()
@@ -591,7 +477,7 @@ function DS.Press(name, down)
             holdBar:Hide()
             if held >= HOLD_ALL then
                 HoldDone()
-                DS.DestroyAll()
+                if DS.AtVendor() then DS.SellAll() else DS.DestroyAll() end
             end
         end
         return
@@ -736,6 +622,27 @@ function DS.Sell(e)
     C_Timer.After(0.2, DS.Refresh)
 end
 
+-- Every listed one a vendor buys
+function DS.SellAll()
+    if IF.InCombat() or not DS.AtVendor() then return end
+    local done, worth = 0, 0
+    for _, e in ipairs(DS.items) do
+        if e.sellable then
+            if SellOne(e) then
+                done, worth = done + 1, worth + e.value
+            elseif blocked then
+                break
+            end
+        end
+    end
+    if blocked and done == 0 then
+        IF.Print("the game doesn't let addons sell items here.")
+    elseif done > 0 then
+        IF.Print("sold " .. done .. (done == 1 and " item" or " items") .. " for " .. Money(worth))
+    end
+    C_Timer.After(0.3, DS.Refresh)
+end
+
 -- noLoot: from the loot window, destroy only (no swap)
 function DS.Destroy(e, noLoot)
     if IF.InCombat() then return end
@@ -805,6 +712,8 @@ panel:SetScript("OnHide", function()
     if GameTooltip:GetOwner() == panel then GameTooltip:Hide() end
     if not IF.InCombat() then ClearOverrideBindings(panel) end
 end)
+
+IV.OnChange(function() DS.Refresh() end)
 
 local events = CreateFrame("Frame")
 events:RegisterEvent("BAG_UPDATE_DELAYED")
@@ -1132,7 +1041,7 @@ B.Add({
     icon = IF.TEX .. "ic_emote_no", context = "bags", order = 21,
     -- Watched, not taken; on an R3 combo the wheels leave it to the panel
     -- while the bags are open (Destroy.lua)
-    tip = "Opens the panel of what is safe to throw away. Only while a bag is open. With the bags full,"
+    tip = "Opens the Destroy panel: the junk, safe to throw away. Only while a bag is open. With the bags full,"
         .. " the top face button (Triangle / Y) opens it from the loot window too: there each destroy"
         .. " loots the item that didn't fit in the junk's place.",
     accepts = B.NotDouble,

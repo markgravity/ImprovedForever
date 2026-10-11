@@ -26,13 +26,13 @@ local DEFAULTS = {
     duration = 2,          -- 1 / 2 / 3: the game's three (A.Durations)
     vendorFloor = true,    -- never under what a vendor pays (after the cut)
     tooltip = true,        -- item tooltips show the usual and lowest price
-    buy = true,            -- the auction features: the window (AuctionBuy.lua), the scan, the prices in tooltips and the Destroy panel
+    buy = true,            -- the auction features: the window (AuctionBuy.lua), the scan, the prices in tooltips and junk's verdict
     buyUsable = false,     -- its filters: usable only, qualities (none ticked: any), up to my level, sort
     buyMyLevel = false,
     buySort = "price",
     tasksTracker = true,   -- tasks tracked in the objective tracker (Tasks.lua)
     buyUpgrades = "mark",  -- upgrades (Upgrades.lua) in it: off, mark (an arrow), only
-    destroy = true,        -- the Destroy panel leaves out what sells better here than to a vendor
+    destroy = true,        -- junk (ItemValue.lua) is never what sells better here than to a vendor
     keepDays = 30,         -- days of prices kept
     chartDays = 14,        -- days the charts show (and the market price covers)
 }
@@ -235,6 +235,16 @@ end
 
 local function Changed()
     for _, fn in ipairs(listeners) do fn() end
+    if IF.ItemValue then IF.ItemValue.Changed() end
+end
+
+-- The core's item verdict (ItemValue.lua) weighs these prices: what is
+-- worth more here is never junk, the Sell tab's sections
+if IF.ItemValue then
+    IF.ItemValue.UseAuction({
+        price = function(itemID) return A.Settings().buy and A.UnitNet(itemID) or nil end,
+        counts = function() return A.Settings().buy and A.Settings().destroy end,
+    })
 end
 
 ---------------------------------------------------------------------------

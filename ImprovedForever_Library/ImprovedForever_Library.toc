@@ -2,18 +2,16 @@
 ## Title: Improved Forever: Library
 ## Notes: Everything about an item: drops, vendors, recipes, quests and prices.
 ## Author: markg
-## Version: 0.4.0
+## Version: 0.5.0
 ## X-Website: https://github.com/markgravity/ImprovedForever
 ## X-License: MIT
 ## X-Curse-Project-ID: 1736880
 ## IconTexture: Interface\AddOns\ImprovedForever\textures\ic_mod_library
 ## Group: ImprovedForever
 ## Dependencies: ImprovedForever
-## OptionalDeps: QuestieDB, ImprovedForever_Auction, ImprovedForever_Destroy, ImprovedForever_Gather, ImprovedForever_Vibration
+## OptionalDeps: QuestieDB, ImprovedForever_Auction, ImprovedForever_Junk, ImprovedForever_Gather, ImprovedForever_Vibration
 
 Module.lua
-LibraryRecipes.lua
-LibraryData.lua
 Library.lua
 LibraryPage.lua
 LibraryMap.lua

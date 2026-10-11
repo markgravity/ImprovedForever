@@ -5,8 +5,11 @@
 --   No price yet: never seen at the auction house (no scan has priced it);
 --   Sell to a vendor: worth no more here than a vendor pays (or too
 --     little to bother), or can't be auctioned at all (bound);
---   Keep: needed for a quest in the log (an objective's item, an item
---     that starts or belongs to one), or an upgrade (Upgrades.lua).
+--   Keep: what the core's verdict keeps (ItemValue.lua): marked "keep",
+--     needed for a quest, an upgrade, a reagent or recipe for one of the
+--     character's professions.
+-- (the sections are the core's verdict: what the Junk module and the
+-- Destroy panel read too)
 -- Stacks of the same item are one line. On the right the picked one: its
 -- price chart (AuctionChart.lua), one price (suggested, Auction.lua), the
 -- receipt (duration, deposit, profit).
@@ -30,7 +33,6 @@ IF.AuctionSellTab = ST
 local LEFT_W = 430
 local ROW_H = 36
 local SEARCH_AFTER = 0.35          -- resting on an item this long: its listings looked up
-local PROFIT_SHARE = 1.25          -- "worth more": over a vendor's pay by a quarter...
 local DURATIONS = A.Durations()
 
 local SECTIONS = {
@@ -46,51 +48,9 @@ local function S()
     return A.Settings()
 end
 
--- ...and by at least this much (copper): 2 silver at level 10, 18 at 30
-local function MinProfit()
-    local level = math.max(1, UnitLevel("player") or 1)
-    return math.max(100, 2 * level * level)
-end
-
 local function ItemInfo(id)
     if C_Item and C_Item.GetItemInfo then return C_Item.GetItemInfo(id) end
     return GetItemInfo(id)
-end
-
----------------------------------------------------------------------------
--- What the quests in the log need: the items their objectives name
----------------------------------------------------------------------------
-local questNeeds   -- { [lowercased objective text] = quest title }
-
-local function QuestNeeds()
-    if questNeeds then return questNeeds end
-    questNeeds = {}
-    local log = C_QuestLog
-    if not (log and log.GetNumQuestLogEntries and log.GetInfo and log.GetQuestObjectives) then return questNeeds end
-    for i = 1, log.GetNumQuestLogEntries() or 0 do
-        local info = log.GetInfo(i)
-        if info and not info.isHeader and info.questID then
-            for _, objective in ipairs(log.GetQuestObjectives(info.questID) or {}) do
-                if objective.type == "item" and objective.text then
-                    questNeeds[objective.text:lower()] = info.title or "a quest"
-                end
-            end
-        end
-    end
-    return questNeeds
-end
-
--- The quest an item is needed for (its title), or nil
-local function QuestFor(name, bag, slot)
-    if C_Container and C_Container.GetContainerItemQuestInfo then
-        local q = C_Container.GetContainerItemQuestInfo(bag, slot)
-        if q and (q.isQuestItem or q.questID) then return "a quest" end
-    end
-    if not name then return nil end
-    name = name:lower()
-    for text, title in pairs(QuestNeeds()) do
-        if text:find(name, 1, true) then return title end
-    end
 end
 
 ---------------------------------------------------------------------------
@@ -100,25 +60,13 @@ end
 ---------------------------------------------------------------------------
 local entries, lines = {}, {}
 
+-- The core's verdict (ItemValue.lua) as a section: kept, worth more here,
+-- never priced here, or for a vendor (junk too)
+local SECTION_OF = { keep = "keep", auction = "profit", unknown = "unknown", vendor = "vendor", junk = "vendor" }
 local function Classify(e)
-    local quest = QuestFor(e.name, e.bag, e.slot)
-    if quest then return "keep", "Needed for " .. (quest == "a quest" and quest or ("\"" .. quest .. "\"")) end
-    if e.link and IF.Upgrades and IF.Upgrades.IsUpgrade(e.link, e.bag, e.slot, true) then
-        local _, needLevel = IF.Upgrades.Gain(e.link, e.bag, e.slot, true)
-        return "keep", needLevel and ("An upgrade for you at level " .. needLevel) or "An upgrade for you"
-    end
-    local vendor = (e.vendor or 0) * e.count
-    if not e.auction then
-        return "vendor", "Can't be auctioned"
-    end
-    local unit = A.UnitNet(e.itemID)
-    if not unit then return "unknown", "Not seen at the auction house yet" end
-    local net = unit * e.count
-    if net > vendor * PROFIT_SHARE and net - vendor >= MinProfit() then
-        return "profit", "About " .. A.Money(net - vendor) .. " more than a vendor pays"
-    end
-    if vendor >= net then return "vendor", "A vendor pays " .. A.Money(vendor) .. ", here about " .. A.Money(net) end
-    return "vendor", "Only about " .. A.Money(net - vendor) .. " more here than from a vendor"
+    local j = IF.ItemValue.Judge(e.bag, e.slot, { count = e.count, auction = true })
+    if not j then return "unknown", "Not seen at the auction house yet" end
+    return SECTION_OF[j.verdict] or "vendor", j.why
 end
 
 local function Scan()
@@ -755,7 +703,6 @@ function ST.Update(now)
 end
 
 function ST.Refresh()
-    questNeeds = nil
     local key = P and P.entry.key
     Scan()
     -- The same item kept picked (or the line where it was)
@@ -809,7 +756,6 @@ events:SetScript("OnEvent", function(_, event)
         end
         return
     end
-    if event == "QUEST_LOG_UPDATE" then questNeeds = nil end
     if f and f:IsShown() then
         ST.Refresh()
         BY.Render()

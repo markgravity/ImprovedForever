@@ -111,9 +111,15 @@ def game_version_id(token):
     return found[-1]["id"]
 
 
+# A project made under another name keeps its first slug (Junk was Destroy)
+SLUGS = {"ImprovedForever_Junk": "improved-forever-destroy"}
+
+
 def slug(folder):
     """The CurseForge slug of an addon of ours: improved-forever,
     improved-forever-quest-tracker..."""
+    if folder in SLUGS:
+        return SLUGS[folder]
     module = folder[len(ADDON):].lstrip("_")
     words = re.findall(r"[A-Z][a-z]*", module)
     return "-".join(["improved", "forever"] + [w.lower() for w in words])

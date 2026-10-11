@@ -1,4 +1,4 @@
-"""Build LibraryData.lua: the Library's drops, vendors and quests, taken from
+"""Build WorldData.lua (core): the drops, vendors and quests, taken from
 QuestieDB's Forever data (the vendor/QuestieDB submodule:
 git submodule update --init) with its corrections applied: QuestieDB's own
 exporter (tools/export-forever.lua, needs a Lua 5.1: LUA51=path) merges its
@@ -13,11 +13,14 @@ instead when there is one (newer data).
 
 Row formats (fields split by "|", lists by ","):
     items[id]   = "npcDrops|objectDrops|itemDrops|vendors|questRewards|startQuest|relatedQuests"
+                  (relatedQuests: QuestieDB's, and every quest naming the item in its
+                   objectives or source items: what the item verdict keeps it for)
     npcs[id]    = "name|minLevel|maxLevel|rank|zoneID|subName|friendlyToFaction|spawns"
     objects[id] = "name|zoneID|spawns"
     quests[id]  = "name|questLevel|zoneOrSort|requiredLevel|startNpcs|startObjects|startItems|
-                   endNpcs|endObjects|preQuests|nextQuest|objectives"   (objectives: lines
-                   split by "~"; the quests before and after it in a chain kept too)
+                   endNpcs|endObjects|preQuests|nextQuest|objectives|requiredRaces|
+                   requiredClasses|exclusiveTo"   (objectives: lines split by "~"; races and
+                   classes: masks, 0 any; the quests before and after it in a chain kept too)
     spawns      = "zone:x,y,x,y;zone:x,y"   (at most SPAWNS_PER_ZONE points a zone)
     displays[npcID] = displayID              (the creature's look, for its portrait)
     trainerSets[n]  = "npcID,npcID,..."      (trainers, a list shared by recipes)
@@ -34,7 +37,7 @@ database (github.com/cmangos/classic-db, GPL-3.0): creature_template's
 ModelId1-4, kept only when the client's own CreatureDisplayInfo table has
 them, and npc_trainer / npc_trainer_template (through TrainerTemplateId). A
 trainer teaches a spell that teaches the recipe (the client's SpellEffect,
-LEARN_SPELL); the recipes are LibraryRecipes.lua's. Recipes Forever adds
+LEARN_SPELL); the recipes are RecipeData.lua's. Recipes Forever adds
 (none of cMaNGOS's trainers teach them) that no recipe item teaches and that
 don't come with the profession are put down to the profession's trainers, at
 the skill rank Forever's SkillLineAbility gives. Client tables from wago.tools,
@@ -54,7 +57,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 QDB = ROOT / "vendor" / "QuestieDB"
-OUT = ROOT / "ImprovedForever_Library" / "LibraryData.lua"
+OUT = ROOT / "ImprovedForever" / "WorldData.lua"
 SPAWNS_PER_ZONE = 40
 CMANGOS_DUMP = "https://raw.githubusercontent.com/cmangos/classic-db/master/Full_DB/ClassicDB_1_12_1_z2815.sql.gz"
 WAGO = "https://wago.tools"
@@ -65,8 +68,10 @@ ITEM = {"npcDrops": 2, "objectDrops": 3, "itemDrops": 4, "startQuest": 5, "quest
 NPC = {"name": 1, "minLevel": 4, "maxLevel": 5, "rank": 6, "spawns": 7, "zoneID": 9,
        "friendlyToFaction": 13, "subName": 14}
 OBJECT = {"name": 1, "spawns": 4, "zoneID": 5}
-QUEST = {"name": 1, "startedBy": 2, "finishedBy": 3, "requiredLevel": 4, "questLevel": 5, "objectivesText": 8,
-         "preQuestGroup": 12, "preQuestSingle": 13, "zoneOrSort": 17, "nextQuestInChain": 22}
+QUEST = {"name": 1, "startedBy": 2, "finishedBy": 3, "requiredLevel": 4, "questLevel": 5, "requiredRaces": 6,
+         "requiredClasses": 7, "objectivesText": 8, "objectives": 10, "sourceItemId": 11, "preQuestGroup": 12,
+         "preQuestSingle": 13, "exclusiveTo": 16, "zoneOrSort": 17, "requiredSourceItems": 21,
+         "nextQuestInChain": 22}
 
 
 # ---------------------------------------------------------------------------
@@ -337,7 +342,7 @@ def trainers(creatures, columns, own, shared):
     recipe spell -> the skill rank trainers ask for it (the lowest), recipe spell ->
     the level they ask (the lowest)"""
     recipes = {}
-    for spell, skill in re.findall(r"^\[(\d+)\]=\{(\d+),", (ROOT / "ImprovedForever_Library" / "LibraryRecipes.lua").read_text(), re.M):
+    for spell, skill in re.findall(r"^\[(\d+)\]=\{(\d+),", (ROOT / "ImprovedForever" / "RecipeData.lua").read_text(), re.M):
         recipes[int(spell)] = int(skill)
     teaches = {}
     # (cMaNGOS's trainers teach vanilla's teaching spells: Classic Era's link
@@ -379,9 +384,22 @@ def main():
     export_forever()
     items, npcs, objects, quests = combined("Item"), combined("Npc"), combined("Object"), combined("Quest")
 
+    # (the quests an item is for: its objectives' items, the items it hands
+    # out or asks to be carried; QuestieDB's relatedQuests misses many)
+    for_quests = {}
+    for qid, row in quests.items():
+        needed = [as_list(o)[0] for o in as_list((row.get(QUEST["objectives"]) or {}).get(3)) if as_list(o)]
+        needed += as_list(row.get(QUEST["requiredSourceItems"])) + as_list(row.get(QUEST["sourceItemId"]))
+        for iid in needed:
+            if isinstance(iid, int) and iid > 0:
+                for_quests.setdefault(iid, set()).add(qid)
+
     item_rows, want_npc, want_obj, want_quest = {}, set(), set(), set()
-    for iid, row in items.items():
+    for iid in set(items) | set(for_quests):
+        row = items.get(iid) or {}
         f = {k: row.get(i) for k, i in ITEM.items()}
+        related = sorted(set(as_list(f["relatedQuests"])) | for_quests.get(iid, set()))
+        f["relatedQuests"] = {i + 1: q for i, q in enumerate(related)} if related else None
         if not any(f.values()):
             continue
         item_rows[iid] = "|".join([ids(f["npcDrops"]), ids(f["objectDrops"]), ids(f["itemDrops"]),
@@ -418,7 +436,7 @@ def main():
     # (Forever's own recipes: its trainers, by the profession)
     added = 0
     by_item = {int(m[0]): (int(m[1]), int(m[2])) for m in re.findall(
-        r"^\[(\d+)\]=\{(\d+),\d+,\d+,(\d+)", (ROOT / "ImprovedForever_Library" / "LibraryRecipes.lua").read_text(), re.M)}
+        r"^\[(\d+)\]=\{(\d+),\d+,\d+,(\d+)", (ROOT / "ImprovedForever" / "RecipeData.lua").read_text(), re.M)}
     for r in abilities:
         spell = int(r["Spell"])
         recipe = by_item.get(spell)
@@ -462,7 +480,9 @@ def main():
                                         ids(finish.get(1)), ids(finish.get(2)),
                                         ",".join(str(q) for q in as_list(row.get(QUEST["preQuestSingle"]))
                                                  + as_list(row.get(QUEST["preQuestGroup"]))),
-                                        num(row.get(QUEST["nextQuestInChain"])), objectives.replace("~ ~", "~")])
+                                        num(row.get(QUEST["nextQuestInChain"])), objectives.replace("~ ~", "~"),
+                                        num(row.get(QUEST["requiredRaces"])), num(row.get(QUEST["requiredClasses"])),
+                                        ids(row.get(QUEST["exclusiveTo"]))])
 
     # Zones: area id -> UiMap id (the base table, Forever's overrides on top)
     zones_file = QDB / "support" / "Forever" / "Zones" / "areaIdToUiMapId.lua"
@@ -498,7 +518,7 @@ def main():
         "-- from cMaNGOS's Classic database (github.com/cmangos/classic-db, GPL-3.0).\n"
         "-- Do not edit by hand.\n"
         "local IF = ImprovedForever\n"
-        f"IF.LibraryData = {{ source = {lua_string(source)},\n"
+        f"IF.WorldData = {{ source = {lua_string(source)},\n"
         + emit("items", item_rows) + emit("npcs", npc_rows) + emit("objects", obj_rows)
         + emit("quests", quest_rows) + f"areaToUi = {{ {zones} }},\n"
         + f"displays = {{ {looks_lua} }},\n"

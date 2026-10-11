@@ -2,7 +2,7 @@
 
 ## Window focus: look and behave like the game's own windows
 
-Every window of ours that takes the gamepad (Library, Destroy, Add Task, vendor
+Every window of ours that takes the gamepad (Library, Destroy (Junk), Add Task, vendor
 Tasks, the auction window, its confirmation, the config window) shows and passes
 focus the way Forever's native windows do. The shared code is
 `ImprovedForever/Focus.lua` (`IF.Focus`). Use it, don't hand-roll a copy.
@@ -85,6 +85,16 @@ focus the way Forever's native windows do. The shared code is
   taints it.
 - This includes the Improved Forever config window. Center only
   confirmations, the way the game centres its dialogs.
+
+## Item verdict: one, in the core
+- Whether a bag item is junk, kept, for the auction house or for a vendor is
+  `IF.ItemValue.Judge(bag, slot)` (`ImprovedForever/ItemValue.lua`). Every module
+  asks it (Junk, the Destroy panel, the auction Sell tab); don't write another.
+- Its data is the core's: `IF.GameData` (`GameData.lua`: QuestieDB or our
+  `WorldData.lua`, the recipes of `RecipeData.lua` and the ones seen in game).
+  The Auction module hands it prices with `IF.ItemValue.UseAuction`.
+- The player's junk / not junk marks are per character
+  (`IF.charDB.junkMarks`), by item ID.
 
 ## Game data: always Forever's
 - Every bundled data file and hardcoded game ID (items, spells, NPCs, nodes) must

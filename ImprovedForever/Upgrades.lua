@@ -360,7 +360,7 @@ function UP.Explain(link, later)
     return lines
 end
 
--- A bag item's, for the Destroy panel (off or not: an upgrade is kept)
+-- A bag item's (off or not: an upgrade is kept)
 function UP.IsBagUpgrade(bag, slot)
     local link = C_Container and C_Container.GetContainerItemLink and C_Container.GetContainerItemLink(bag, slot)
     return link and UP.IsUpgrade(link, bag, slot) or false

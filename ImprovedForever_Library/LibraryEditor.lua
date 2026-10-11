@@ -42,8 +42,8 @@ local ITEMS = {
             .. " open it (recipes only Forever has).",
         text = function()
             local bundled, seen = 0, 0
-            for _ in pairs(IF.LibraryRecipes and IF.LibraryRecipes.recipes or {}) do bundled = bundled + 1 end
-            for _ in pairs(S().recipes) do seen = seen + 1 end
+            for _ in pairs(IF.RecipeData and IF.RecipeData.recipes or {}) do bundled = bundled + 1 end
+            for _ in pairs(IF.GameData.SeenRecipes()) do seen = seen + 1 end
             return bundled .. " known, " .. seen .. " seen in your profession windows"
         end,
     }),

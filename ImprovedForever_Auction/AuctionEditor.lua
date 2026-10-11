@@ -56,7 +56,7 @@ local ITEMS = {
         tip = "Opens over the auction house, used with the pad, its tabs down the right (the right stick up / down): Buy (the left"
             .. " stick picks the category, L1 / R1 and L2 / R2 the next two levels, L3 the filters), Sell (your"
             .. " bags sorted for profit), Auctions (yours, to cancel) and Tasks. Off: the game's own window, and every"
-            .. " auction feature off (no scan, no prices in tooltips or in the Destroy panel).",
+            .. " auction feature off (no scan, no prices in tooltips, for junk or in the Destroy panel).",
     }, OnOff(function() return S().buy end, function(on) S().buy = on end, "Auction window")),
     Item({
         key = "scan", group = "scan", label = "Scan on open",
@@ -140,10 +140,13 @@ ITEMS[#ITEMS + 1] = Item({
     tip = "Item tooltips show its usual auction price and the latest lowest (and a bag stack's worth).",
 }, OnOff(function() return S().tooltip end, function(on) S().tooltip = on end, "Tooltips"))
 ITEMS[#ITEMS + 1] = Item({
-    key = "destroy", group = "use", label = "Destroy panel",
-    tip = "The Destroy panel leaves out what sells for more at the auction house than to a vendor"
-        .. " (unless next to nothing either way), and shows each item's auction worth.",
-}, OnOff(function() return S().destroy end, function(on) S().destroy = on end, "Destroy panel"))
+    key = "destroy", group = "use", label = "Junk",
+    tip = "What sells for more at the auction house than to a vendor (unless next to nothing either way)"
+        .. " is never marked junk, and the Destroy panel shows each item's auction worth.",
+}, OnOff(function() return S().destroy end, function(on)
+    S().destroy = on
+    IF.ItemValue.Changed()
+end, "Junk"))
 
 ITEMS[#ITEMS + 1] = Item({
     key = "upgradeBags", group = "upgrades", label = "Bag arrows",

@@ -2,11 +2,10 @@
 -- an item (the bags, the loot window: watched, never bound; the auction
 -- window: its own R3, AuctionBuy.lua) opens its page (LibraryPage.lua).
 -- This file: what is known (the sources below), what is focused, the hold.
--- Drops, vendors and quests come from QuestieDB (the Questie team's data
--- addon, read through its LibQuestieDB API) when it's installed, else from
--- our copy of its Forever data (LibraryData.lua); recipes from
--- LibraryRecipes.lua (made by tools/make_library.py from the game's own
--- tables) and from the recipes seen whenever a profession window opens.
+-- Drops, vendors, quests and recipes come from the core (GameData.lua:
+-- QuestieDB when installed, else our copy of its Forever data; the game's
+-- own recipe tables) and from the recipes seen whenever a profession
+-- window opens (LB.Learn).
 -- Never in combat.
 local IF = ImprovedForever
 
@@ -37,14 +36,13 @@ local RANKS = { [1] = "Elite", [2] = "Rare Elite", [3] = "Boss", [4] = "Rare" }
 local ROLES = { reward = "Reward", starts = "Starts the quest", objective = "Needed for it" }
 
 ---------------------------------------------------------------------------
--- Settings: IF.db.library = { enabled, recipes = { [spellID] = row } }
--- (recipes: the ones seen in a profession window, LibraryRecipes.lua's row)
+-- Settings: IF.db.library = { enabled } (the recipes seen in a profession
+-- window: the core's, GameData.lua)
 ---------------------------------------------------------------------------
 function LB.Settings()
     local s = IF.db.library or {}
     IF.db.library = s
     if s.enabled == nil then s.enabled = true end
-    s.recipes = s.recipes or {}
     return s
 end
 
@@ -65,147 +63,11 @@ local function ItemID(item)
 end
 
 ---------------------------------------------------------------------------
--- QuestieDB (LibQuestieDB) when installed (its data the newest), else our
--- copy of it (LibraryData.lua, tools/make_library_data.py), read through the
--- same Get / GetAll; looked for once it's needed; every read guarded (its
--- Forever data is new)
+-- QuestieDB, else our copy of it; the recipes: the core's (GameData.lua)
 ---------------------------------------------------------------------------
--- "a|b||c" -> { "a", "b", "", "c" }
-local function SplitRow(s)
-    local out = {}
-    for part in (s .. "|"):gmatch("(.-)|") do out[#out + 1] = part end
-    return out
-end
-
-local function Ids(s)
-    local list = {}
-    for n in s:gmatch("%d+") do list[#list + 1] = tonumber(n) end
-    return #list > 0 and list or nil
-end
-
-local function Text(s)
-    return s ~= "" and s or nil
-end
-
--- "12:40.5,80.3,40.9,80.7;40:..." -> { [12] = { { 40.5, 80.3 }, ... } }
-local function Spawns(s)
-    local spawns
-    for zone, list in s:gmatch("(%d+):([^;]*)") do
-        local points, x = {}, nil
-        for v in list:gmatch("[^,]+") do
-            if x then
-                points[#points + 1] = { x, tonumber(v) }
-                x = nil
-            else
-                x = tonumber(v)
-            end
-        end
-        spawns = spawns or {}
-        spawns[tonumber(zone)] = points
-    end
-    return spawns
-end
-
-local DECODE = {
-    items = function(f)
-        return { npcDrops = Ids(f[1]), objectDrops = Ids(f[2]), itemDrops = Ids(f[3]), vendors = Ids(f[4]),
-            questRewards = Ids(f[5]), startQuest = tonumber(f[6]), relatedQuests = Ids(f[7]) }
-    end,
-    npcs = function(f)
-        return { name = Text(f[1]), minLevel = tonumber(f[2]), maxLevel = tonumber(f[3]), rank = tonumber(f[4]),
-            zoneID = tonumber(f[5]), subName = Text(f[6]), friendlyToFaction = Text(f[7]), spawns = Spawns(f[8]) }
-    end,
-    objects = function(f)
-        return { name = Text(f[1]), zoneID = tonumber(f[2]), spawns = Spawns(f[3]) }
-    end,
-    quests = function(f)
-        local objectives
-        for line in (f[12] or ""):gmatch("[^~]+") do
-            line = line:match("^%s*(.-)%s*$")
-            if line ~= "" then
-                objectives = objectives or {}
-                objectives[#objectives + 1] = line
-            end
-        end
-        return { name = Text(f[1]), questLevel = tonumber(f[2]), zoneOrSort = tonumber(f[3]),
-            requiredLevel = tonumber(f[4]), startedBy = { Ids(f[5] or ""), Ids(f[6] or ""), Ids(f[7] or "") },
-            finishedBy = { Ids(f[8] or ""), Ids(f[9] or "") }, preQuestSingle = Ids(f[10] or ""),
-            nextQuestInChain = tonumber(f[11]), objectivesText = objectives }
-    end,
-}
-
--- One kind of our rows as an entity of LibQuestieDB's (rows decoded once read)
-local function Entity(kind)
-    local rows, decode, cache = IF.LibraryData[kind] or {}, DECODE[kind], {}
-    local function Row(id)
-        local r = cache[id]
-        if r == nil then
-            local s = rows[id]
-            r = s and decode(SplitRow(s)) or false
-            cache[id] = r
-        end
-        return r or nil
-    end
-    return {
-        Get = function(id, key)
-            local r = Row(id)
-            return r and r[key]
-        end,
-        GetAll = function(id, keys)
-            local r = Row(id)
-            if not r then return nil end
-            local out = { n = #keys }
-            for i, key in ipairs(keys) do out[i] = r[key] end
-            return out
-        end,
-    }
-end
-
-local function Bundled()
-    local data = IF.LibraryData
-    if not data then return nil end
-    local zones = { private = { areaIdToUiMapId = data.areaToUi } }
-    return {
-        bundled = true, source = data.source,
-        Item = Entity("items"), Npc = Entity("npcs"), Object = Entity("objects"), Quest = Entity("quests"),
-        Support = { Get = function(name) return name == "ZoneDB" and zones or nil end },
-    }
-end
-
-local qdb                      -- the library (or our copy); false: neither
-function LB.Q()
-    if qdb == nil then
-        qdb = false
-        local lib = _G.LibQuestieDB
-        if lib and lib.RequireContract then
-            local ok, pass = pcall(lib.RequireContract, 1)
-            if ok and pass then qdb = lib end
-        end
-        if not qdb then qdb = Bundled() or false end
-    end
-    return qdb or nil
-end
-
--- "found" (QuestieDB installed), "bundled" (ours: QuestieDB missing, or its
--- version doesn't fit) or "missing"
-function LB.QStatus()
-    local q = LB.Q()
-    if not q then return "missing" end
-    return q.bundled and "bundled" or "found"
-end
-
-local function Field(entity, id, key)
-    local ok, v = pcall(entity.Get, id, key)
-    return ok and v or nil
-end
-
-local function Fields(entity, id, keys)
-    local ok, v = pcall(entity.GetAll, id, keys)
-    if not ok or not v then return nil end
-    local out = {}
-    for i, key in ipairs(keys) do out[key] = v[i] end
-    return out
-end
+local GD = IF.GameData
+local Field, Fields = GD.Field, GD.Fields
+LB.Q, LB.QStatus = GD.Q, GD.QStatus
 
 -- Zones: QuestieDB's are area ids; the map's are UiMap ids (its tables are
 -- Lua source strings, the Forever overrides on top)
@@ -451,7 +313,7 @@ local function Backwards()
             table.insert(map[id], item)
         end
     end
-    for item, row in pairs(IF.LibraryData and IF.LibraryData.items or {}) do
+    for item, row in pairs(IF.WorldData and IF.WorldData.items or {}) do
         local drops, objects, inside, sells, given = row:match("^([^|]*)|([^|]*)|([^|]*)|([^|]*)|([^|]*)")
         add(rewards, given, item)
         add(loot, drops, item)
@@ -498,11 +360,11 @@ function LB.Contents(itemID)
 end
 
 -- What a trainer teaches, as the items its recipes make: the recipes it
--- teaches (LibraryData.lua's trainers), and the recipes that come with its
+-- teaches (WorldData.lua's trainers), and the recipes that come with its
 -- profession (its starters)
 local taught
 function LB.Teaches(npcID)
-    local data, recipes = IF.LibraryData, IF.LibraryRecipes and IF.LibraryRecipes.recipes
+    local data, recipes = IF.WorldData, IF.RecipeData and IF.RecipeData.recipes
     if not (data and data.trainerSets and recipes) then return {} end
     if not taught then
         taught = {}
@@ -628,7 +490,7 @@ end
 -- cMaNGOS); a recipe that comes with its profession: any of the profession's
 -- trainers (second return: true then)
 function LB.Trainers(spell, skill)
-    local Q, data = LB.Q(), IF.LibraryData
+    local Q, data = LB.Q(), IF.WorldData
     if not (Q and data and data.trainerSets) then return {} end
     local set = data.trainers[spell]
     local starter = set == nil and data.starters and data.starters[spell] ~= nil
@@ -727,72 +589,21 @@ function LB.Quests(itemID)
         seen[id] = true
         lines[#lines + 1] = QuestEntry(Q, id, role)
     end
-    add(Field(Q.Item, itemID, "startQuest"), "starts")
+    -- (the core's links: QuestieDB's, and the quests naming the item in
+    -- their objectives: GameData.lua)
+    local starts, related = GD.ItemQuests(itemID)
+    add(starts, "starts")
     for _, id in ipairs(Field(Q.Item, itemID, "questRewards") or {}) do add(id, "reward") end
-    for _, id in ipairs(Field(Q.Item, itemID, "relatedQuests") or {}) do add(id, "objective") end
+    for _, id in ipairs(related or {}) do add(id, "objective") end
     return lines
 end
 
 ---------------------------------------------------------------------------
--- Recipes: the bundled index (LibraryRecipes.lua), the ones seen in game on
--- top; a row: { skillLine, makesItemID, makesCount, taughtByItemID, reagent,
--- count, ... }
+-- Recipes: the core's index (GameData.lua): the bundled ones, the ones seen
+-- in game on top; a row: { skillLine, makesItemID, makesCount,
+-- taughtByItemID, reagent, count, ... }
 ---------------------------------------------------------------------------
--- A profession's own skill line (LibraryRecipes.lua's: Cooking 185...) for
--- one a profession window reports: Forever's are its own (Cooking 2939,
--- Mining 2946), with the profession as their parent, else named after it
-local SKILL_ALIASES = { [2939] = 185, [2946] = 186 }
-local baseSkill = {}
-local function Known(skill)
-    return skill and IF.LibraryRecipes and IF.LibraryRecipes.skills[skill] ~= nil
-end
-local function BaseSkill(skill, parent)
-    if Known(skill) or not skill then return skill end
-    if Known(parent) then return parent end
-    if baseSkill[skill] == nil then
-        local found = SKILL_ALIASES[skill]
-        local ui = C_TradeSkillUI
-        local ok, info = pcall(ui and ui.GetProfessionInfoBySkillLineID, skill)
-        if not found and ok and info then
-            if Known(info.parentProfessionID) then found = info.parentProfessionID end
-            local name = info.parentProfessionName or info.professionName
-            for id, english in pairs(not found and name and IF.LibraryRecipes.skills or {}) do
-                if name:find(english, 1, true) then found = id end
-            end
-        end
-        baseSkill[skill] = found or false
-    end
-    return baseSkill[skill] or skill
-end
-
-local index                    -- { rows, makes = { [item] = { spell } }, uses = same }
-local function Index()
-    if index then return index end
-    index = { rows = {}, makes = {}, uses = {} }
-    local bundled = IF.LibraryRecipes and IF.LibraryRecipes.recipes or {}
-    for spell, row in pairs(bundled) do index.rows[spell] = row end
-    for spell, row in pairs(LB.Settings().recipes) do
-        -- (what the game says wins; the profession and the recipe item as
-        -- the bundle has them)
-        local old = index.rows[spell]
-        row[1] = old and old[1] or BaseSkill(row[1])
-        if old and (row[4] or 0) == 0 then row[4] = old[4] end
-        index.rows[spell] = row
-    end
-    local function push(map, item, spell)
-        local list = map[item]
-        if not list then
-            list = {}
-            map[item] = list
-        end
-        list[#list + 1] = spell
-    end
-    for spell, row in pairs(index.rows) do
-        if (row[2] or 0) > 0 then push(index.makes, row[2], spell) end
-        for i = 5, #row, 2 do push(index.uses, row[i], spell) end
-    end
-    return index
-end
+local Index, BaseSkill = GD.Recipes, GD.BaseSkill
 
 local function SkillName(line)
     local ui = C_TradeSkillUI
@@ -800,7 +611,7 @@ local function SkillName(line)
         local ok, info = pcall(ui.GetProfessionInfoBySkillLineID, line)
         if ok and info and info.professionName and info.professionName ~= "" then return info.professionName end
     end
-    local names = IF.LibraryRecipes and IF.LibraryRecipes.skills
+    local names = IF.RecipeData and IF.RecipeData.skills
     return names and names[line] or "Profession"
 end
 
@@ -889,7 +700,7 @@ function LB.Learn()
     if not (ui and ui.GetAllRecipeIDs and IF.Tasks and IF.Tasks.Recipe) or not IF.db then return end
     local ok, ids = pcall(ui.GetAllRecipeIDs)
     if not ok or type(ids) ~= "table" then return end
-    local store = LB.Settings().recipes
+    local store = GD.SeenRecipes()
     local changed = false
     for _, id in ipairs(ids) do
         if not learnedNow[id] then
@@ -897,7 +708,7 @@ function LB.Learn()
             local r = IF.Tasks.Recipe(id)
             if r and (r.output or #r.reagents > 0) then
                 local got, line, _, parent = pcall(ui.GetTradeSkillLineForRecipe, id)
-                local bundled = IF.LibraryRecipes and IF.LibraryRecipes.recipes[id]
+                local bundled = IF.RecipeData and IF.RecipeData.recipes[id]
                 local skill = bundled and bundled[1] or (got and BaseSkill(line, parent)) or 0
                 local row = { skill, r.output or 0, r.makes or 1, bundled and bundled[4] or 0 }
                 for _, g in ipairs(r.reagents) do
@@ -912,16 +723,16 @@ function LB.Learn()
             end
         end
     end
-    if changed then index = nil end
+    if changed then GD.ResetRecipes() end
 end
 
 ---------------------------------------------------------------------------
 -- A creature's portrait, as the game draws one, from its look's display id
--- (LibraryData.lua's: the server alone knows them; a model can't be handed
+-- (WorldData.lua's: the server alone knows them; a model can't be handed
 -- one the client hasn't met). LB.Portrait(npcID, texture) -> true: drawn
 ---------------------------------------------------------------------------
 function LB.Portrait(npcID, texture)
-    local looks = IF.LibraryData and IF.LibraryData.displays
+    local looks = IF.WorldData and IF.WorldData.displays
     local display = npcID and looks and looks[npcID]
     if not (display and SetPortraitTextureFromCreatureDisplayID) then return false end
     return pcall(SetPortraitTextureFromCreatureDisplayID, texture, display)
@@ -1112,7 +923,7 @@ function LB.HoldProgress(start)
 end
 
 ---------------------------------------------------------------------------
--- The bags and the loot window: R3 (alone: R2 + R3 is Destroy's) watched,
+-- The bags and the loot window: R3 (alone: R2 + R3 is the Destroy panel's) watched,
 -- never bound. The game's own R3 there turns its tooltips over on the
 -- press: a hold that opens the Library turns them back.
 ---------------------------------------------------------------------------

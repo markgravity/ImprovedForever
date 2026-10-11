@@ -8,14 +8,14 @@ the core, **Improved Forever**:
 
 | Addon | What it does |
 |---|---|
-| `ImprovedForever` | The core: button glyphs, bindings, the configuration panel. Required. |
+| `ImprovedForever` | The core: button glyphs, bindings, the configuration panel, the game data (QuestieDB's, recipes) and the item verdict every module shares. Required. |
 | `ImprovedForever_Controller` | Bag clean-up, touchpad corners, the Controller tab: every press on one drawing of the controller. |
 | `ImprovedForever_Wheel` | Wheels on R3 combos, the recent action slot. Needs Controller. |
 | `ImprovedForever_Vibration` | Vibration on game events and spell casts. |
 | `ImprovedForever_Gather` | Names beside the minimap's gathering dots, alerts. |
 | `ImprovedForever_Map` | The peek map. |
 | `ImprovedForever_Auction` | The controller auction window, prices over time, tasks. |
-| `ImprovedForever_Destroy` | Destroy junk from the bags or the loot window. |
+| `ImprovedForever_Junk` | Finds and marks junk, sells it with the vendor's Sell All Junk, destroys it from the bags or the loot window. Formerly Destroy. |
 | `ImprovedForever_Library` | Everything about an item. |
 | `ImprovedForever_QuestTracker` | Sort options for the quest tracker (zone, level, title, distance, completed) and an objective complete sound. Formerly Improved Quest Tracker. |
 
@@ -27,7 +27,11 @@ the core, **Improved Forever**:
 - **Touchpad** corner actions.
 - **Button overrides** for L3 click and double-click.
 - **Vibration** on game events and spell casts, with per-action patterns.
-- **Destroy** to destroy junk from the controller (with no junk, white items too: gear, food and trade goods, unusable, low level and cheapest first); from the loot window when the bags are full, it destroys junk and loots in its place.
+- **Junk**: what the bags no longer need is marked junk (the game's coin on its slot), from quests (QuestieDB's
+  data), your professions' recipes, auction prices, your class and whether it's soulbound. L2 + L3 on a bag item
+  marks it junk or not junk, remembered per character. A vendor's Sell All Junk sells it all. Its **Destroy**
+  panel throws junk away from the controller; from the loot window when the bags are full, it destroys junk
+  and loots in its place. The auction window's Sell tab sorts the bags by the same verdict.
 - **Library**: hold R3 on an item (bags, loot window, auction house) for everything about it: what drops
   it, who sells it, the recipes that make or use it, its quests and auction prices. Drops, vendors and
   quests come from [QuestieDB](https://github.com/Questie/QuestieDB)'s data: the addon when installed, else

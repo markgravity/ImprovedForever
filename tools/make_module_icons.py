@@ -7,7 +7,8 @@ shapes, green accents, holes cut; shapes drawn with radial_icon's helpers):
   ic_mod_gather       a leaf and an ore nugget
   ic_mod_map          a folded map, a green pin on it
   ic_mod_auction      a stack of coins, a green tag
-  ic_mod_destroy      a bin, a green cross over it
+  ic_mod_destroy      a bin, a green cross over it (the Junk module's Destroy panel)
+  ic_mod_junk         a sack, a green junk coin in front
   ic_mod_library      an open book, a green bookmark
   ic_mod_quests       a quest list (its "!" and lines cut), green sort arrows
 
@@ -169,6 +170,25 @@ def make():
     icon.stroke(dx, [(44, 56), (84, 96)], 7)
     icon.stroke(dx, [(84, 56), (44, 96)], 7)
     save("ic_mod_destroy", [(m, GOLD), (lid, GOLD), (x, GREEN)])
+
+    # Junk: a sack tied at the neck, a coin (green, the game's junk coin)
+    # in front of it, a ring cut in the coin
+    sack, ds = new()
+    icon.polygon(ds, [(46, 34), (82, 34), (76, 46), (98, 66), (104, 92), (92, 112), (36, 112), (24, 92),
+                      (30, 66), (52, 46)])
+    rounded(ds, 40, 18, 88, 32, 6)
+    tie, dt = new()
+    icon.stroke(dt, [(48, 40), (80, 40)], 5)
+    sack = icon.cut(sack, tie)
+    coin, dc = new()
+    icon.circle(dc, 92, 94, 22)
+    ring, dr = new()
+    icon.circle(dr, 92, 94, 13)
+    inner, di = new()
+    icon.circle(di, 92, 94, 9)
+    ring = icon.cut(ring, inner)
+    coin = icon.cut(coin, ring)
+    save("ic_mod_junk", [(sack, GOLD), (coin, GREEN)])
 
     # Library: an open book, a bookmark (green) hanging from its spine
     book, db = new()

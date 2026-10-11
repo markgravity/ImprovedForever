@@ -12,6 +12,11 @@ for dir in "$root"/ImprovedForever*/; do
     ln -sfn "${dir%/}" "$dest/$name"
     echo "$dest/$name -> ${dir%/}"
 done
+# (a module renamed: Destroy is Junk since 0.5.0)
+if [ -L "$dest/ImprovedForever_Destroy" ]; then
+    rm "$dest/ImprovedForever_Destroy"
+    echo "removed the old ImprovedForever_Destroy link"
+fi
 # (the addon's name before it was split)
 if [ -L "$dest/ImprovedController" ]; then
     rm "$dest/ImprovedController"

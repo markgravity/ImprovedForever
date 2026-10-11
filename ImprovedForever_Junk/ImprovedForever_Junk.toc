@@ -1,16 +1,17 @@
 ## Interface: 16001, 16002, 16003, 16100, 16101, 16200
-## Title: Improved Forever: Destroy
-## Notes: Destroy junk from the controller, from the bags or the loot window.
+## Title: Improved Forever: Junk
+## Notes: Marks what the bags no longer need as junk (quests, recipes, auction prices, class), sells it with the vendor's Sell All Junk, destroys it from the controller.
 ## Author: markg
-## Version: 0.4.0
+## Version: 0.5.0
 ## X-Website: https://github.com/markgravity/ImprovedForever
 ## X-License: MIT
 ## X-Curse-Project-ID: 1736877
-## IconTexture: Interface\AddOns\ImprovedForever\textures\ic_mod_destroy
+## IconTexture: Interface\AddOns\ImprovedForever\textures\ic_mod_junk
 ## Group: ImprovedForever
 ## Dependencies: ImprovedForever
 ## OptionalDeps: ImprovedForever_Auction, ImprovedForever_Wheel
 
 Module.lua
+Junk.lua
 Destroy.lua
-DestroyEditor.lua
+JunkEditor.lua

@@ -1,7 +1,32 @@
 # Changelog
 
-## Unreleased
+## 0.5.0
 
+- **Junk** (formerly Destroy): the module now finds what the bags no longer need and marks it junk,
+  the game's junk coin on its bag slot. It weighs quests (in your log, or one an item starts:
+  QuestieDB's data), your professions' reagents and recipes, auction prices (what sells better at
+  the auction house is never junk), your class (gear you can't use, a lighter armor than you wear)
+  and whether it's soulbound. L2 + L3 on a bag item (rebindable) marks it junk or not junk; in the
+  Destroy panel R1 does. Marks are remembered per character, so a wrong verdict stays fixed.
+- **Junk**: an item a quest needs is kept while you're on the quest or can still do it (not done,
+  for your race and class), e.g. Crisp Spider Meat for Redridge Goulash; once done, it can be junk.
+  Profession tools (Skinning Knife, Mining Pick, Blacksmith Hammer, runed rods, fishing poles...)
+  and class tools (Thieves' Tools, totems) are kept for those who use them, never junk. The
+  tools come from Forever's own tables, as do the gathering professions' recipes, now known too.
+- **Junk**: an ordinary item a quest needs (meat, cloth...) says so in its tooltip, in orange:
+  "Needed for "Redridge Goulash"", in the bags, the loot window and links alike (not for what a
+  vendor sells). On / off in the Junk tab.
+- **Junk**: only items no quest needs can be marked junk; an old junk mark on one waits until the
+  quest is done.
+- **Junk**: a vendor's Sell All Junk now sells this junk too, after the game's greys; its button
+  lights up while only ours is left. In the Destroy panel at a vendor, Square held sells them all.
+- **Controller**: bag clean-up on L3 no longer also sorts on L2 + L3 (or with any shoulder or
+  trigger held).
+- **Auction**: the Sell tab's sections come from the same verdict (Keep now also holds your
+  professions' reagents and recipes, and what you marked to keep).
+- The QuestieDB and recipe data moved into the core (Improved Forever), shared by every module.
+  **Updating**: delete the old `ImprovedForever_Destroy` folder from `Interface/AddOns`; the Junk
+  module is `ImprovedForever_Junk`.
 - **Vibration**: Eating and Drinking now follow the eat motion as the server plays it: a bite or a
   sip every 5 s (the first 3 s after you sit), as the hand reaches the mouth. Both Skyborne races
   are timed too.

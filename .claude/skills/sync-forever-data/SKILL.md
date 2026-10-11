@@ -1,6 +1,6 @@
 ---
 name: sync-forever-data
-description: Re-sync the addon's game data with WoW Forever. It pulls the latest QuestieDB (drops, vendors, quests, NPCs, objects, with QuestieDB's corrections) and rebuilds the Library's recipes from Forever's own client tables. It then rebuilds LibraryData.lua and checks the IDs and names hardcoded in the code (Tasks, Vibration, Gather) against Forever. Use when the user asks to sync, update or refresh the data, says a Library entry is missing or doesn't match the game, mentions a new Forever patch or QuestieDB update, or asks "is our data up to date".
+description: Re-sync the addon's game data with WoW Forever. It pulls the latest QuestieDB (drops, vendors, quests, NPCs, objects, with QuestieDB's corrections) and rebuilds the Library's recipes from Forever's own client tables. It then rebuilds WorldData.lua and checks the IDs and names hardcoded in the code (Tasks, Vibration, Gather) against Forever. Use when the user asks to sync, update or refresh the data, says a Library entry is missing or doesn't match the game, mentions a new Forever patch or QuestieDB update, or asks "is our data up to date".
 ---
 
 # Sync Forever data
@@ -22,10 +22,10 @@ It exits 2 when a hardcoded ID needs a look. It does:
 
 1. **QuestieDB → latest** (`git submodule update --remote vendor/QuestieDB`).
 2. **Recipes** (`tools/make_library.py`):
-   - `LibraryRecipes.lua` from wago.tools DB2 CSVs of Forever's own build. wago lists
+   - `ImprovedForever/RecipeData.lua` from wago.tools DB2 CSVs of Forever's own build. wago lists
      Forever under the product key `wow_cn_beta`, so `forever_build()` picks the
      highest 1.16+ version from any product.
-3. **Library data** (`tools/make_library_data.py` → `LibraryData.lua`):
+3. **Library data** (`tools/make_library_data.py` → `ImprovedForever/WorldData.lua`):
    - QuestieDB's Forever data with its corrections: its exporter
      `tools/export-forever.lua --include-authored` writes
      `vendor/QuestieDB/src/corrections/Forever/combined/`.
@@ -51,12 +51,12 @@ It exits 2 when a hardcoded ID needs a look. It does:
   - Add missing nodes with their skill rank.
   - Then rerun with `--check`.
 - **Spot-check what the user reported**, e.g. the item's row in
-  `LibraryRecipes.lua` / `LibraryData.lua`.
+  `ImprovedForever/RecipeData.lua` / `ImprovedForever/WorldData.lua`.
 - **Report:** the QuestieDB commit move, the build used, the counts it printed
   (recipes, items, NPCs, quests, trainers) against the previous run, and anything
   still unresolved.
-- **Don't commit** unless asked. The changed files are `ImprovedForever_Library/
-  LibraryRecipes.lua`, `LibraryData.lua`, and the `vendor/QuestieDB` pointer.
+- **Don't commit** unless asked. The changed files are `ImprovedForever/
+  RecipeData.lua`, `ImprovedForever/WorldData.lua`, and the `vendor/QuestieDB` pointer.
 
 ## When a generator breaks
 
