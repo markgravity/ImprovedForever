@@ -76,6 +76,11 @@ focus the way Forever's native windows do. The shared code is
 - **No room past them:** as far right as the window fits.
 - **Re-placed as windows come and go:** every docked window is checked a few
   times a second while shown.
+- **Beside its opener:** a window opened from one that isn't along the top
+  (Destroy, from the bags or loot window) sits beside that one instead:
+  `IF.Focus.Dock(win, { beside = fn })`, `fn` returning the frames. It goes on
+  the side with room, tops level, and falls back to the top row when none is
+  shown.
 - Don't hand placement to the game's panel manager: an addon panel there
   taints it.
 - This includes the Improved Forever config window. Center only

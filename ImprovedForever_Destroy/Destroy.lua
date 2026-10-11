@@ -237,9 +237,21 @@ panel:EnableMouse(true)
 panel:SetClampedToScreen(true)
 panel:Hide()
 DS.panel = panel
--- Where it sits: as the game's own panels, along the top beside the open
--- windows, again as they come and go (ImprovedForever's Focus.lua)
-IF.Focus.Dock(panel)
+-- Where it sits: beside the window it was opened from (the loot window, else
+-- the bags), again as they come and go (ImprovedForever's Focus.lua)
+local function OpenedFrom()
+    local loot = _G.LootFrame
+    if DS.origin == "loot" and loot and loot:IsShown() then return { loot } end
+    local frames = {}
+    local combined = _G.ContainerFrameCombinedBags
+    if combined and combined:IsShown() then frames[#frames + 1] = combined end
+    for i = 1, NUM_CONTAINER_FRAMES or 13 do
+        local f = _G["ContainerFrame" .. i]
+        if f and f:IsShown() then frames[#frames + 1] = f end
+    end
+    return frames
+end
+IF.Focus.Dock(panel, { beside = OpenedFrom })
 
 -- The focus colour of the game's controller options (GamepadFocusStateColor:
 -- gold, black, blue), for the picked row
@@ -690,8 +702,7 @@ function DS.Open(origin)
     DS.switch.focus = "ours"
     DS.origin = origin or "bags"
     DS.TakePad(true)
-    -- (where: as the game's panels, along the top beside the open windows:
-    -- IF.Focus.Dock below)
+    -- (where: beside the loot window or the bags: IF.Focus.Dock above)
     panel:Show()
     Bind()
     DS.HideNativeFocus(true)

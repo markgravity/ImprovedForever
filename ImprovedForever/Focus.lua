@@ -221,7 +221,9 @@ end
 -- the last of them, the game's spacing between. Worked out the same way
 -- rather than handed to the game's panel manager (an addon's panel there
 -- taints it), and again as windows come and go.
---   F.Dock(win): placed so while shown (ours opened earlier first)
+--   F.Dock(win, opts?): placed so while shown (ours opened earlier first);
+--     opts.beside() -> frames: beside those instead while any is shown (the
+--     bags, the loot window: on the side with room, tops level)
 --   F.AlongTop(win): ours placed otherwise but counted (the auction window)
 ---------------------------------------------------------------------------
 local PANEL_X, BOTTOM_CLAMP, MIN_Y = 35, 140, -10
@@ -282,15 +284,53 @@ local function TakenRight(win)
     return right
 end
 
+-- The box of the shown frames (UIParent's units): left, right, top, or nil
+local function Box(frames)
+    local ui = UIParent:GetEffectiveScale()
+    local left, right, top
+    for _, f in ipairs(frames or {}) do
+        if f and f.IsShown and f:IsShown() and f:GetLeft() and f:GetTop() then
+            local k = f:GetEffectiveScale() / ui
+            left = math.min(left or math.huge, f:GetLeft() * k)
+            right = math.max(right or 0, f:GetRight() * k)
+            top = math.max(top or 0, f:GetTop() * k)
+        end
+    end
+    return left, right, top
+end
+
+-- Where beside the box: the side with room (the left of the bags, the
+-- right of a window on the left), tops level
+local BESIDE_GAP = 10
+local function Beside(win, left, right, top)
+    local w = win:GetWidth() * win:GetScale()
+    local screen = UIParent:GetWidth() or 0
+    local x
+    if (left + right) / 2 > screen / 2 then
+        x = left - BESIDE_GAP - w
+        if x < 0 then x = right + BESIDE_GAP end
+    else
+        x = right + BESIDE_GAP
+        if x + w > screen then x = left - BESIDE_GAP - w end
+    end
+    return math.max(0, math.min(x, screen - w)), top - (UIParent:GetTop() or 0)
+end
+
 function F.Place(win)
     local d = docked[win]
     if not d then return end
     local scale = win:GetScale()
-    local right = TakenRight(win)
-    local x = right and (right + Layout("PANEl_SPACING_X", 32)) or (Layout("LEFT_OFFSET", 16) + PANEL_X)
-    -- (no room past them: as far right as it fits)
-    x = math.min(x, (UIParent:GetWidth() or x) - win:GetWidth() * scale)
-    local y = Layout("TOP_OFFSET", -116)
+    local x, y
+    local left, right, top = Box(d.beside and d.beside())
+    if left then
+        x, y = Beside(win, left, right, top)
+    else
+        local taken = TakenRight(win)
+        x = taken and (taken + Layout("PANEl_SPACING_X", 32)) or (Layout("LEFT_OFFSET", 16) + PANEL_X)
+        -- (no room past them: as far right as it fits)
+        x = math.min(x, (UIParent:GetWidth() or x) - win:GetWidth() * scale)
+        y = Layout("TOP_OFFSET", -116)
+    end
     local bottom = (UIParent:GetTop() or 0) + y - win:GetHeight() * scale
     if bottom < BOTTOM_CLAMP then y = y + (BOTTOM_CLAMP - bottom) end
     y = math.min(y, MIN_Y)
@@ -316,9 +356,9 @@ driver:SetScript("OnUpdate", function()
     end
 end)
 
-function F.Dock(win)
+function F.Dock(win, opts)
     if docked[win] then return end
-    docked[win] = {}
+    docked[win] = { beside = opts and opts.beside }
     win:HookScript("OnShow", function()
         local d = docked[win]
         shownOrder = shownOrder + 1
