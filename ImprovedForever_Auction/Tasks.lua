@@ -13,18 +13,20 @@ local TK = {}
 IF.Tasks = TK
 
 -- Reagents vendors sell (the trade supply vendors'), known before any is
--- seen at a vendor: thread, dyes, vials, flux, spices, salt, water, bleach,
--- parchment, rods...
+-- seen at a vendor, without the Library's data: thread, dyes, vials, flux,
+-- spices, salt, water, bleach, parchment, rods... (Forever's items, checked
+-- against QuestieDB's Forever vendors; with the Library loaded its data
+-- answers for any item)
 local SEED_VENDOR = {
-    2320, 2321, 4291, 8343, 14341, 38426,           -- coarse, fine, silken, heavy silken, rune thread, eternium
-    2324, 2604, 2605, 4340, 4341, 4342, 6260, 6261, 10290, -- bleach, dyes
+    2320, 2321, 4291, 8343, 14341,                  -- coarse, fine, silken, heavy silken, rune thread
+    2324, 2325, 2604, 2605, 4340, 4341, 4342, 6260, 6261, 10290, -- bleach, dyes
     3371, 3372, 8925, 18256,                        -- vials
-    2880, 3466, 3857,                               -- weak flux, strong flux, coal
+    2880, 3466, 3857, 18567,                        -- weak flux, strong flux, coal, elemental flux
     2678, 2692, 3713, 159,                          -- mild spices, hot spices, soothing spices, spring water
-    4289, 4399, 4400,                               -- salt, wooden stock, heavy stock
+    4289, 4399, 4400, 11291, 272941,                -- salt, wooden stock, heavy stock, star wood, thick logs
     2928, 8923, 8924, 5173, 3777,                   -- poison supplies
-    16583, 17020, 17194, 30817,                     -- demonic figurine, arcane powder, holiday spices, simple flour
-    6217, 4470, 4471,                               -- copper rod, simple wood, flint and tinder
+    16583, 17020, 17194, 10284,                     -- demonic figurine, arcane powder, holiday spices, simple flour
+    6217, 4470, 4471, 10647, 10648,                 -- copper rod, simple wood, flint and tinder, engineer's ink, parchment
 }
 local seed = {}
 for _, id in ipairs(SEED_VENDOR) do seed[id] = true end
@@ -34,9 +36,11 @@ local function Vendors()
     return IF.db.vendorItems
 end
 
--- Sold by vendors (seen at one, or well known)
+-- Sold by vendors (seen at one, well known, or in the Library's Forever data)
 function TK.FromVendor(itemID)
-    return seed[itemID] or Vendors()[itemID] ~= nil
+    if seed[itemID] or Vendors()[itemID] ~= nil then return true end
+    local library = IF.Library
+    return library and library.Sold and library.Sold(itemID) or false
 end
 
 -- What a vendor sells, kept (account-wide) as its window opens

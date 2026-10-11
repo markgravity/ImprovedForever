@@ -641,6 +641,14 @@ function LB.Trainers(spell, skill)
     return ByZone(entries), starter
 end
 
+-- Whether any vendor sells it (QuestieDB's Forever vendors; nil: no data)
+function LB.Sold(itemID)
+    local Q = LB.Q()
+    if not (Q and itemID) then return nil end
+    local vendors = Field(Q.Item, itemID, "vendors")
+    return vendors ~= nil and next(vendors) ~= nil
+end
+
 -- The people it comes from, by zone: so far those who sell it (QuestieDB's
 -- vendors)
 function LB.People(itemID)

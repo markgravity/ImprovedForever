@@ -1,9 +1,10 @@
 """Build LibraryRecipes.lua: the profession recipe index the Library reads.
 
 Blizzard's DB2 tables (SkillLineAbility, SpellReagents, SpellEffect, ItemEffect)
-come from wago.tools as CSV. Forever has no build there, so the latest Classic
-Era build stands in; recipes Forever adds are learned in game when a profession
-window opens (Library.lua LB.Learn).
+come from wago.tools as CSV, from Forever's own build: the client reports itself
+as 1.60.x (product wow_classic_beta; wago lists it under another product name,
+so it's found by its version). Recipes newer than that build are learned in
+game when a profession window opens (Library.lua LB.Learn).
 
 Each recipe spell becomes one row:
     [spellID] = { skillLine, makesItemID, makesCount, taughtByItemID, reagentID, count, ... }
@@ -42,13 +43,23 @@ def table(name, build):
     return list(csv.DictReader(io.StringIO(text)))
 
 
-def latest_build():
+def forever_build():
+    """The latest Forever build wago has: version 1.16 and up (Classic Era is
+    1.15; Forever's client is 1.60.x), whichever product it's listed under."""
     builds = json.loads(fetch(f"{API}/api/builds"))
-    return builds["wow_classic_era"][0]["version"]
+    versions = []
+    for listed in builds.values():
+        for b in listed:
+            parts = [int(x) for x in b["version"].split(".")]
+            if parts[0] == 1 and parts[1] >= 16:
+                versions.append(parts)
+    if not versions:
+        raise SystemExit("no Forever build on wago.tools: pass one (python tools/make_library.py <build>)")
+    return ".".join(map(str, max(versions)))
 
 
 def main():
-    build = sys.argv[1] if len(sys.argv) > 1 else latest_build()
+    build = sys.argv[1] if len(sys.argv) > 1 else forever_build()
     print(f"build {build}")
 
     skill = {}
@@ -73,15 +84,32 @@ def main():
     for row in table("SpellEffect", build):
         effect, spell = int(row["Effect"]), int(row["SpellID"])
         if effect == CREATE_ITEM and spell in skill and int(row["EffectItemType"]) > 0:
-            count = int(row["EffectBasePoints"]) + max(int(row["EffectDieSides"]), 1)
+            if "EffectBasePointsF" in row:
+                # (Forever's build: the count itself, as a float)
+                count = round(float(row["EffectBasePointsF"] or 0))
+            else:
+                count = int(row["EffectBasePoints"]) + max(int(row["EffectDieSides"]), 1)
             makes[spell] = (int(row["EffectItemType"]), max(count, 1))
         elif effect == LEARN_SPELL and int(row["EffectTriggerSpell"]) > 0:
             learns[spell].append(int(row["EffectTriggerSpell"]))
 
+    # (an item's use effects: on the effect itself in older builds, through
+    # ItemXItemEffect in Forever's)
+    effects = table("ItemEffect", build)
+    pairs = []
+    if effects and "ParentItemID" in effects[0]:
+        pairs = [(int(row["ParentItemID"]), int(row["SpellID"])) for row in effects]
+    else:
+        spell_of = {int(row["ID"]): int(row["SpellID"]) for row in effects}
+        for row in table("ItemXItemEffect", build):
+            spell = spell_of.get(int(row["ItemEffectID"]))
+            if spell:
+                pairs.append((int(row["ItemID"]), spell))
     taught = {}
-    for row in table("ItemEffect", build):
-        item, spell = int(row["ParentItemID"]), int(row["SpellID"])
-        for recipe in learns.get(spell, ()):
+    for item, spell in sorted(pairs):
+        # (a recipe item's effect: a spell that learns the recipe, or in
+        # Forever's build the recipe itself, its trigger "learn")
+        for recipe in tuple(learns.get(spell, ())) + ((spell,) if spell in skill else ()):
             if recipe in skill:
                 taught.setdefault(recipe, item)
 

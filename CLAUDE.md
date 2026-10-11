@@ -81,6 +81,16 @@ focus the way Forever's native windows do. The shared code is
 - This includes the Improved Forever config window. Center only
   confirmations, the way the game centres its dialogs.
 
+## Game data: always Forever's
+- Every bundled data file and hardcoded game ID (items, spells, NPCs, nodes) must
+  match WoW Forever (client 1.60.x), not Classic Era: Forever changed recipes,
+  spells and items.
+- Sync and check with `/sync-forever-data` (`python3 tools/sync_forever_data.py`).
+  It pulls QuestieDB, rebuilds the Library's data from Forever's own client tables
+  and QuestieDB's corrected data, and checks the IDs written in the code.
+- When adding a hardcoded ID or name, check it against Forever's data, then rerun
+  `python3 tools/sync_forever_data.py --check`.
+
 ## Checks
 - `luajit -bl <file>` for syntax.
 - `luajit -bl <file> | grep -oE 'GGET.*"[A-Za-z_]+"'` for stray globals.

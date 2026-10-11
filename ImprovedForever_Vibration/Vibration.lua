@@ -166,16 +166,17 @@ V.MOVES = {
     burst = { 1449, 122, 120, 11113, 15237, 8122, 6673, 1160, 5246, 12323, 2687, 18499 },
     -- The seals (Righteousness, the Crusader, Command, Light, Wisdom,
     -- Justice), the blessings, Inner Fire, Renew, Lightning Shield
-    seal = { 20154, 21082, 20375, 20165, 20166, 20164, 19740, 19742, 20217, 1044, 1038, 20911, 19977, 588, 139,
+    seal = { 20154, 21082, 20375, 20165, 20166, 20164, 19740, 19742, 20217, 1044, 1038, 19977, 588, 139,
         324 },
     judge = { 20271, 20066 },                               -- Judgement, Repentance
     -- Power Word: Shield, Divine Shield, Divine Protection, Blessing of
     -- Protection, Holy Shield, Ice Barrier, Ice Block, Mana Shield, Shield
     -- Block, Shield Wall, Evasion
     ward = { 17, 642, 498, 1022, 20925, 11426, 11958, 1463, 2565, 871, 5277 },
-    -- Shadow Word: Pain, Corruption, the curses, Siphon Life, Life Tap,
-    -- Hunter's Mark, Faerie Fire, Insect Swarm
-    hex = { 589, 172, 980, 702, 704, 1714, 1490, 17862, 18265, 1454, 1130, 770, 5570 },
+    -- Shadow Word: Pain, Corruption, the banes (Forever's: Agony, Doom), the
+    -- curses (Forever's Elements), Siphon Life, Life Tap, Hunter's Mark,
+    -- Faerie Fire, Insect Swarm (IDs as Forever's spell table has them)
+    hex = { 589, 172, 980, 603, 702, 704, 1714, 1311676, 18265, 1454, 1130, 770, 5570 },
 }
 -- Each pattern's icon, drawn in the radial menu's style (tools/make_vibe_icons.py)
 local VIBE_ICONS = "Interface\\AddOns\\ImprovedForever\\textures\\ic_vibe_"

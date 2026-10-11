@@ -1,6 +1,8 @@
 """Build LibraryData.lua: the Library's drops, vendors and quests, taken from
 QuestieDB's Forever data (the vendor/QuestieDB submodule:
-git submodule update --init).
+git submodule update --init) with its corrections applied: QuestieDB's own
+exporter (tools/export-forever.lua, needs a Lua 5.1: LUA51=path) merges its
+raw data with its Classic and Forever fixes.
 
 Only what the Library shows is kept: for each item its sources (creatures,
 objects and containers that drop it, vendors, quests); for each creature,
@@ -32,11 +34,14 @@ database (github.com/cmangos/classic-db, GPL-3.0): creature_template's
 ModelId1-4, kept only when the client's own CreatureDisplayInfo table has
 them, and npc_trainer / npc_trainer_template (through TrainerTemplateId). A
 trainer teaches a spell that teaches the recipe (the client's SpellEffect,
-LEARN_SPELL); the recipes are LibraryRecipes.lua's. Client tables from
-wago.tools, the latest Classic Era build.
+LEARN_SPELL); the recipes are LibraryRecipes.lua's. Recipes Forever adds
+(none of cMaNGOS's trainers teach them) that no recipe item teaches and that
+don't come with the profession are put down to the profession's trainers, at
+the skill rank Forever's SkillLineAbility gives. Client tables from wago.tools,
+Forever's own build (make_library.py's forever_build).
 
 Usage:
-    python tools/make_library_data.py
+    LUA51=/path/to/lua5.1 python tools/make_library_data.py
 """
 import csv
 import gzip
@@ -154,6 +159,47 @@ def data_string(path, name):
     return reader.table()
 
 
+COMBINED = QDB / "src" / "corrections" / "Forever" / "combined"
+
+
+def export_forever():
+    """QuestieDB's Forever data with its corrections applied: its raw data
+    (data/Forever) is only the base; its fixes (the inherited Classic ones and
+    Forever's own, src/corrections) are folded in by its own exporter,
+    tools/export-forever.lua, run with a Lua 5.1 (LUA51=path, else lua5.1 /
+    lua on the PATH when it is 5.1; LuaJIT can't load its biggest tables)."""
+    import os
+    import shutil
+    lua = os.environ.get("LUA51") or shutil.which("lua5.1") or shutil.which("lua")
+    if lua:
+        out = subprocess.run([lua, "-v"], capture_output=True, text=True)
+        if "5.1" not in (out.stdout + out.stderr):
+            lua = None
+    if lua:
+        run = subprocess.run([lua, "tools/export-forever.lua", "--include-authored"], cwd=QDB,
+                             capture_output=True, text=True)
+        if run.returncode != 0:
+            raise SystemExit("QuestieDB's export-forever.lua failed:\n" + run.stdout + run.stderr)
+        print(run.stdout.strip().splitlines()[-1])
+    elif not (COMBINED / "foreverNpcDB.lua").is_file():
+        raise SystemExit("QuestieDB's corrections need its exporter: set LUA51 to a Lua 5.1 interpreter")
+    else:
+        print("QuestieDB export: no Lua 5.1 found, using the last export in " + str(COMBINED.relative_to(ROOT)))
+
+
+def combined(name):
+    """One merged entity table (name: Item, Npc, Object, Quest): rows written
+    as `x[id]={...}`, one a line, positional with nil holes"""
+    rows = {}
+    for line in (COMBINED / f"forever{name}DB.lua").read_text(encoding="utf-8").splitlines():
+        m = re.match(r"^\w+\[(\d+)\]=(\{.*\})\s*$", line)
+        if m:
+            reader = Reader(m.group(2))
+            reader.take("{")
+            rows[int(m.group(1))] = reader.table()
+    return rows
+
+
 def as_list(v):
     if v is None:
         return []
@@ -240,8 +286,21 @@ def sql_rows(statement):
     return rows
 
 
-def wago_table(name):
-    build = json.loads(fetch(f"{WAGO}/api/builds"))["wow_classic_era"][0]["version"]
+_builds = {}
+
+
+def wago_table(name, era=False):
+    """A client table from Forever's build; era: from the latest Classic Era
+    build (the vanilla spells cMaNGOS's trainers teach, gone from Forever's)"""
+    key = "era" if era else "forever"
+    if key not in _builds:
+        if era:
+            _builds[key] = json.loads(fetch(f"{WAGO}/api/builds"))["wow_classic_era"][0]["version"]
+        else:
+            from make_library import forever_build
+            _builds[key] = forever_build()
+        print(f"client tables ({key}): build {_builds[key]}")
+    build = _builds[key]
     return list(csv.DictReader(io.StringIO(fetch(f"{WAGO}/db2/{name}/csv?build={build}").decode("utf-8"))))
 
 
@@ -281,7 +340,9 @@ def trainers(creatures, columns, own, shared):
     for spell, skill in re.findall(r"^\[(\d+)\]=\{(\d+),", (ROOT / "ImprovedForever_Library" / "LibraryRecipes.lua").read_text(), re.M):
         recipes[int(spell)] = int(skill)
     teaches = {}
-    for row in wago_table("SpellEffect"):
+    # (cMaNGOS's trainers teach vanilla's teaching spells: Classic Era's link
+    # from them to the recipe, and Forever's own where it has one)
+    for row in wago_table("SpellEffect", era=True) + wago_table("SpellEffect"):
         if row["Effect"] == "36" and int(row["EffectTriggerSpell"]) > 0:
             teaches.setdefault(int(row["SpellID"]), []).append(int(row["EffectTriggerSpell"]))
     templates = {}
@@ -313,13 +374,10 @@ def emit(name, rows):
 
 
 def main():
-    forever = QDB / "data" / "Forever"
-    if not forever.is_dir():
+    if not (QDB / "data" / "Forever").is_dir():
         raise SystemExit("vendor/QuestieDB missing: git submodule update --init")
-    items = data_string(forever / "foreverItemDB.lua", "QuestieDB.itemData")
-    npcs = data_string(forever / "foreverNpcDB.lua", "QuestieDB.npcData")
-    objects = data_string(forever / "foreverObjectDB.lua", "QuestieDB.objectData")
-    quests = data_string(forever / "foreverQuestDB.lua", "QuestieDB.questData")
+    export_forever()
+    items, npcs, objects, quests = combined("Item"), combined("Npc"), combined("Object"), combined("Quest")
 
     item_rows, want_npc, want_obj, want_quest = {}, set(), set(), set()
     for iid, row in items.items():
@@ -355,7 +413,26 @@ def main():
 
     creatures, columns, own, shared = cmangos()
     by_recipe, by_skill, ranks, levels = trainers(creatures, columns, own, shared)
-    starter_spells = {int(r["Spell"]) for r in wago_table("SkillLineAbility") if r["AcquireMethod"] == "1"}
+    abilities = wago_table("SkillLineAbility")
+    starter_spells = {int(r["Spell"]) for r in abilities if r["AcquireMethod"] == "1"}
+    # (Forever's own recipes: its trainers, by the profession)
+    added = 0
+    by_item = {int(m[0]): (int(m[1]), int(m[2])) for m in re.findall(
+        r"^\[(\d+)\]=\{(\d+),\d+,\d+,(\d+)", (ROOT / "ImprovedForever_Library" / "LibraryRecipes.lua").read_text(), re.M)}
+    for r in abilities:
+        spell = int(r["Spell"])
+        recipe = by_item.get(spell)
+        if not recipe or spell in by_recipe or spell in starter_spells or recipe[1] or r["AcquireMethod"] != "0":
+            continue
+        npcs_ = by_skill.get(recipe[0])
+        if not npcs_:
+            continue
+        by_recipe[spell] = set(npcs_)
+        rank = int(r["MinSkillLineRank"] or 0)
+        if rank > 0:
+            ranks[spell] = rank
+        added += 1
+    print(f"{added} recipes put down to their profession's trainers")
     for npcs_ in list(by_recipe.values()) + list(by_skill.values()):
         want_npc.update(npcs_)
 
