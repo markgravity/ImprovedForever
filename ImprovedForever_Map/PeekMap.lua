@@ -58,6 +58,15 @@ local place = K.NewFrame("Frame", "ImprovedForeverPeekMapPlace", UIParent)
 place:SetSize(1, 1)
 place:EnableMouse(false)
 
+-- /if peek: each line printed and kept in IF.db.peekLog (a fresh log per
+-- run), read from the saved variables after a /reload
+function PeekMap.Say(text)
+    if not PeekMap.debug then return end
+    IF.Print(text)
+    local log = IF.db and IF.db.peekLog
+    if log then log[#log + 1] = ("%.2f %s"):format(GetTime() % 1000, text) end
+end
+
 local peeking = false      -- the open map is a peek
 local saved                -- what the look changed: { alphas, points, scale, alpha }
 
@@ -111,6 +120,7 @@ end
 local function Restore()
     local scroll = WorldMapFrame and WorldMapFrame.ScrollContainer
     if not saved then return end
+    IF.Focus.DimNative(place, false)
     for region, alpha in pairs(saved.alphas) do region:SetAlpha(alpha) end
     if scroll then
         scroll:SetScale(saved.scale)
@@ -121,19 +131,27 @@ local function Restore()
     saved = nil
 end
 
--- (parts of the window it shows later, a footer, faded too while a peek)
+-- (parts of the window it shows later, a footer, faded too while a peek;
+-- and the game's cursor, there when the peek opened the map as a window:
+-- the first one, or in combat, Focus.lua)
 local refade = CreateFrame("Frame")
 refade:SetScript("OnUpdate", function()
     if not (peeking and saved and WorldMapFrame) then return end
     for _, child in ipairs({ WorldMapFrame:GetChildren() }) do
         if child ~= WorldMapFrame.ScrollContainer and saved.alphas[child] == nil then Fade(child) end
     end
+    local pointer = _G.SmartNavigation and SmartNavigation.Pointer
+    if pointer and pointer:GetAlpha() > 0 then IF.Focus.DimNative(place, true) end
 end)
 
 IF.OnLogin(function()
     local map = WorldMapFrame
     if not map then return end
+    map:HookScript("OnShow", function()
+        PeekMap.Say("peek: map OnShow, peeking: " .. tostring(peeking))
+    end)
     map:HookScript("OnHide", function()
+        PeekMap.Say("peek: map OnHide, peeking: " .. tostring(peeking))
         peeking = false
         Restore()
     end)
@@ -145,12 +163,16 @@ function PeekMap.Opened()
     if peeking or not (WorldMapFrame and WorldMapFrame:IsShown()) then return end
     peeking = true
     Apply()
-    if PeekMap.debug and saved then
+    if PeekMap.debug then
         local scroll = WorldMapFrame.ScrollContainer
         local n = 0
-        for _ in pairs(saved.alphas) do n = n + 1 end
-        IF.Print(("peek: shown, map %dx%d, alpha %.2f, %d parts faded"):format(scroll:GetWidth(),
-            scroll:GetHeight(), scroll:GetEffectiveAlpha(), n))
+        for _ in pairs(saved and saved.alphas or {}) do n = n + 1 end
+        local cx, cy = scroll:GetCenter()
+        PeekMap.Say(("peek: shown, look applied: %s, map %dx%d, scale %.3f, centre %s, %s, alpha %.2f,"
+            .. " visible: %s, frame alpha %.2f, frame scale %.3f, %d parts faded"):format(tostring(saved ~= nil),
+            scroll:GetWidth(), scroll:GetHeight(), scroll:GetEffectiveScale(), tostring(cx and math.floor(cx)),
+            tostring(cy and math.floor(cy)), scroll:GetEffectiveAlpha(), tostring(scroll:IsVisible()),
+            WorldMapFrame:GetEffectiveAlpha(), WorldMapFrame:GetEffectiveScale(), n))
     end
 end
 
@@ -174,19 +196,28 @@ SecureHandlerWrapScript(hold, "OnClick", hold, [[
 -- the map is shown directly, not as a window: Forever's gamepad UI only
 -- takes the gamepad for windows (ShowUIPanel), so the player keeps moving.
 -- In combat a handle to the map is refused (it isn't protected): its
--- button opens it as a window then, which takes the gamepad. Returns false
+-- button opens it as a window then, which takes the gamepad (and the first
+-- peek, before the map has a place). Returns false
 -- (nothing to run) or sets the click to run the map's button.
 PeekMap.SNIPPET = [[
     local down, macro = ...
-    if not PlayerInCombat() then
-        local map = self:GetFrameRef("map")
-        if not map then return false end
+    local combat = PlayerInCombat()
+    local map = not combat and self:GetFrameRef("map")
+    -- Before the map's first opening as a window it has no place or size
+    -- (its window layout gives it them): shown directly it is drawn nowhere.
+    -- That first peek goes through its button too, as in combat, and is
+    -- closed the same way.
+    local scroll = not combat and self:GetFrameRef("map-scroll")
+    local unplaced = scroll and (scroll:GetWidth() or 0) == 0
+    local opened = self:GetAttribute("ic-peek-open")
+    if map and not (down and unplaced and not map:IsShown())
+            and not (not down and opened and map:IsShown()) then
         if down then
             if not map:IsShown() then
                 map:Show()
                 self:SetAttribute("ic-peek-shown", true)
             end
-        elseif self:GetAttribute("ic-peek-shown") or self:GetAttribute("ic-peek-open") then
+        elseif self:GetAttribute("ic-peek-shown") then
             map:Hide()
         end
         if not down then
@@ -196,10 +227,10 @@ PeekMap.SNIPPET = [[
         return false
     end
     if down then
-        if self:GetAttribute("ic-peek-shown") or self:GetAttribute("ic-peek-open") then return false end
+        if self:GetAttribute("ic-peek-shown") or opened then return false end
         self:SetAttribute("ic-peek-open", true)
     else
-        if not (self:GetAttribute("ic-peek-shown") or self:GetAttribute("ic-peek-open")) then return false end
+        if not (self:GetAttribute("ic-peek-shown") or opened) then return false end
         self:SetAttribute("ic-peek-shown", nil)
         self:SetAttribute("ic-peek-open", nil)
     end
@@ -210,7 +241,7 @@ PeekMap.SNIPPET = [[
 hold:SetAttribute("ic-peek", PeekMap.SNIPPET)
 hold:SetScript("PostClick", function(self, button, down)
     if PeekMap.debug then
-        IF.Print("peek: hotkey " .. (down and "down" or "up") .. ", ran: " .. tostring(self:GetAttribute("type"))
+        PeekMap.Say("peek: hotkey " .. (down and "down" or "up") .. ", ran: " .. tostring(self:GetAttribute("type"))
             .. ", map open: " .. tostring(WorldMapFrame and WorldMapFrame:IsShown()))
     end
     PeekMap.Opened()
@@ -237,7 +268,10 @@ function PeekMap.Apply()
     end
     pending = false
     local macro = IF.Touch and IF.Touch.Macro("map")
-    if WorldMapFrame then hold:SetFrameRef("map", WorldMapFrame) end
+    if WorldMapFrame then
+        hold:SetFrameRef("map", WorldMapFrame)
+        if WorldMapFrame.ScrollContainer then hold:SetFrameRef("map-scroll", WorldMapFrame.ScrollContainer) end
+    end
     hold:SetAttribute("ic-macro", macro)
     ClearOverrideBindings(hold)
     local key = PeekMap.Key() and IF.Binds.KeyOf(PeekMap.Key())
@@ -256,14 +290,21 @@ IF.OnLogin(PeekMap.Apply)
 -- printed until /if peek again)
 function PeekMap.Probe()
     PeekMap.debug = not PeekMap.debug
+    if PeekMap.debug then IF.db.peekLog = { date("%Y-%m-%d %H:%M:%S") } end
     local spec = PeekMap.Key()
     local key = spec and IF.Binds.KeyOf(spec)
-    IF.Print("peek: hotkey " .. tostring(spec) .. " -> key " .. tostring(key)
+    PeekMap.Say("peek: hotkey " .. tostring(spec) .. " -> key " .. tostring(key)
         .. ", bound to: " .. tostring(key and GetBindingAction(key, true)))
-    IF.Print("peek: macro " .. tostring(hold:GetAttribute("ic-macro")) .. ", map frame: "
+    PeekMap.Say("peek: macro " .. tostring(hold:GetAttribute("ic-macro")) .. ", map frame: "
         .. tostring(WorldMapFrame ~= nil) .. ", map scroll: " .. tostring(WorldMapFrame and WorldMapFrame.ScrollContainer ~= nil)
         .. ", in combat: " .. tostring(IF.InCombat()) .. ", pending: " .. tostring(pending))
-    IF.Print("peek: press printing " .. (PeekMap.debug and "on" or "off"))
+    -- (again once the chat box has closed: while it's open the click is the game's)
+    if IF.Touch and IF.Touch.Probe then
+        IF.Touch.Probe()
+        if PeekMap.debug then C_Timer.After(2, IF.Touch.Probe) end
+    end
+    IF.Print("peek: press printing " .. (PeekMap.debug and "on, logged to the saved variables (/reload to write)"
+        or ("off, " .. #(IF.db.peekLog or {}) .. " lines logged")))
 end
 
 local events = CreateFrame("Frame")

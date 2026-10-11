@@ -16,6 +16,11 @@ local IF = ImprovedForever
 local touch = {}
 IF.Touch = touch
 
+-- (/if peek: printed and logged, PeekMap.Say)
+local function Say(text)
+    if IF.PeekMap and IF.PeekMap.Say then IF.PeekMap.Say(text) end
+end
+
 local PAD_STICK = 4       -- StickConfigNameToIndex("Pad") is nil on Forever
 local KEY = "PADBACK"     -- what the game calls a touchpad click
 local MODIFIERS = { "", "SHIFT-", "CTRL-", "ALT-", "CTRL-SHIFT-", "ALT-SHIFT-", "CTRL-ALT-", "CTRL-ALT-SHIFT-" }
@@ -190,7 +195,7 @@ click:SetScript("PostClick", function(self, button, down)
     -- (the peek map's corner opened the map: shown as the peek map)
     local region = self:GetAttribute("ic-region")
     if IF.PeekMap and IF.PeekMap.debug then
-        IF.Print("peek: pad " .. (down and "down" or "up") .. ", corner " .. tostring(region)
+        Say("peek: pad " .. (down and "down" or "up") .. ", corner " .. tostring(region)
             .. " (" .. tostring(region and settings.regions[region]) .. ", held: "
             .. tostring(region and self:GetAttribute("ic-peek-" .. region)) .. "), ran: "
             .. tostring(self:GetAttribute("type") and self:GetAttribute("macrotext")) .. ", map open: "
@@ -272,7 +277,10 @@ function touch.Apply()
         click:SetAttribute("ic-macro-" .. region, not off and touch.Macro(action) or nil)
         click:SetAttribute("ic-peek-" .. region, peek or nil)
     end
-    if WorldMapFrame then click:SetFrameRef("map", WorldMapFrame) end
+    if WorldMapFrame then
+        click:SetFrameRef("map", WorldMapFrame)
+        if WorldMapFrame.ScrollContainer then click:SetFrameRef("map-scroll", WorldMapFrame.ScrollContainer) end
+    end
     if IF.PeekMap then click:SetAttribute("ic-peek", IF.PeekMap.SNIPPET) end
     ClearOverrideBindings(click)
     -- While the panel is open it owns the touchpad click (it picks the slot
@@ -292,8 +300,31 @@ function touch.Apply()
             SetOverrideBindingClick(click, true, modifier .. KEY, click:GetName(), "LeftButton")
         end
     end
+    if IF.PeekMap and IF.PeekMap.debug then
+        Say("touch: apply, bound: " .. tostring(ours and not panelOpen and inGame) .. ", in game: "
+            .. tostring(IF.Binds.InGame()) .. ", windows: " .. tostring(WindowsShown()) .. ", peeking: "
+            .. tostring(IF.PeekMap.IsPeeking()) .. ", panel open: " .. tostring(panelOpen))
+    end
     -- (the panel picks the corner under the finger too)
     BlockTouchCursor(ours and (inGame or panelOpen) and true or false)
+end
+
+-- /if peek: why the click is or isn't ours, each part of touch.Apply's test
+function touch.Probe()
+    local settings = touch.GetSettings()
+    local manager = _G.GamepadMode and GamepadMode.FrameControlsManager
+    local names = {}
+    for _, frame in ipairs(manager and manager.shownFrames or {}) do
+        names[#names + 1] = type(frame) == "table" and frame.GetName and (frame:GetName() or "?") or tostring(frame)
+    end
+    Say("touch: PADBACK -> " .. tostring(GetBindingAction(KEY, true)) .. ", enabled: "
+        .. tostring(settings.enabled ~= false) .. ", pad: " .. tostring(IF.PadStyle()) .. ", panel open: "
+        .. tostring(IF.Menu and IF.Menu.IsOpen and IF.Menu.IsOpen()) .. ", in game: " .. tostring(IF.Binds.InGame())
+        .. ", windows: " .. (#names > 0 and table.concat(names, " ") or "none") .. ", pending: " .. tostring(pending))
+    local x, y = touch.FingerPosition()
+    Say("touch: finger " .. tostring(x) .. ", " .. tostring(y) .. ", keydown: "
+        .. tostring(click:GetAttribute("ic-keydown")) .. ", top right: " .. tostring(click:GetAttribute("ic-macro-upright"))
+        .. ", held: " .. tostring(click:GetAttribute("ic-peek-upright")) .. ", cursor: " .. tostring(GetCVarSafe(CURSOR_CVAR)))
 end
 
 function touch.CycleAction(region, step)
