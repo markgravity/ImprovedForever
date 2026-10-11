@@ -21,8 +21,10 @@ CACHE = Path(__file__).resolve().parent / ".models"
 
 # The playable races' models (ChrModel: male, female)
 MODELS = {1: (1011653, 1000764), 2: (917116, 949470), 3: (878772, 950080), 4: (974343, 921844),
-          5: (959310, 997378), 6: (968705, 986648), 7: (900914, 940356), 8: (1022938, 1018060)}
-NAMES = {1: "Human", 2: "Orc", 3: "Dwarf", 4: "Night Elf", 5: "Undead", 6: "Tauren", 7: "Gnome", 8: "Troll"}
+          5: (959310, 997378), 6: (968705, 986648), 7: (900914, 940356), 8: (1022938, 1018060),
+          95: (7478487, 7478494), 96: (7478487, 7478494)}
+NAMES = {1: "Human", 2: "Orc", 3: "Dwarf", 4: "Night Elf", 5: "Undead", 6: "Tauren", 7: "Gnome", 8: "Troll",
+         95: "High Order Skyborne", 96: "Windshaper Skyborne"}
 
 
 def chunks(d):

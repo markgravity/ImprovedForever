@@ -785,10 +785,11 @@ end
 
 ---------------------------------------------------------------------------
 -- Eating and drinking in time with the character: sitting with food or a
--- drink, it loops the eat motion (EmoteEat) from the moment the buff goes
--- on, lifting the hand to the mouth once a loop. Munch bites as the hand
--- gets there and chews while it stays; Gulp sips, then swallows. Only
--- while the hand is at the mouth: still while it goes and comes back.
+-- drink, the server has the character play the eat motion (EmoteEat) once
+-- on each of its ticks (REST_TIMER), lifting the hand to the mouth. Munch
+-- bites as the hand gets there and chews while it stays; Gulp sips, then
+-- swallows. Only while the hand is at the mouth: still while it goes and
+-- comes back.
 ---------------------------------------------------------------------------
 -- The motion's length, when the hand reaches the mouth and when it leaves
 -- (ms), by race and sex (male, female): from each model's animation, the
@@ -802,7 +803,16 @@ local REST_MOTION = {
     [6] = { { 2000, 900, 2000 }, { 2000, 720, 1880 } },     -- Tauren
     [7] = { { 2666, 800, 1820 }, { 2666, 1040, 2100 } },    -- Gnome
     [8] = { { 3000, 600, 2220 }, { 1500, 260, 1180 } },     -- Troll
+    [95] = { { 3334, 400, 1280 }, { 2000, 540, 1440 } },    -- High Order Skyborne
+    [96] = { { 3334, 400, 1280 }, { 2000, 540, 1440 } },    -- Windshaper Skyborne
 }
+
+-- The server's ticks (seconds), each playing the motion once: the first
+-- some time after the buff goes on, then one every so often. Every 5 s, as
+-- classic servers have eating (cMaNGOS, Aura::HandleModRegen), drinking
+-- too; the first 3 s in, not 5 (both felt in game in WoW Forever). The
+-- game tells addons nothing of them.
+local REST_TIMER = { eat = { first = 3, every = 5 }, drink = { first = 3, every = 5 } }
 
 -- When the buff went on (GetTime seconds), per event; set below
 local restStart = {}
@@ -816,16 +826,19 @@ function V.RestMotion()
     return { m[1] / 1000, m[2] / 1000, m[3] / 1000 }
 end
 
--- Where the motion is: seconds since the hand reached the mouth (0 ..
--- length) and how long it stays there
-local function MotionAt(m, start, now)
-    local d = (now - start - m[2]) % m[1]
-    return d, (m[3] - m[2]) % m[1]
+-- Where the motion is: seconds since the hand last reached the mouth, and
+-- how long it stays there (cut short by the next tick); nil before the
+-- first time
+local function MotionAt(m, timer, start, now)
+    local t = now - start - timer.first - m[2]
+    if t < 0 then return nil end
+    return t % timer.every, math.min((m[3] - m[2]) % m[1], timer.every)
 end
 
-local function Munch(m, start)
+local function Munch(m, timer, start)
     return function(now)
-        local d, near = MotionAt(m, start, now)
+        local d, near = MotionAt(m, timer, start, now)
+        if not d then return 0, 0 end
         if d < 0.14 then return 0.55, 0.4 end                     -- the bite
         if d < near then
             -- chewing: a small tick every 0.3 s
@@ -835,9 +848,10 @@ local function Munch(m, start)
     end
 end
 
-local function Gulp(m, start)
+local function Gulp(m, timer, start)
     return function(now)
-        local d, near = MotionAt(m, start, now)
+        local d, near = MotionAt(m, timer, start, now)
+        if not d then return 0, 0 end
         if d < 0.2 then return 0.1 + 0.15 * d / 0.2, 0.2 + 0.15 * d / 0.2 end   -- the sip
         local swallow = d - near / 2
         if swallow >= 0 and swallow < 0.16 then return 0.3, 0.4 end
@@ -852,7 +866,8 @@ local function RestShape(eventKey, pattern)
     local m = V.RestMotion()
     if not m or (pattern ~= "chew" and pattern ~= "gulp") then return nil end
     local start = restStart[eventKey] or GetTime()
-    return pattern == "chew" and Munch(m, start) or Gulp(m, start)
+    local timer = REST_TIMER[eventKey]
+    return pattern == "chew" and Munch(m, timer, start) or Gulp(m, timer, start)
 end
 
 -- Combo events (critical hits, given or taken): one soon after another
@@ -1557,11 +1572,20 @@ local function SetResting(key, start)
     if on then V.Fire(key) else V.EndLoop(key) end
 end
 
+-- Returned by Buff when the auras can't be read (secret, e.g. in combat)
+local HIDDEN = {}
+
 -- The player's buff i's name, and when it went on (nil: no more)
 local function Buff(i)
     local name, duration, expires
     if C_UnitAuras and C_UnitAuras.GetBuffDataByIndex then
-        local aura = C_UnitAuras.GetBuffDataByIndex("player", i)
+        -- Secret auras error when read from addon code: ask first, and catch
+        -- the error where that can't be asked
+        if C_Secrets and C_Secrets.ShouldAurasBeSecret and C_Secrets.ShouldAurasBeSecret() then
+            return HIDDEN
+        end
+        local ok, aura = pcall(C_UnitAuras.GetBuffDataByIndex, "player", i)
+        if not ok then return HIDDEN end
         if not aura then return nil end
         name, duration, expires = aura.name, aura.duration, aura.expirationTime
     elseif UnitBuff then
@@ -1583,7 +1607,7 @@ rest:SetScript("OnEvent", function()
     for i = 1, 40 do
         local name, start = Buff(i)
         if name == nil then break end
-        if secret(name) then return end
+        if name == HIDDEN or secret(name) then return end
         local kind = restByName[name]
         if kind == "eat" or kind == "both" then eat = start or GetTime() end
         if kind == "drink" or kind == "both" then drink = start or GetTime() end

@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- **Vibration**: Eating and Drinking now follow the eat motion as the server plays it: a bite or a
+  sip every 5 s (the first 3 s after you sit), as the hand reaches the mouth. Both Skyborne races
+  are timed too.
+
 ## 0.4.0
 
 - **Options**: Esc > Options > AddOns > Improved Forever can now be used with a controller (D-pad
