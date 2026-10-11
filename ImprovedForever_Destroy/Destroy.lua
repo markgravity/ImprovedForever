@@ -8,11 +8,11 @@
 -- is left out, and each card shows its auction worth; an upgrade for the
 -- character (Upgrades.lua) is never offered. Laid out as
 -- Forever's loot window: a list of item cards, the picked one's tooltip
--- beside it. Cross
--- destroys the picked item (press twice: once to arm), holding Square and
--- letting go destroys them all, Circle closes, R3 shows / hides the
--- tooltip. From the loot window Cross swaps and Triangle destroys only;
--- at a vendor Triangle sells.
+-- beside it. Holding Cross
+-- until the picked card has filled, then letting go, destroys it; holding
+-- Square and letting go destroys them all, Circle closes, R3 shows / hides
+-- the tooltip. From the loot window Cross swaps and Triangle destroys only
+-- (both held); at a vendor Triangle sells.
 -- Never in combat.
 local IF = ImprovedForever
 
@@ -23,6 +23,7 @@ local DS = {}
 IF.Destroy = DS
 
 local HOLD_ALL = 1.2          -- Square held this long, then let go: destroy all
+local HOLD_ONE = 0.6          -- Cross (or Triangle) held this long, then let go: destroy the picked one
 local DEFAULT_KEY = "PADRTRIGGER+PADRSTICK"   -- one button, or "held+pressed"
 
 ---------------------------------------------------------------------------
@@ -308,6 +309,12 @@ for i = 1, ROWS do
     r.focusGlow:SetAllPoints()
     r.focusGlow:SetBlendMode("ADD")
     Atlas(r.focusGlow, "Looting_ItemCard_HighlightState")
+    -- Cross held: the card fills from the left until it goes
+    r.fill = r:CreateTexture(nil, "ARTWORK", nil, -1)
+    r.fill:SetPoint("TOPLEFT")
+    r.fill:SetPoint("BOTTOMLEFT")
+    r.fill:SetColorTexture(0.85, 0.2, 0.1, 0.45)
+    r.fill:Hide()
     r.icon = r:CreateTexture(nil, "ARTWORK")
     r.icon:SetSize(36, 36)
     r.icon:SetPoint("LEFT", 4, 0)
@@ -337,7 +344,7 @@ for i = 1, ROWS do
     r.cursor = IF.Focus.Cursor(r)
     r:SetScript("OnClick", function()
         DS.index = DS.top + i - 1
-        DS.armed = nil
+        DS.CancelPress()
         DS.Render()
     end)
     rows[i] = r
@@ -363,6 +370,50 @@ holdBar:SetPoint("BOTTOMLEFT", 5, 4)
 holdBar:Hide()
 
 DS.items, DS.index, DS.top = {}, 1, 1
+
+-- The held Cross (or Triangle): which, on what, since when
+local function ShowFill(p)
+    for i, r in ipairs(rows) do
+        local on = p and DS.top + i - 1 == DS.index
+        r.fill:SetShown(on or false)
+        if on then
+            r.fill:SetWidth(math.max(1, r:GetWidth() * math.min(1, p)))
+            -- (full: brighter, let go now)
+            r.fill:SetColorTexture(p >= 1 and 1 or 0.85, p >= 1 and 0.35 or 0.2, 0.1, p >= 1 and 0.6 or 0.45)
+        end
+    end
+end
+
+-- Still the item the press began on (the list is rebuilt as the bags change)
+local function Pressed()
+    local e, p = DS.items[DS.index], DS.pressEntry
+    return e and p and e.bag == p.bag and e.slot == p.slot and e.itemID == p.itemID and e or nil
+end
+
+-- The feel of a hold, every update: a rumble rising with it, both grips
+-- full once full (Vibration.lua, when loaded); nil: none under way
+local vibing = false
+local function HoldFeel(p)
+    if not IF.Vibe then return end
+    if p then
+        IF.Vibe.Hold(p)
+        vibing = true
+    elseif vibing then
+        IF.Vibe.Hold(nil)
+        vibing = false
+    end
+end
+
+-- A hold let go full: the confirm thump
+local function HoldDone()
+    vibing = false
+    if IF.Vibe and IF.Vibe.Confirm then IF.Vibe.Confirm() end
+end
+
+function DS.CancelPress()
+    DS.pressStart, DS.pressBy, DS.pressEntry = nil, nil, nil
+    ShowFill(nil)
+end
 
 -- 10350 -> "1 [gold] 3 [silver] 50 [copper]", with the game's coin icons
 local COINS = {
@@ -458,20 +509,17 @@ function DS.Render()
     elseif GameTooltip:GetOwner() == panel then
         GameTooltip:Hide()
     end
-    local function Armed(by, word, again)
-        return (DS.armed and DS.armedBy == by) and ("|cffff5c3cAgain to " .. again .. "|r") or word
-    end
-    -- From the loot window: Cross swaps, Triangle destroys only
-    local press = Glyph("A") .. " " .. (swap and Armed("A", "Swap", "swap") or Armed("A", "Destroy", "destroy"))
+    -- From the loot window: Cross swaps, Triangle destroys only (held)
+    local press = Glyph("A") .. " " .. (swap and "Hold to Swap" or "Hold to Destroy")
     -- Triangle: at a vendor it sells what can be sold; from the loot window
     -- it destroys only
     local picked = items[DS.index]
     if DS.AtVendor() then
         if picked and picked.sellable then press = press .. "   " .. Glyph("Y") .. " Sell" end
     elseif swap then
-        press = press .. "   " .. Glyph("Y") .. " " .. Armed("Y", "Destroy", "destroy")
+        press = press .. "   " .. Glyph("Y") .. " Hold to Destroy"
     end
-    local all = swap and " Swap All (hold)   " or " Destroy All (hold)   "
+    local all = swap and " Hold to Swap All   " or " Hold to Destroy All   "
     -- (L2 or R2, by the side it's on: the pad to the window it was opened from)
     local label, key = DS.switch:Behind()
     local back = label and (Glyph(key) .. " " .. label .. "   ") or ""
@@ -509,7 +557,7 @@ local function Move(step)
     if n == 0 then return end
     local i = DS.index + step
     if i >= 1 and i <= n then DS.index = i end
-    DS.armed = nil
+    DS.CancelPress()
     DS.Render()
 end
 
@@ -541,8 +589,32 @@ function DS.Press(name, down)
             local held = GetTime() - DS.holdStart
             DS.holdStart = nil
             holdBar:Hide()
-            if held >= HOLD_ALL then DS.DestroyAll() end
+            if held >= HOLD_ALL then
+                HoldDone()
+                DS.DestroyAll()
+            end
         end
+        return
+    end
+    -- Cross (Triangle from the loot window) held, then let go once the
+    -- picked card has filled: it goes (on the release, a button press the
+    -- game lets destroy and loot); let go sooner, nothing
+    if name == "A" or (name == "Y" and DS.origin == "loot") then
+        if not down then
+            if DS.pressBy ~= name then return end
+            local e, held = Pressed(), GetTime() - DS.pressStart
+            DS.CancelPress()
+            -- From the loot window Cross swaps, Triangle only destroys
+            if e and held >= HOLD_ONE then
+                HoldDone()
+                DS.Destroy(e, name == "Y")
+            end
+            return
+        end
+        local e = DS.items[DS.index]
+        if not e then return end
+        DS.pressStart, DS.pressBy, DS.pressEntry = GetTime(), name, e
+        ShowFill(0)
         return
     end
     -- Circle on its release: closing on the press would hand the release to
@@ -557,22 +629,9 @@ function DS.Press(name, down)
     elseif name == "LEFT" then Move(-ROWS)
     elseif name == "RIGHT" then Move(ROWS)
     elseif name == "Y" and DS.AtVendor() then
-        -- At a vendor Triangle sells (bought back from it if need be: no arming)
+        -- At a vendor Triangle sells (bought back from it if need be: no hold)
         local e = DS.items[DS.index]
-        if e and e.sellable then
-            DS.armed = nil
-            DS.Sell(e)
-        end
-    elseif name == "A" or (name == "Y" and DS.origin == "loot") then
-        -- From the loot window Cross swaps, Triangle only destroys
-        local e = DS.items[DS.index]
-        if not e then return end
-        if DS.armed ~= e or DS.armedBy ~= name then
-            DS.armed, DS.armedBy = e, name
-            return DS.Render()
-        end
-        DS.armed = nil
-        DS.Destroy(e, name == "Y")
+        if e and e.sellable then DS.Sell(e) end
     end
 end
 
@@ -612,8 +671,9 @@ end
 DS.switch = IF.Focus.Switch(panel, {
     onChange = function(focus)
         DS.focus = focus == "ours" and "panel" or "bags"
-        DS.armed, DS.holdStart = nil, nil
+        DS.holdStart = nil
         holdBar:Hide()
+        DS.CancelPress()
         Bind()
         DS.TakePad(focus == "ours")
         DS.HideNativeFocus(focus == "ours")
@@ -628,11 +688,25 @@ end
 
 panel:SetScript("OnUpdate", function()
     if panel.EnableGamePadButton then DS.switch:Update() end
+    -- (the rumble of whichever hold is under way; none: let go)
+    local feel
     if DS.holdStart then
         local p = math.min(1, (GetTime() - DS.holdStart) / HOLD_ALL)
+        feel = p
         holdBar:SetWidth(math.max(1, (legend:GetWidth() - 10) * p))
         holdBar:SetColorTexture(p >= 1 and 1 or 0.85, p >= 1 and 0.35 or 0.2, 0.1, 0.9)
     end
+    if DS.pressStart then
+        -- (gone from under it: let go)
+        if Pressed() then
+            local p = (GetTime() - DS.pressStart) / HOLD_ONE
+            ShowFill(p)
+            feel = math.max(feel or 0, math.min(1, p))
+        else
+            DS.CancelPress()
+        end
+    end
+    HoldFeel(feel)
 end)
 
 -- A vendor's window is open: what can be sold is sold to it
@@ -697,7 +771,8 @@ end
 -- origin: "bags" (default) or "loot", the window it is opened from
 function DS.Open(origin)
     if IF.InCombat() or panel:IsShown() then return end
-    DS.items, DS.index, DS.top, DS.armed = DS.Scan(), 1, 1, nil
+    DS.items, DS.index, DS.top = DS.Scan(), 1, 1
+    DS.CancelPress()
     DS.focus = "panel"
     DS.switch.focus = "ours"
     DS.origin = origin or "bags"
@@ -723,8 +798,10 @@ end
 panel:SetScript("OnHide", function()
     DS.TakePad(false)
     DS.HideNativeFocus(false)
-    DS.holdStart, DS.armed = nil, nil
+    DS.holdStart = nil
     holdBar:Hide()
+    DS.CancelPress()
+    HoldFeel(nil)
     if GameTooltip:GetOwner() == panel then GameTooltip:Hide() end
     if not IF.InCombat() then ClearOverrideBindings(panel) end
 end)

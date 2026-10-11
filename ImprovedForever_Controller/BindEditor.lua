@@ -562,8 +562,10 @@ function P:BindCorner(region, e)
     Done(touch.REGION_LABELS[region] .. ": " .. (e.name or ""))
 end
 
--- Triangle on a corner: a press clears it, held (0.6 s) turns it off / on
-local HOLD = 0.6
+-- Triangle on a corner: a press clears it, held (0.6 s) turns it off / on;
+-- a rumble rises once it is clearly a hold, a thump when it acts
+-- (Vibration.lua, when loaded)
+local HOLD, FEEL_AFTER = 0.6, 0.15
 
 function P:CornerTriangle(region)
     if self.holding then return end
@@ -571,19 +573,24 @@ function P:CornerTriangle(region)
     self.holding = region
     self.holdTicker = C_Timer.NewTicker(0.05, function(ticker)
         local held = IsKeyDown and IsKeyDown("PAD4")
-        if held and GetTime() - started >= HOLD then
+        local elapsed = GetTime() - started
+        if held and elapsed >= HOLD then
             ticker:Cancel()
             P.holding = nil
+            if IF.Vibe and IF.Vibe.Confirm then IF.Vibe.Confirm() end
             local off = touch.ToggleOff(region)
             Done(touch.REGION_LABELS[region] .. (off and " turned off" or " turned on")
                 .. (off and touch.CORNERS[region] and " (its sides take its area)" or ""))
         elseif not held then
             ticker:Cancel()
             P.holding = nil
+            if IF.Vibe and elapsed >= FEEL_AFTER then IF.Vibe.Hold(nil) end
             if touch.IsBound(touch.GetSettings().regions[region]) then
                 touch.SetAction(region, "none")
                 Done(touch.REGION_LABELS[region] .. " cleared")
             end
+        elseif elapsed >= FEEL_AFTER and IF.Vibe then
+            IF.Vibe.Hold(elapsed / HOLD)
         end
     end)
 end
@@ -621,7 +628,7 @@ function P:Help()
     if self.key then
         hints[#hints + 1] = H({ "DPAD" }, "Move")
         hints[#hints + 1] = H({ "A" }, "Bind", "A")
-        hints[#hints + 1] = H({ "Y" }, Region() and "Clear (hold: off)" or "Unbind", "Y")
+        hints[#hints + 1] = H({ "Y" }, Region() and ("Clear / Hold to " .. (touch.IsOff(Region()) and "Turn On" or "Turn Off")) or "Unbind", "Y")
     end
     if line and line.def and not line.spec and not self.key then
         hints[#hints + 1] = H({ "X" }, "Record press", "X")

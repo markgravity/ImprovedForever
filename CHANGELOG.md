@@ -12,6 +12,14 @@
   with food or a drink, in time with your character: a bite or a sip each time the hand reaches the
   mouth (timed per race and sex from the game's models), until you stand up or it's done. Each can
   take any pattern instead, or be off.
+- **Destroy**: Cross (and Triangle from the loot window) is now held instead of pressed twice: the
+  picked card fills while you hold, and the item goes when you let go once it's full. Let go
+  sooner, or move, and nothing happens.
+- **Vibration**: every hold now rumbles the way the auction window's do: rising as you hold, full
+  once it's ready, a thump when it acts. New: Destroy (one and all), the Wheels tab (Triangle held:
+  rename / reset, Square held: delete) and the touchpad corners in the Controller tab.
+- Every hold is now labelled "Hold to …" (Hold to Destroy, Hold to Swap All, Hold to Rename, Hold
+  to Delete, Hold to Turn Off, Hold to Open Library).
 
 ## 0.3.1
 

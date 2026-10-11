@@ -1081,7 +1081,7 @@ holdIcon:SetKey("RS")
 holdIcon:Hide()
 local holdLabel = K.ChatText(holdIcon, 12, KC.focusText)
 holdLabel:SetPoint("LEFT", holdIcon, "RIGHT", 2, 0)
-holdLabel:SetText("Library")
+holdLabel:SetText("Hold to Open Library")
 
 -- p: 0 to 1; anchor: the frame it sits by (nil: the screen's middle)
 function LB.HoldShow(p, anchor)

@@ -450,8 +450,10 @@ function W:ShowDialog(text, hints)
     d:Show()
 end
 
--- A press, or a hold (0.6 s): Triangle and Square do one thing each way
-local HOLD = 0.6
+-- A press, or a hold (0.6 s): Triangle and Square do one thing each way;
+-- a rumble rises once it is clearly a hold, a thump when it acts
+-- (Vibration.lua, when loaded)
+local HOLD, FEEL_AFTER = 0.6, 0.15
 
 function W:PressOrHold(key, onPress, onHold)
     if self.holding then return end
@@ -459,14 +461,19 @@ function W:PressOrHold(key, onPress, onHold)
     self.holding = key
     C_Timer.NewTicker(0.05, function(ticker)
         local held = IsKeyDown and IsKeyDown(key)
-        if held and GetTime() - started >= HOLD then
+        local elapsed = GetTime() - started
+        if held and elapsed >= HOLD then
             ticker:Cancel()
             W.holding = nil
+            if IF.Vibe and IF.Vibe.Confirm then IF.Vibe.Confirm() end
             onHold()
         elseif not held then
             ticker:Cancel()
             W.holding = nil
+            if IF.Vibe and elapsed >= FEEL_AFTER then IF.Vibe.Hold(nil) end
             onPress()
+        elseif elapsed >= FEEL_AFTER and IF.Vibe then
+            IF.Vibe.Hold(elapsed / HOLD)
         end
     end)
 end
@@ -696,11 +703,11 @@ function W:Help()
         if Editable(wheel) then
             hints[#hints + 1] = H({ "DPAD_UD" }, "Move")
             hints[#hints + 1] = H({ "A" }, "Choose", "A")
-            hints[#hints + 1] = H({ "Y" }, wheel.id and "Clear (hold: rename)"
-                or (wheel.reset and "Clear (hold: reset)" or "Clear"), "Y")
+            hints[#hints + 1] = H({ "Y" }, wheel.id and "Clear / Hold to Rename"
+                or (wheel.reset and "Clear / Hold to Reset" or "Clear"), "Y")
         end
         if Pages(wheel) > 1 then hints[#hints + 1] = H({ "LT", "RT" }, "Page", "RT") end
-        if wheel.id then hints[#hints + 1] = H({ "X" }, "Hold: delete", "X") end
+        if wheel.id then hints[#hints + 1] = H({ "X" }, "Hold to Delete", "X") end
     end
     hints[#hints + 1] = H({ "RS" }, "Tab")
     hints[#hints + 1] = H({ "B" }, "Close", "B")

@@ -1514,7 +1514,7 @@ end
 -- The legend: a page's buttons, then the right stick for the tabs
 local function SetHints(text)
     legend:SetText(text .. "   " .. Glyph("RS") .. " Tabs (tilt) / " .. (BY.TipsOff() and "Tooltip (click)" or "No tooltip (click)")
-        .. ((IF.Library and IF.Library.Settings().enabled) and " / Library (hold)" or ""))
+        .. ((IF.Library and IF.Library.Settings().enabled) and " / Hold to Open Library" or ""))
 end
 
 function BY.SetTab(key)
