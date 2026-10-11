@@ -92,6 +92,7 @@ local function ModifierOf(button)
         if get and get(m[1]) == button then return m[2] end
     end
 end
+B.ModifierOf = ModifierOf
 
 -- The key an override binding for a press goes on ("PADLSTICK",
 -- "SHIFT-PAD1"; a press twice: its button's), or nil when it can't have

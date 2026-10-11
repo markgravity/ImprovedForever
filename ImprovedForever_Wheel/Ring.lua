@@ -168,6 +168,39 @@ ring:SetAttribute("ic-pick-body", [[
     return best
 ]])
 
+-- Shared by the snippets: put R2 (use), L1 and R1 (wheels) on the ring's
+-- buttons. One still held (the combo that opened it: R1 + R3) is taken only
+-- once let go: a key's release goes where its binding points by then, and
+-- the game's own binding, which got the press, must get it too or it stays
+-- down (the crossbar's page, a targeting modifier). `opening`: check all
+-- three; else only those still waiting.
+ring:SetAttribute("ic-take-pad", [[
+    local opening = ...
+    if not self:IsShown() then
+        return
+    end
+    local state = GetGamePadState()
+    local buttons = state and state.buttons
+    local waiting = false
+    for _, key in ipairs(newtable("PADRTRIGGER", "PADLSHOULDER", "PADRSHOULDER")) do
+        if opening or self:GetAttribute("ic-wait-" .. key) then
+            local index = self:GetAttribute("ic-btn-" .. key)
+            if buttons and index and buttons[index] then
+                self:SetAttribute("ic-wait-" .. key, true)
+                waiting = true
+            else
+                self:SetAttribute("ic-wait-" .. key, nil)
+                local target = key == "PADRTRIGGER" and "ImprovedForeverRingUse" or "ImprovedForeverRingPage"
+                local click = key == "PADRTRIGGER" and "LeftButton" or key
+                for _, modifier in ipairs(newtable("", "SHIFT-", "CTRL-", "ALT-", "CTRL-SHIFT-", "ALT-SHIFT-", "CTRL-ALT-", "CTRL-ALT-SHIFT-")) do
+                    self:SetBindingClick(true, modifier .. key, target, click)
+                end
+            end
+        end
+    end
+    self:SetAttribute("ic-waiting", waiting or nil)
+]])
+
 -- R3: open the ring for the held combo. It stays up until R2 uses a slot
 -- or Circle closes it. R3 again while it's up, the same combo held (a
 -- double click), uses the wheel's most recent action (RecentSlot.lua) and
@@ -287,6 +320,7 @@ local aim = SecureButton("ImprovedForeverRingAim")
 aim:RegisterForClicks("AnyDown", "AnyUp")
 SecureHandlerWrapScript(aim, "OnClick", aim, [[
     local ring = self:GetFrameRef("ring")
+    if ring:GetAttribute("ic-waiting") then ring:RunAttribute("ic-take-pad") end
     if ring:IsShown() then
         local pick = ring:RunAttribute("ic-pick-body", down and 0.12 or 0.5)
         if pick then
@@ -301,6 +335,7 @@ local step = SecureButton("ImprovedForeverRingStep")
 step:RegisterForClicks("AnyDown")
 SecureHandlerWrapScript(step, "OnClick", step, [[
     local ring = self:GetFrameRef("ring")
+    if ring:GetAttribute("ic-waiting") then ring:RunAttribute("ic-take-pad") end
     local count = ring:GetAttribute(ring:GetAttribute("ic-active") .. "-count") or 0
     if not ring:IsShown() or count < 1 then
         return false
@@ -328,6 +363,7 @@ use:RegisterForClicks("AnyDown", "AnyUp")
 SecureHandlerWrapScript(use, "OnClick", use, [[
     self:SetAttribute("type", nil)
     local ring = self:GetFrameRef("ring")
+    if ring:GetAttribute("ic-waiting") then ring:RunAttribute("ic-take-pad") end
     if not ring:IsShown() then
         self:SetAttribute("ic-pressed", nil)
         return false
@@ -369,6 +405,7 @@ local page = SecureButton("ImprovedForeverRingPage")
 page:RegisterForClicks("AnyDown")
 SecureHandlerWrapScript(page, "OnClick", page, [[
     local ring = self:GetFrameRef("ring")
+    if ring:GetAttribute("ic-waiting") then ring:RunAttribute("ic-take-pad") end
     local active = ring:GetAttribute("ic-active") or ""
     local wheel = ring:GetAttribute(active .. "-wheel")
     if not ring:IsShown() or not wheel then
@@ -404,13 +441,12 @@ SecureHandlerWrapScript(close, "OnClick", close, [[
 ]])
 
 -- While the ring is up it owns R2, Circle, L1, R1, the D-pad and the right
--- stick's directions, whatever they do otherwise.
+-- stick's directions, whatever they do otherwise (R2, L1, R1: once let go,
+-- ic-take-pad).
 SecureHandlerWrapScript(ring, "OnShow", ring, [[
+    self:RunAttribute("ic-take-pad", true)
     for _, modifier in ipairs(newtable("", "SHIFT-", "CTRL-", "ALT-", "CTRL-SHIFT-", "ALT-SHIFT-", "CTRL-ALT-", "CTRL-ALT-SHIFT-")) do
-        self:SetBindingClick(true, modifier .. "PADRTRIGGER", "ImprovedForeverRingUse", "LeftButton")
         self:SetBindingClick(true, modifier .. "PAD2", "ImprovedForeverRingClose", "LeftButton")
-        self:SetBindingClick(true, modifier .. "PADLSHOULDER", "ImprovedForeverRingPage", "PADLSHOULDER")
-        self:SetBindingClick(true, modifier .. "PADRSHOULDER", "ImprovedForeverRingPage", "PADRSHOULDER")
         for _, key in ipairs(newtable("PADDUP", "PADDDOWN")) do
             self:SetBindingClick(true, modifier .. key, "ImprovedForeverRingStep", key)
         end
@@ -424,7 +460,17 @@ SecureHandlerWrapScript(ring, "OnShow", ring, [[
 ]])
 SecureHandlerWrapScript(ring, "OnHide", ring, [[
     self:ClearBindings()
+    self:SetAttribute("ic-waiting", nil)
 ]])
+
+-- Out of combat a held shoulder is taken as soon as it's let go, not only
+-- at the next stick / D-pad / R2 press (in combat only those can).
+local takeWatch = CreateFrame("Frame", nil, ring)
+takeWatch:SetScript("OnUpdate", function()
+    if ring:GetAttribute("ic-waiting") and not InCombatLockdown() then
+        SecureHandlerExecute(ring, [[ self:RunAttribute("ic-take-pad") ]])
+    end
+end)
 
 -- The game only sends stick directions as keys with GamePadStickAxisButtons
 -- on: switch it on while the ring is up and put it back after. The old
@@ -872,21 +918,38 @@ function IF.ApplyRingBindings()
     ring:SetAttribute("ic-stick2", nil)
     use:SetAttribute("ic-keydown", GetCVarSafe("ActionButtonUseKeyDown") == "0" and 0 or 1)
     trigger:SetAttribute("ic-keydown", use:GetAttribute("ic-keydown"))
-    local anyRing = false
+    -- The key prefixes R3 reaches us under for a combo with a ring: the
+    -- modifier its held button makes (GamePadEmulate*), or none (R3 alone,
+    -- or held with a button that isn't one). Only those are taken: the rest
+    -- stay the game's own (R3's ping can't be run for it from here).
+    local plain, modifiers = false, {}
     for _, combo in ipairs(IF.COMBOS) do
         local key = IF.GetComboRing(combo)
         trigger:SetAttribute("ic-combo-" .. combo, key)
-        anyRing = anyRing or key ~= "native"
+        if key ~= "native" then
+            local modifier = COMBO_BUTTONS[combo] and IF.Binds.ModifierOf(COMBO_BUTTONS[combo])
+            if modifier then modifiers[#modifiers + 1] = modifier else plain = true end
+        end
+    end
+    local function Takes(prefix)
+        if prefix == "" then return plain end
+        for _, modifier in ipairs(modifiers) do
+            if prefix:find(modifier, 1, true) then return true end
+        end
+        return false
     end
     for combo, binding in pairs(COMBO_BUTTONS) do
         trigger:SetAttribute("ic-btn-" .. combo, GamePadIndex(binding))
+        ring:SetAttribute("ic-btn-" .. binding, GamePadIndex(binding))
     end
     ClearOverrideBindings(trigger)
     -- Only while the game has the gamepad's focus (Binds.lua): a window
     -- holding it keeps R3 for itself
-    if anyRing and IF.Binds.InGame() then
+    if IF.Binds.InGame() then
         for _, modifier in ipairs(MODIFIERS) do
-            SetOverrideBindingClick(trigger, true, modifier .. KEY, trigger:GetName(), modifier .. KEY)
+            if Takes(modifier) then
+                SetOverrideBindingClick(trigger, true, modifier .. KEY, trigger:GetName(), modifier .. KEY)
+            end
         end
     end
 end
@@ -903,7 +966,7 @@ events:RegisterEvent("BAG_UPDATE_DELAYED")
 events:RegisterEvent("GET_ITEM_INFO_RECEIVED")
 events:RegisterEvent("PLAYER_REGEN_ENABLED")
 events:RegisterEvent("PLAYER_REGEN_DISABLED")
-events:SetScript("OnEvent", function(_, event)
+events:SetScript("OnEvent", function(_, event, name)
     if not IF.db then
         return
     end
@@ -911,6 +974,10 @@ events:SetScript("OnEvent", function(_, event)
         if not IF.InCombat() then
             use:SetAttribute("ic-keydown", GetCVarSafe("ActionButtonUseKeyDown") == "0" and 0 or 1)
             trigger:SetAttribute("ic-keydown", use:GetAttribute("ic-keydown"))
+        end
+        -- (which shoulder is a modifier: the keys R3 is taken on)
+        if type(name) == "string" and name:lower():find("^gamepademulate") then
+            IF.ApplyRingBindings()
         end
     elseif event == "PLAYER_REGEN_ENABLED" then
         RestoreAxisCVar()

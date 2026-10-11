@@ -2,39 +2,56 @@
 -- panel, which holds every module's settings. Also /if.
 local _, IF = ...
 
-local panel = CreateFrame("Frame")
-panel.name = IF.TITLE
+local HELP = "All settings live in the controller panel: D-pad to move, {A} to choose, {B} to go back. "
+    .. "Open it with /if, or bind \"Toggle Improved Forever panel\" in Key Bindings > AddOns."
 
-local heading = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
-heading:SetPoint("TOPLEFT", 16, -16)
-heading:SetText(IF.TITLE)
-
-local help = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-help:SetPoint("TOPLEFT", heading, "BOTTOMLEFT", 0, -8)
-help:SetPoint("RIGHT", panel, "RIGHT", -16, 0)
-help:SetJustifyH("LEFT")
-help:SetText(IF.PadText("All settings live in the controller panel: D-pad to move, {A} to choose, {B} to go back. ")
-    .. "Open it with /if, or bind \"Toggle Improved Forever panel\" in Key Bindings > AddOns.")
-
-local open = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
-open:SetSize(200, 26)
-open:SetPoint("TOPLEFT", help, "BOTTOMLEFT", 0, -16)
-open:SetText("Open controller panel")
-open:SetScript("OnClick", function()
+local function OpenPanel()
     if SettingsPanel and SettingsPanel:IsShown() then
         HideUIPanel(SettingsPanel)
     elseif InterfaceOptionsFrame and InterfaceOptionsFrame:IsShown() then
         HideUIPanel(InterfaceOptionsFrame)
     end
     IF.Menu.Open()
-end)
+end
+
+-- A canvas page of our own: only for a client without the settings list.
+-- The pad can't reach a canvas's buttons (right from the category list only
+-- looks in the settings list), so a client that has one gets that instead.
+local function CanvasPanel()
+    local panel = CreateFrame("Frame")
+    panel.name = IF.TITLE
+
+    local heading = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
+    heading:SetPoint("TOPLEFT", 16, -16)
+    heading:SetText(IF.TITLE)
+
+    local help = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+    help:SetPoint("TOPLEFT", heading, "BOTTOMLEFT", 0, -8)
+    help:SetPoint("RIGHT", panel, "RIGHT", -16, 0)
+    help:SetJustifyH("LEFT")
+    help:SetText(IF.PadText(HELP))
+
+    local open = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
+    open:SetSize(200, 26)
+    open:SetPoint("TOPLEFT", help, "BOTTOMLEFT", 0, -16)
+    open:SetText("Open controller panel")
+    open:SetScript("OnClick", OpenPanel)
+    return panel
+end
 
 IF.OnLogin(function()
-    if Settings and Settings.RegisterCanvasLayoutCategory then
-        local category = Settings.RegisterCanvasLayoutCategory(panel, panel.name)
+    if Settings and Settings.RegisterVerticalLayoutCategory and CreateSettingsButtonInitializer then
+        -- The game's own settings list and button, which its pad navigation
+        -- reaches (D-pad right from the category list)
+        local category, layout = Settings.RegisterVerticalLayoutCategory(IF.TITLE)
+        layout:AddInitializer(CreateSettingsButtonInitializer("Controller panel", "Open",
+            OpenPanel, IF.PadText(HELP), true))
         Settings.RegisterAddOnCategory(category)
+    elseif Settings and Settings.RegisterCanvasLayoutCategory then
+        local panel = CanvasPanel()
+        Settings.RegisterAddOnCategory(Settings.RegisterCanvasLayoutCategory(panel, panel.name))
     elseif InterfaceOptions_AddCategory then
-        InterfaceOptions_AddCategory(panel)
+        InterfaceOptions_AddCategory(CanvasPanel())
     end
 end)
 

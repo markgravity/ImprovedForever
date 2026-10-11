@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- **Options**: Esc > Options > AddOns > Improved Forever can now be used with a controller (D-pad
+  right from the list, then the Open button). `/improvedcontroller` works again. (#1)
+- **Wheel**: opening a wheel with L1 / R1 / R2 + R3 no longer leaves that button stuck down. (#3)
+- **Wheel**: R3 is only taken under the shoulders whose combo has a wheel, so a combo set back to
+  the game's own (R3 alone: ping) does what the game does again. R3 alone stays ours while a wheel
+  is on R1 or on a shoulder the game doesn't make a modifier. (#4)
+
 ## 0.3.1
 
 Each module is now its own CurseForge project, so you can install only the ones you want. The

@@ -85,6 +85,7 @@ end
 
 SLASH_IMPROVEDFOREVER1 = "/if"
 SLASH_IMPROVEDFOREVER2 = "/improvedforever"
+SLASH_IMPROVEDFOREVER3 = "/improvedcontroller" -- its name before 0.3.0
 SlashCmdList.IMPROVEDFOREVER = IF.RunCommand
 
 -- A protected call of ours the game blocked: which one, said in chat (the
