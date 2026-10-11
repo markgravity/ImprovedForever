@@ -553,8 +553,16 @@ shaper:SetScript("OnUpdate", function()
     motors(math.min(1, low * gain), math.min(1, high * gain))
 end)
 
+-- A hold's peak (its bar full, its thump when done): both grips at the set
+-- strength, never under PEAK_FLOOR, so it still stands out from the
+-- filling (at most 0.45 of the strength) when the strength is low
+local PEAK_FLOOR = 0.6
+local function Peak()
+    return math.max(PEAK_FLOOR, math.min(1, V.Settings().intensity))
+end
+
 -- A hold under way (a "Hold to" bar): a rumble on the left grip rising with
--- its progress (0 to 1), both grips at full strength once full; the caller sends it every
+-- its progress (0 to 1), both grips at the peak once full; the caller sends it every
 -- update (sent on at most every 0.1 s); nil: stopped
 local holdSent = 0
 function V.Hold(progress)
@@ -570,23 +578,23 @@ function V.Hold(progress)
     holdSent = now
     local gain = s.intensity
     if progress >= 1 then
-        -- (full: both grips at full strength, whatever the intensity: it
-        -- must stand out from the filling)
-        motors(1, 1)
+        local peak = Peak()
+        motors(peak, peak)
     else
         motors((0.1 + 0.35 * progress) * gain, 0)
     end
 end
 
 -- A hold done (let go full: sold, bought, cancelled; a task removed): a
--- short hard thump on both grips, whatever the intensity
+-- short hard thump on both grips, at the peak
 function V.Confirm()
     if not (C_GamePad and C_GamePad.SetVibration and IF.db) then return end
     if not V.Settings().enabled then return end
     V.Stop()
     holdSent = 0
-    motors(1, 1)
-    later(0.1, function() motors(1, 1) end)
+    local peak = Peak()
+    motors(peak, peak)
+    later(0.1, function() motors(peak, peak) end)
     later(0.22, function() C_GamePad.StopVibration() end)
 end
 
