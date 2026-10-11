@@ -354,7 +354,7 @@ end
 
 -- db.vibration = { enabled, intensity, events = { key = { on, pattern } } }
 function V.Settings()
-    IF.db.fishLog = nil   -- (the log of a fishing probe, since removed)
+    IF.db.fishLog, IF.db.eatLog = nil, nil   -- (logs of probes, since removed)
     IF.db.vibration = IF.db.vibration or {}
     local s = IF.db.vibration
     if s.enabled == nil then s.enabled = true end
@@ -909,7 +909,6 @@ function V.Fire(eventKey)
     local s = V.Settings()
     local pattern = V.EventPattern(eventKey)
     if not (s.enabled and pattern) then return end
-    if V.probing and (eventKey == "eat" or eventKey == "drink") then return end   -- PROBE (temporary)
     if EVENT[eventKey].loop then
         V.EndLoop(eventKey)
         local shape
@@ -1593,70 +1592,3 @@ rest:SetScript("OnEvent", function()
     SetResting("eat", eat)
     SetResting("drink", drink)
 end)
-
--- PROBE (temporary): eating and drinking in time? /if eatprobe starts a log
--- (IF.db.eatLog): the buffs, where we put each bite, each R2 press (tapped
--- in rhythm with the hand touching the mouth). /if eatprobe again stops it.
-local probe = CreateFrame("Frame")
-local probeLast, probeDown, probeBuffs = {}, {}, ""
-local function Log(text)
-    local log = IF.db.eatLog
-    log[#log + 1] = format("%.2f %s", GetTime() % 1000, text)
-end
-probe:SetScript("OnEvent", function()
-    Names()
-    local found = {}
-    for i = 1, 40 do
-        local name, start = Buff(i)
-        if name == nil then break end
-        if not secret(name) and restByName[name] then
-            found[#found + 1] = format("%s on since %s", name, start and format("%.2f", start % 1000) or "?")
-        end
-    end
-    local now = #found > 0 and table.concat(found, ", ") or "none"
-    if now ~= probeBuffs then Log("buffs: " .. now) end
-    probeBuffs = now
-end)
-probe:SetScript("OnUpdate", function()
-    local state = C_GamePad and C_GamePad.GetDeviceMappedState
-        and C_GamePad.GetDeviceMappedState(C_GamePad.GetActiveDeviceID())
-    if state then
-        for i, down in pairs(state.buttons or {}) do
-            if down and not probeDown[i] then Log("press " .. (i == 16 and "R2" or "button " .. i)) end
-            probeDown[i] = down
-        end
-    end
-    local m = V.RestMotion()
-    if not m then return end
-    local now = GetTime()
-    for key in pairs(resting) do
-        if resting[key] then
-            local d = MotionAt(m, restStart[key] or now, now)
-            if probeLast[key] and d < probeLast[key] then Log("bite (ours) " .. key) end
-            probeLast[key] = d
-        else
-            probeLast[key] = nil
-        end
-    end
-end)
-probe:Hide()
-
-function V.EatProbe()
-    if probe:IsShown() then
-        probe:Hide()
-        probe:UnregisterAllEvents()
-        V.probing = nil
-        Log("stop")
-        return IF.Print(format("eat probe: stopped, %d lines. /reload, then say so.", #IF.db.eatLog))
-    end
-    IF.db.eatLog = { date("%Y-%m-%d %H:%M:%S") }
-    local m = V.RestMotion()
-    Log(format("race %s sex %s motion %s", tostring(select(3, UnitRace("player"))), tostring(UnitSex("player")),
-        m and format("%.3f reach %.3f leave %.3f", m[1], m[2], m[3]) or "none"))
-    probeBuffs = ""
-    wipe(probeDown)
-    probe:RegisterUnitEvent("UNIT_AURA", "player")
-    probe:Show()
-    V.probing = true
-    IF.Print("eat probe: on. Eat, then drink; tap R2 in rhythm as the hand touches the mouth.")
-end

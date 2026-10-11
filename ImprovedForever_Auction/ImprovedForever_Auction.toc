@@ -2,7 +2,7 @@
 ## Title: Improved Forever: Auction
 ## Notes: A controller auction house: prices over time, buy, sell, your auctions, and tasks for what to buy or craft.
 ## Author: markg
-## Version: 0.3.1
+## Version: 0.4.0
 ## X-Website: https://github.com/markgravity/ImprovedForever
 ## X-License: MIT
 ## X-Curse-Project-ID: 1736874

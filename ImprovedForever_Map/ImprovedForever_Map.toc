@@ -2,7 +2,7 @@
 ## Title: Improved Forever: Map
 ## Notes: The peek map: the game's map while a press is held.
 ## Author: markg
-## Version: 0.3.1
+## Version: 0.4.0
 ## X-Website: https://github.com/markgravity/ImprovedForever
 ## X-License: MIT
 ## X-Curse-Project-ID: 1736870

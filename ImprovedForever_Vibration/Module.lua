@@ -7,6 +7,3 @@ IF.AddModule({ key = "vibration", label = "Vibration", icon = IF.TEX .. "ic_mod_
 
 -- /if vibe: test each vibration motor (which side)
 IF.AddCommand("vibe", function() IF.Vibe.TestSides() end, ": test each motor (which side)")
-
--- PROBE (temporary): /if eatprobe: eating and drinking in time with the character
-IF.AddCommand("eatprobe", function() IF.Vibe.EatProbe() end, ": log eating and drinking (start / stop)")

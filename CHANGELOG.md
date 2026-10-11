@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.0
 
 - **Options**: Esc > Options > AddOns > Improved Forever can now be used with a controller (D-pad
   right from the list, then the Open button). `/improvedcontroller` works again. (#1)
@@ -20,6 +20,20 @@
   rename / reset, Square held: delete) and the touchpad corners in the Controller tab.
 - Every hold is now labelled "Hold to …" (Hold to Destroy, Hold to Swap All, Hold to Rename, Hold
   to Delete, Hold to Turn Off, Hold to Open Library).
+- **Vibration**: new Shooting event. Each ranged shot (Auto Shot, Shoot, Throw, a hunter's instant
+  shots) rumbles, matched to the weapon: a bow's string, a crossbow's latch, a gun's recoil, a wand's
+  zap, a throw.
+- **Vibration**: new Abilities event. Each instant ability (Heroic Strike, Sinister Strike, a seal,
+  a shock...) has its own feel: a slash, a stab, a bash, a charge, a whirl, a seal's light, a
+  Judgement...
+- **Vibration**: Gathering matches the action, with its own pattern for fishing (the throw, then
+  still: Forever doesn't tell addons when a fish bites).
+- **Vibration**: hold and confirm rumbles always reach a strength the motors can be felt at.
+- **Destroy**: the window now sits beside the one it was opened from (the loot window or the bags),
+  and moves as they open and close.
+- **Tasks**: "sold by vendors" now uses Forever's own vendor lists (and the Library's data when it's
+  loaded), so more reagents are found.
+- **Library**: data synced with WoW Forever's own recipes, items and vendors.
 
 ## 0.3.1
 
