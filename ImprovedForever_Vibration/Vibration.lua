@@ -309,7 +309,8 @@ V.CAST_KINDS = {
             .. " fades as it flies off (Fireball). A channel hums and swells with each missile or tick"
             .. " (Arcane Missiles, Drain Life)." },
     { key = "gather", label = "Gathering", icon = EVENT_ICONS .. "gather", preset = "auto",
-        tip = "Herbalism, mining, skinning, fishing, opening a chest or a lock." },
+        tip = "Herbalism, mining, skinning, fishing, opening a chest or a lock. Match the action: each its"
+            .. " own feel. Fishing: the throw, then still (the game doesn't tell addons when a fish bites)." },
     { key = "craft", label = "Crafting", icon = EVENT_ICONS .. "craft", preset = "auto",
         tip = "Making something with a profession (cast with its window open)." },
 }
@@ -334,6 +335,7 @@ end
 
 -- db.vibration = { enabled, intensity, events = { key = { on, pattern } } }
 function V.Settings()
+    IF.db.fishLog = nil   -- (the log of a fishing probe, since removed)
     IF.db.vibration = IF.db.vibration or {}
     local s = IF.db.vibration
     if s.enabled == nil then s.enabled = true end
@@ -625,6 +627,11 @@ end
 -- whether it has a shape (shaped), and how it ended
 local cast = {}
 
+-- Combat values WoW Forever may hide from addons
+local function secret(v)
+    return issecretvalue ~= nil and issecretvalue(v) or false
+end
+
 -- A spell's name, in the game's language
 local function SpellName(id)
     if C_Spell and C_Spell.GetSpellName then return C_Spell.GetSpellName(id) end
@@ -708,14 +715,34 @@ local function Release(now)
     return env, env
 end
 
+-- Fishing: the throw (the pole drawn back, whipped forward, the line
+-- running out, the bobber landing), then nothing. (No bite to feel: WoW
+-- Forever tells addons nothing when a fish bites. The bobber's soft
+-- interact state, the events and its cursor icon all stay as they are.)
+local function Fishing(now)
+    local t = now - cast.timing.start
+    if t < 0.35 then return 0.1 + 0.25 * t / 0.35, 0 end
+    if t < 0.5 then return 1, 0.9 end
+    if t < 1.1 then
+        local env = 0.03 + 0.4 * (1 - (t - 0.5) / 0.6) ^ 1.5
+        return env, env * 0.6
+    end
+    if t < 1.25 then return 0.35, 0.3 end
+end
+
 -- The cast in progress' shape, or nil: its own pattern loops instead (a
 -- set other than Match the action, gathering, crafting, a channel whose
 -- ticks we don't know, a cast whose timing is hidden)
 local function CastShape()
     local t = cast.timing
-    if V.castKind ~= "spell" or not t then return nil end
-    local preset = PRESET[V.CastPreset("spell")]
+    if not t then return nil end
+    local preset = PRESET[V.CastPreset(V.castKind)]
     if not (preset and preset.auto) then return nil end
+    if V.castKind == "gather" and V.castAction == "fishing" and t.channel then
+        t.fishing = true
+        return Fishing
+    end
+    if V.castKind ~= "spell" then return nil end
     if t.channel and not t.interval then return nil end
     t.texture = V.EventPattern("cast")
     return t.channel and Missiles or BuildUp
@@ -936,9 +963,26 @@ function V.SimulateCast(onStep, kind, action)
         cast.timing = nil
         onStep(nil)
     end
+    local preset = PRESET[V.CastPreset(V.castKind)]
+    -- Gathering, Match the action: a herb picked; then fishing: the throw
+    if V.castKind == "gather" and preset and preset.auto then
+        V.castAction = "herbalism"
+        onStep(SpellName(2366) or "Herbalism")
+        play("cast", true)
+        at(2.5, function() V.EndLoop("cast") end)
+        at(3.5, function()
+            local now = GetTime()
+            V.castAction = "fishing"
+            cast.timing = { start = now, finish = now + 30, channel = true }
+            cast.ended = false
+            onStep((SpellName(7620) or "Fishing") .. ": the throw")
+            play("cast", true)
+        end)
+        at(5.5, finish)
+        return
+    end
     -- A spell, Match the action: a Fireball pushed back, then released;
     -- Arcane Missiles, three of them; a Frostbolt interrupted
-    local preset = PRESET[V.CastPreset(V.castKind)]
     if V.castKind == "spell" and preset and preset.auto then
         local name
         local function begin(id, actionKey, seconds, interval)
@@ -987,11 +1031,6 @@ end
 ---------------------------------------------------------------------------
 -- The events
 ---------------------------------------------------------------------------
--- Combat values WoW Forever may hide from addons
-local function secret(v)
-    return issecretvalue ~= nil and issecretvalue(v) or false
-end
-
 -- Where each kind of combat log entry keeps its "critical" flag
 local CRIT_ARG = {
     SWING_DAMAGE = 18, RANGE_DAMAGE = 21, SPELL_DAMAGE = 21, SPELL_PERIODIC_DAMAGE = 21,
@@ -1221,6 +1260,8 @@ local function CastEnded(how)
     V.EndLoop("cast")
     if cast.ended then return end
     cast.ended = true
+    -- (fishing stopped early: most often the catch, looted)
+    if how == "cancelled" and cast.timing and cast.timing.fishing then return end
     V.Fire(how)
 end
 
@@ -1229,7 +1270,7 @@ local function CastReleased()
     V.EndLoop("cast")
     if cast.ended then return end
     cast.ended = true
-    if cast.shaped then V.Release() end
+    if cast.shaped and not cast.timing.fishing then V.Release() end
 end
 
 local CAST_HANDLERS = {

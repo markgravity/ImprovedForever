@@ -91,6 +91,30 @@ focus the way Forever's native windows do. The shared code is
 - When adding a hardcoded ID or name, check it against Forever's data, then rerun
   `python3 tools/sync_forever_data.py --check`.
 
+## Debugging in game: log to SavedVariables
+When an in-game probe prints more than a screenshot can hold, log to the saved
+variables instead of the chat, then read the file:
+- Write lines into a table in `IF.db` (`ImprovedForeverDB`), e.g.
+  `IF.db.fishLog = { date(...) }` at the start of each run (a fresh log per run),
+  then append a line per event or state change, with a timestamp
+  (`GetTime() % 1000`). Show any secret value as `<hidden>`: `tostring` on one
+  errors. Keep the chat to a start line and a stop line with the line count.
+- The game writes it to disk only on `/reload` or logout. Ask the user to run
+  the probe, `/reload`, and say when it's done.
+- Read it from
+  `/Applications/World of Warcraft/_classic_beta_/WTF/Account/53960380#1/SavedVariables/ImprovedForever.lua`
+  (per-character data: `ImprovedForeverCharDB` under
+  `WTF/Account/53960380#1/<realm>/<character>/SavedVariables/`).
+- To find which event comes with something, log every event while it
+  happens: `frame:RegisterAllEvents()`, leave out chat and the like, and write
+  each name at most once a second. The fishing probe did this (since removed;
+  it showed Forever fires nothing when a fish bites).
+- Never touch a nameplate frame in a probe: they're restricted, and reaching
+  into one taints the gamepad interact button.
+- Once you're done, remove the probe and clear its log table (e.g.
+  `IF.db.fishLog = nil` in the module's `Settings()`), so the saved variables
+  stay small.
+
 ## Checks
 - `luajit -bl <file>` for syntax.
 - `luajit -bl <file> | grep -oE 'GGET.*"[A-Za-z_]+"'` for stray globals.
