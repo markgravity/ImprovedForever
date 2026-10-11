@@ -1,7 +1,7 @@
 -- The Vibration tab, a tab of settings (IF.SettingsPage, SettingsPage.lua):
 -- under Settings, vibration on / off and its strength; under Events, the
--- events in sections (Combat; Casting: spell, gathering, crafting; Wheel;
--- Progress), each a dropdown of patterns (a kind of cast: of ready-made sets for its
+-- events in sections (Combat; Casting: spell, gathering, crafting; Food &
+-- drink; Wheel; Progress), each a dropdown of patterns (a kind of cast: of ready-made sets for its
 -- four moments: casting, interrupted, cancelled, pushed back). Choosing
 -- one sets it and plays it; Triangle plays it again.
 local IF = ImprovedForever

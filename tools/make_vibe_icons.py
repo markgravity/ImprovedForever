@@ -660,6 +660,52 @@ def moves():
     render(path("ic_event_instant"), [(sw, STEEL), (hilt, LEATHER), (spark, GOLD)])
 
 
+def rest():
+    """Eating and drinking: the events' icons and their patterns'"""
+    # Eating: a drumstick, the bone's knob below
+    meat = icon.mask(); d = icon.draw(meat)
+    leaf_shape(d, 76, 52, 40, 28, -45)
+    bone = icon.mask(); d = icon.draw(bone)
+    icon.stroke(d, [(52, 78), (28, 102)], 12)
+    icon.circle(d, 20, 100, 10)
+    icon.circle(d, 30, 112, 10)
+    render(path("ic_event_eat"), [(meat, LEATHER), (bone, GREY)])
+
+    # Drinking: a mug of water, its handle, a drop above
+    mug = icon.mask(); d = icon.draw(mug)
+    icon.polygon(d, [(26, 40), (86, 40), (82, 114), (30, 114)])
+    icon.arc(d, 88, 72, 18, -80, 80, 9)
+    water = icon.mask(); d = icon.draw(water)
+    icon.polygon(d, [(32, 52), (80, 52), (78, 74), (34, 74)])
+    drop = icon.mask(); d = icon.draw(drop)
+    pts = [(56 + 10 * math.cos(math.radians(a)), 22 + 10 * math.sin(math.radians(a))) for a in range(-30, 211, 6)]
+    icon.polygon(d, pts + [(56, 0)])
+    render(path("ic_event_drink"), [(icon.cut(mug, water), STEEL), (water, BLUE), (drop, BLUE)])
+
+    # Munch: an apple, a bite out of its side
+    apple = icon.mask(); d = icon.draw(apple)
+    icon.circle(d, 52, 72, 38)
+    icon.circle(d, 76, 72, 38)
+    bite = icon.mask(); d = icon.draw(bite)
+    icon.circle(d, 116, 66, 16)
+    icon.circle(d, 112, 92, 14)
+    stem = icon.mask(); d = icon.draw(stem)
+    icon.stroke(d, [(64, 40), (66, 18)], 6)
+    lf = icon.mask(); d = icon.draw(lf)
+    leaf_shape(d, 82, 22, 14, 7, -25)
+    render(path("ic_vibe_chew"), [(icon.cut(apple, bite), RED), (stem, LEATHER), (lf, GREEN)])
+
+    # Gulp: two drops falling, ripples where they land
+    drops = icon.mask(); d = icon.draw(drops)
+    for cx, cy, r in ((48, 46, 14), (82, 30, 10)):
+        pts = [(cx + r * math.cos(math.radians(a)), cy + r * math.sin(math.radians(a))) for a in range(-30, 211, 6)]
+        icon.polygon(d, pts + [(cx, cy - 2.4 * r)])
+    rip = icon.mask(); d = icon.draw(rip)
+    icon.arc(d, 64, 96, 20, 200, 340, 6)
+    icon.arc(d, 64, 100, 40, 200, 340, 6)
+    render(path("ic_vibe_gulp"), [(drops, BLUE), (rip, STEEL)])
+
+
 if __name__ == "__main__":
     patterns()
     actions()
@@ -667,3 +713,4 @@ if __name__ == "__main__":
     weapons()
     moves()
     events()
+    rest()

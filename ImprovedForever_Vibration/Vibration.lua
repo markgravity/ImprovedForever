@@ -3,7 +3,8 @@
 -- LICENSE-EasyController.md): its patterns, played on the two
 -- standard motors at one strength for all. Three events: you level up, you
 -- land a critical hit (damage or heal), you take one; casts, matched to
--- what they are (fire, Hearthstone, mining, tailoring...). Each has a pattern of
+-- what they are (fire, Hearthstone, mining, tailoring...); eating and
+-- drinking, while you sit with food or a drink. Each has a pattern of
 -- its own, or none, grouped as Easy Controller does (Combat, Progress). Set
 -- in the Vibration tab (VibeEditor.lua); on / off
 -- and strength in the Vibration tab (Settings).
@@ -70,6 +71,14 @@ V.PATTERNS = {
     { key = "shimmer", label = "Shimmer", action = true,   -- enchanting: magic swelling and fading
         steps = { { 0.1, 0.1, 0.1 }, { 0.3, 0.3, 0.1 }, { 0.5, 0.5, 0.1 }, { 0.3, 0.3, 0.1 }, { 0.1, 0.1, 0.1 },
             { 0, 0, 0.1 } } },
+    -- Eating and drinking (their loop, while you sit with it), in time with
+    -- the hand going to the mouth (V.RestMotion); these steps only where it
+    -- can't be (a race we have no motion for)
+    { key = "chew", label = "Munch", action = true, rest = true,     -- food: a bite, chewing, a pause
+        steps = { { 0.3, 0.2, 0.12 }, { 0, 0, 0.15 }, { 0.2, 0.12, 0.1 }, { 0, 0, 0.15 }, { 0.2, 0.12, 0.1 },
+            { 0, 0, 1.3 } } },
+    { key = "gulp", label = "Gulp", action = true, rest = true,      -- a drink: a sip, a swallow, a pause
+        steps = { { 0.12, 0.2, 0.15 }, { 0, 0, 0.1 }, { 0.25, 0.35, 0.15 }, { 0, 0, 1.5 } } },
     -- Spells, by family
     { key = "kindle", label = "Kindle", action = true,     -- fire: crackling, building heat
         steps = { { 0.3, 0.15, 0.1 }, { 0.1, 0.35, 0.1 }, { 0.45, 0.25, 0.1 }, { 0.15, 0.4, 0.1 }, { 0.55, 0.45, 0.1 },
@@ -192,6 +201,7 @@ end
 V.GROUPS = {
     { key = "combat", label = "Combat" },
     { key = "casting", label = "Casting" },
+    { key = "rest", label = "Food & drink" },
     { key = "wheel", label = "Wheel" },
     { key = "progress", label = "Progress" },
 }
@@ -230,6 +240,15 @@ V.EVENTS = {
             .. " use (Heroic Strike, Sinister Strike, a seal, a shock...). Match the move: each its own feel (a"
             .. " slash, a stab, a bash, a charge, a whirl, a seal's light, a Judgement...); any other: none. A"
             .. " pattern: every instant ability." },
+    { key = "eat", group = "rest", label = "Eating", icon = EVENT_ICONS .. "eat", on = true,
+        pattern = "chew", loop = true, family = "rest", tip = "While you sit eating, until you stand up or the"
+            .. " food is done. Munch goes with your character: a bite as the hand reaches the mouth, chewing"
+            .. " while it stays. Another pattern: played over and over." },
+    { key = "drink", group = "rest", label = "Drinking", icon = EVENT_ICONS .. "drink", on = true,
+        pattern = "gulp", loop = true, family = "rest", tip = "While you sit drinking, until you stand up or"
+            .. " the drink is done. Gulp goes with your character: a sip as the hand reaches the mouth, then"
+            .. " a swallow. Another pattern: played over and over. Food and drink at once (a mage's"
+            .. " Refreshment, Dim Sum): both, drinking felt over eating." },
     { key = "wheelTick", group = "wheel", label = "Slot change", icon = EVENT_ICONS .. "wheel", on = true,
         pattern = "micro", gap = 0.03, tip = "In an open wheel, the pick moves to another slot (stick,"
             .. " D-pad or a new page)." },
@@ -336,6 +355,7 @@ end
 -- db.vibration = { enabled, intensity, events = { key = { on, pattern } } }
 function V.Settings()
     IF.db.fishLog = nil   -- (the log of a fishing probe, since removed)
+    IF.db.eatLog = nil    -- (the log of an eating probe, since removed)
     IF.db.vibration = IF.db.vibration or {}
     local s = IF.db.vibration
     if s.enabled == nil then s.enabled = true end
@@ -756,6 +776,83 @@ function V.Release()
     StartShape(Release, true)
 end
 
+---------------------------------------------------------------------------
+-- Eating and drinking in time with the character: sitting with food or a
+-- drink, it loops the eat motion (EmoteEat) from the moment the buff goes
+-- on, lifting the hand to the mouth once a loop. Munch bites as the hand
+-- gets there and chews while it stays; Gulp sips, then swallows.
+---------------------------------------------------------------------------
+-- The motion's length, when the hand reaches the mouth and when it leaves
+-- (ms), by race and sex (male, female): from each model's animation, the
+-- right hand's distance to the mouth (tools/make_rest_motion.py)
+local REST_MOTION = {
+    [1] = { { 2600, 940, 2040 }, { 2600, 640, 1980 } },     -- Human
+    [2] = { { 2500, 1120, 1920 }, { 2500, 240, 2140 } },    -- Orc
+    [3] = { { 2000, 600, 1700 }, { 3000, 840, 2220 } },     -- Dwarf
+    [4] = { { 2000, 780, 1580 }, { 2500, 460, 1900 } },     -- Night Elf
+    [5] = { { 3334, 820, 1600 }, { 2000, 1120, 1720 } },    -- Undead
+    [6] = { { 2000, 900, 2000 }, { 2000, 720, 1880 } },     -- Tauren
+    [7] = { { 2666, 800, 1820 }, { 2666, 1040, 2100 } },    -- Gnome
+    [8] = { { 3000, 600, 2220 }, { 1500, 260, 1180 } },     -- Troll
+}
+local LIFT = 0.35                                     -- the hand rising, before it gets there
+
+-- When the buff went on (GetTime seconds), per event; set below
+local restStart = {}
+
+-- The player's motion: { length, reaches, leaves } in seconds, or nil
+function V.RestMotion()
+    local race = select(3, UnitRace("player"))
+    local sex = UnitSex("player")
+    local m = REST_MOTION[race] and REST_MOTION[race][sex == 3 and 2 or 1]
+    if not m then return nil end
+    return { m[1] / 1000, m[2] / 1000, m[3] / 1000 }
+end
+
+-- Where the motion is: seconds since the hand reached the mouth (0 ..
+-- length) and how long it stays there
+local function MotionAt(m, start, now)
+    local d = (now - start - m[2]) % m[1]
+    return d, (m[3] - m[2]) % m[1]
+end
+
+local function Munch(m, start)
+    return function(now)
+        local d, near = MotionAt(m, start, now)
+        if d < 0.14 then return 0.55, 0.4 end                     -- the bite
+        if d < near then
+            -- chewing: a small tick every 0.3 s
+            if (d - 0.14) % 0.3 < 0.1 then return 0.18, 0.12 end
+            return 0, 0
+        end
+        local lift = m[1] - d
+        if lift < LIFT then return 0.04 + 0.1 * (1 - lift / LIFT), 0 end
+        return 0, 0
+    end
+end
+
+local function Gulp(m, start)
+    return function(now)
+        local d, near = MotionAt(m, start, now)
+        if d < 0.2 then return 0.1 + 0.15 * d / 0.2, 0.2 + 0.15 * d / 0.2 end   -- the sip
+        local swallow = d - near / 2
+        if swallow >= 0 and swallow < 0.16 then return 0.3, 0.4 end
+        local lift = m[1] - d
+        if lift < LIFT then return 0.04 + 0.08 * (1 - lift / LIFT), 0 end
+        return 0, 0
+    end
+end
+
+-- Eating's or drinking's shape (its own patterns only), else nil: the
+-- pattern loops as it is
+local function RestShape(eventKey, pattern)
+    if eventKey ~= "eat" and eventKey ~= "drink" then return nil end
+    local m = V.RestMotion()
+    if not m or (pattern ~= "chew" and pattern ~= "gulp") then return nil end
+    local start = restStart[eventKey] or GetTime()
+    return pattern == "chew" and Munch(m, start) or Gulp(m, start)
+end
+
 -- Combo events (critical hits, given or taken): one soon after another
 -- (within COMBO_WINDOW) plays with a random strength, length and side
 -- (more left or more right), each well apart from the last one's, so a run
@@ -812,7 +909,9 @@ function V.Fire(eventKey)
     if not (s.enabled and pattern) then return end
     if EVENT[eventKey].loop then
         V.EndLoop(eventKey)
-        V.looping = { key = eventKey, pattern = pattern, shape = eventKey == "cast" and CastShape() or nil }
+        local shape
+        if eventKey == "cast" then shape = CastShape() else shape = RestShape(eventKey, pattern) end
+        V.looping = { key = eventKey, pattern = pattern, shape = shape }
         if eventKey == "cast" then cast.shaped = V.looping.shape ~= nil end
         loops[#loops + 1] = V.looping
         Resume(V.looping)
@@ -1133,10 +1232,24 @@ local SHOT_IDS = {
     75, 5019, 3018, 2480, 7918, 7919, 2764,
     3044, 2643, 5116, 1978, 3043, 3034, 19386, 19503, 20736, 19801,
 }
-local gatherByName, craftByName, spellByName, ticksByName, shotByName, moveByName
+-- Eating and drinking: the buffs of sitting with food or a drink (each
+-- also the spell the item casts). Most are Food or Drink; a few have their
+-- own name, some both at once (a mage's Refreshment, Dim Sum...).
+local REST_SPELLS = {
+    eat = { 433, 26030, 18124, 21149, 29041 },
+    drink = { 430, 18140, 23698 },
+    both = { 167152, 25990, 26263, 29055, 1312719, 1269354 },
+}
+local gatherByName, craftByName, spellByName, ticksByName, shotByName, moveByName, restByName
 local function Names()
     if gatherByName then return end
-    gatherByName, craftByName, ticksByName, shotByName, moveByName = {}, {}, {}, {}, {}
+    gatherByName, craftByName, ticksByName, shotByName, moveByName, restByName = {}, {}, {}, {}, {}, {}
+    for kind, ids in pairs(REST_SPELLS) do
+        for _, id in ipairs(ids) do
+            local name = SpellName(id)
+            if name then restByName[name] = kind end
+        end
+    end
     for move, ids in pairs(V.MOVES) do
         for _, id in ipairs(ids) do
             local name = SpellName(id)
@@ -1214,6 +1327,14 @@ local function IsShot(spellID)
     Names()
     local name = SpellName(spellID)
     return name ~= nil and not secret(name) and shotByName[name] == true
+end
+
+-- Food or a drink (eat, drink or both; nil: neither)
+local function RestOf(spellID)
+    if not spellID or secret(spellID) then return nil end
+    Names()
+    local name = SpellName(spellID)
+    return name and not secret(name) and restByName[name] or nil
 end
 
 -- A channel's seconds between ticks (nil: not one we know)
@@ -1315,6 +1436,8 @@ local CAST_HANDLERS = {
         end
         if UnitChannelInfo and UnitChannelInfo("player") then return end
         if not secret(spellID) and spellID == ATTACK then return end
+        -- (sitting down with food or a drink: Eating, Drinking)
+        if RestOf(spellID) then return end
         V.instantMove = V.MoveOf(spellID)
         V.Fire("instant")
     end,
@@ -1416,3 +1539,54 @@ health:SetScript("OnEvent", function(_, event)
     SetLow(hp / max <= LOW_HP)
 end)
 
+---------------------------------------------------------------------------
+-- Eating and drinking: a loop while the food's or the drink's buff is on
+-- you, stopped when it goes (you stand up, or it is done). Names hidden
+-- (combat): left as they are.
+---------------------------------------------------------------------------
+local resting = { eat = false, drink = false }
+
+-- start: when the buff went on (nil: now)
+local function SetResting(key, start)
+    local on = start ~= false
+    if on == resting[key] then return end
+    resting[key] = on
+    restStart[key] = on and start or nil
+    if on then V.Fire(key) else V.EndLoop(key) end
+end
+
+-- The player's buff i's name, and when it went on (nil: no more)
+local function Buff(i)
+    local name, duration, expires
+    if C_UnitAuras and C_UnitAuras.GetBuffDataByIndex then
+        local aura = C_UnitAuras.GetBuffDataByIndex("player", i)
+        if not aura then return nil end
+        name, duration, expires = aura.name, aura.duration, aura.expirationTime
+    elseif UnitBuff then
+        local _
+        name, _, _, _, duration, expires = UnitBuff("player", i)
+    end
+    if name == nil or secret(name) then return name end
+    if secret(duration) or secret(expires) or not (duration and expires) or duration <= 0 then return name end
+    return name, expires - duration
+end
+
+local rest = CreateFrame("Frame")
+rest:RegisterUnitEvent("UNIT_AURA", "player")
+rest:RegisterEvent("PLAYER_ENTERING_WORLD")
+rest:SetScript("OnEvent", function()
+    if not IF.db then return end
+    Names()
+    local eat, drink = false, false
+    for i = 1, 40 do
+        local name, start = Buff(i)
+        if name == nil then break end
+        if secret(name) then return end
+        local kind = restByName[name]
+        if kind == "eat" or kind == "both" then eat = start or GetTime() end
+        if kind == "drink" or kind == "both" then drink = start or GetTime() end
+    end
+    -- (both: drinking played over eating)
+    SetResting("eat", eat)
+    SetResting("drink", drink)
+end)

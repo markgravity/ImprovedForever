@@ -8,6 +8,10 @@
 - **Wheel**: R3 is only taken under the shoulders whose combo has a wheel, so a combo set back to
   the game's own (R3 alone: ping) does what the game does again. R3 alone stays ours while a wheel
   is on R1 or on a shoulder the game doesn't make a modifier. (#4)
+- **Vibration**: new Food & drink section. Eating (Munch) and Drinking (Gulp) play while you sit
+  with food or a drink, in time with your character: a bite or a sip each time the hand reaches the
+  mouth (timed per race and sex from the game's models), until you stand up or it's done. Each can
+  take any pattern instead, or be off.
 
 ## 0.3.1
 

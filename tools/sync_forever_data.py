@@ -8,7 +8,8 @@
    listed under).
 3. LibraryData.lua rebuilt (tools/make_library_data.py).
 4. The IDs and names written into the code checked against Forever's data:
-   Tasks' vendor reagents, Vibration's spells, Gather's node names.
+   Tasks' vendor reagents, Vibration's spells (moves, food and drink),
+   Gather's node names.
 5. The Lua checks: syntax of the data files, tools/loadcheck.lua.
 
 A Lua 5.1 is needed for step 1 (LuaJIT can't load QuestieDB's largest
@@ -120,7 +121,7 @@ def check_code():
         elif not data.as_list(row.get(14)):
             problems.append(f"Tasks.lua SEED_VENDOR: {row.get(1)} ({iid}) has no Forever vendor")
 
-    # Vibration: the spells each move matches, and the gathering spells
+    # Vibration: the spells each move matches, food and drink, and the gathering spells
     build, names = forever_spell_names()
     src = (ROOT / "ImprovedForever_Vibration" / "Vibration.lua").read_text()
     moves = re.search(r"V\.MOVES = \{(.*?)\n\}", src, re.S)
@@ -128,6 +129,11 @@ def check_code():
         for sid in lua_ids(body):
             if sid not in names:
                 problems.append(f"Vibration.lua V.MOVES.{key}: spell {sid} isn't in Forever ({build})")
+    rest = re.search(r"local REST_SPELLS = \{(.*?)\n\}", src, re.S)
+    for key, body in re.findall(r"(\w+) = \{([^}]*)\}", rest.group(1) if rest else ""):
+        for sid in lua_ids(body):
+            if sid not in names:
+                problems.append(f"Vibration.lua REST_SPELLS.{key}: spell {sid} isn't in Forever ({build})")
     for sid in (int(x) for x in re.findall(r"spell = (\d+)", src)):
         if sid not in names:
             problems.append(f"Vibration.lua: spell {sid} isn't in Forever ({build})")
