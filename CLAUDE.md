@@ -153,6 +153,24 @@ variables instead of the chat, then read the file:
   `IF.db.fishLog = nil` in the module's `Settings()`), so the saved variables
   stay small.
 
+## Debugging a taint error
+For `ADDON_ACTION_FORBIDDEN` / blocked (e.g. `SetPreferredGamepadInteractTarget()`
+when a gamepad-focused window closes):
+- Note the addon the error names each time: several modules can taint the
+  same game state, and the name changes as one is fixed.
+- Repeat each test 3+ times: the error can be intermittent.
+- Taint log: `/console taintLog 1`, reproduce, `/console taintLog 0`, then
+  `/reload`, and read `_classic_beta_/Logs/taint.log`. It restarts on every
+  `/reload` while on. Don't use level 2: it can flood and freeze the game.
+- Taint sources found so far:
+  - our code filling the game's shared caches first (`QuestCache:Get`,
+    `QuestUtil.CanCreateQuestGroup`): keep our own copies
+  - setting properties of the game's frames: use `IF.Focus.Fade`
+  - `AddManagedFrame` into the game's columns
+  - taking, passing on or binding the game's pad buttons while its window has
+    focus
+  - calling the game's window code that drives SmartNavigation
+
 ## Checks
 - `luajit -bl <file>` for syntax.
 - `luajit -bl <file> | grep -oE 'GGET.*"[A-Za-z_]+"'` for stray globals.
