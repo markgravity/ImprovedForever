@@ -103,12 +103,109 @@ local function PadOrder(on)
 	IQT.Refresh()
 end
 
+---------------------------------------------------------------------------
+-- R3: our sort menu. Watched (IsKeyDown), never taken or bound: the game's
+-- R3 still runs (its tooltips toggle); the menu takes the pad with its own
+-- catcher (Dropdown.lua) and gives it back on B. Its prompt in the game's
+-- legend (seemingly): our own glyph and words, not the game's templates.
+---------------------------------------------------------------------------
+
+local lastR3 = true     -- (counted only once seen up)
+
+-- The prompt in the game's legend: the legend's own box (its background
+-- and border) faded, ours drawn round its prompts and ours instead, so one
+-- box shows; its prompts stay the game's (they follow what the cursor is
+-- on). Laid out as the game's legend: 10 padding, 15 between prompts.
+local LEGEND_PAD, PROMPT_GAP, ICON = 10, 15, 24
+local box, boxParts
+
+local function Box()
+	if box then return box end
+	box = CreateFrame("Frame", nil, nil)
+	box:SetParent(UIParent)
+	local slot = box:CreateTexture(nil, "BACKGROUND")
+	slot:SetAllPoints()
+	slot:SetAtlas("gamepad-footer-slot-bg")
+	local border = box:CreateTexture(nil, "BORDER")
+	border:SetAllPoints()
+	border:SetAtlas("gamepad-footer-slot-frameneutral")
+	local prompt = CreateFrame("Frame", nil, nil)
+	prompt:SetParent(box)
+	local icon = prompt:CreateTexture(nil, "ARTWORK")
+	icon:SetSize(ICON, ICON)
+	icon:SetPoint("LEFT")
+	box.icon = icon
+	local text = prompt:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+	text:SetPoint("LEFT", icon, "RIGHT", 4, 0)
+	text:SetText("Sort")
+	box.text = text
+	box.prompt = prompt
+	box:Hide()
+	return box
+end
+
+-- The game legend's box textures (its background and border)
+local function LegendBox(legend)
+	if boxParts and boxParts.legend == legend then return boxParts end
+	boxParts = { legend = legend }
+	-- (on the legend, or a frame of its: its prompts' holder)
+	local frames = { legend }
+	for _, child in ipairs({ legend:GetChildren() }) do frames[#frames + 1] = child end
+	for _, frame in ipairs(frames) do
+		for _, region in ipairs({ frame:GetRegions() }) do
+			local atlas = region.GetAtlas and region:GetAtlas()
+			if atlas and atlas:find("gamepad%-footer%-slot") then
+				boxParts[#boxParts + 1] = region
+			end
+		end
+	end
+	return boxParts
+end
+
+local function Hint(show)
+	local footer = ObjectiveTrackerFrame.gamepadFooter
+	local legend = footer and footer.inputLegend
+	if boxParts then
+		for _, region in ipairs(boxParts) do IF.Focus.Fade(region, show and legend == boxParts.legend) end
+	end
+	if not show or not (legend and legend:IsVisible() and legend:GetLeft()) then
+		if box then box:Hide() end
+		return
+	end
+	local b = Box()
+	local atlas = IF.GlyphAtlas and IF.GlyphAtlas("RS")
+	if atlas then b.icon:SetAtlas(atlas) end
+	b.prompt:SetSize(ICON + 4 + b.text:GetStringWidth(), ICON)
+	b.prompt:ClearAllPoints()
+	b.prompt:SetPoint("RIGHT", legend, "LEFT", LEGEND_PAD - PROMPT_GAP, 0)
+	b:SetFrameStrata(legend:GetFrameStrata())
+	b:SetFrameLevel(math.max(0, legend:GetFrameLevel() - 1))
+	b:ClearAllPoints()
+	b:SetPoint("TOP", legend, "TOP")
+	b:SetPoint("BOTTOM", legend, "BOTTOM")
+	b:SetPoint("LEFT", b.prompt, "LEFT", -LEGEND_PAD, 0)
+	b:SetPoint("RIGHT", legend, "RIGHT")
+	b:Show()
+	for _, region in ipairs(LegendBox(legend)) do IF.Focus.Fade(region, true) end
+end
+
+local function WatchR3()
+	local r3 = IsKeyDown and IsKeyDown("PADRSTICK") or false
+	if r3 and not lastR3 and not InCombatLockdown() and not IQT.IsDropdownShown() then
+		IQT.ToggleSortMenu(nil, { pad = true, anchor = pointed or IQT.sortButton,
+			point = "TOPRIGHT", relativePoint = "TOPLEFT", x = -8, y = 0 })
+	end
+	lastR3 = r3
+end
+
 local function Stop()
 	if not mirroring then return end
 	mirroring, pointed = false, nil
 	if cursor then cursor:Hide() end
 	HidePointer(false)
 	PadOrder(false)
+	Hint(false)
+	lastR3 = true
 end
 
 mirror:SetScript("OnUpdate", function()
@@ -117,10 +214,17 @@ mirror:SetScript("OnUpdate", function()
 	end
 	mirroring = true
 	PadOrder(true)
+	WatchR3()
+	Hint(not IQT.IsDropdownShown())
 	local nav = _G.SmartNavigation
 	local ok, current = pcall(function() return nav and nav:GetCurrentButton() end)
 	local target = ok and Target(current) or nil
-	if target and target:IsVisible() then
+	-- (our menu open: the pad is there, its cursor with it)
+	if IQT.IsDropdownShown() then
+		pointed = nil
+		if cursor then cursor:Hide() end
+		HidePointer(true)
+	elseif target and target:IsVisible() then
 		cursor = cursor or IF.Focus.Cursor(IFObjectiveTrackerFrame)
 		if target ~= pointed or not cursor:IsShown() then
 			pointed = target

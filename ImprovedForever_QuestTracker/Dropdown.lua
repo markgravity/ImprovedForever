@@ -1,4 +1,5 @@
 local _, IQT = ...
+local IF = ImprovedForever
 
 -- Our dropdown, styled like the native Menu (Blizzard_Menu MenuStyle1 /
 -- MenuVariants). Blizzard's Menu can't be opened from addon code on Forever:
@@ -78,10 +79,23 @@ local function RefreshRow(row)
 	row.highlight:SetShown(row.index == focusIndex)
 end
 
+-- With the pad: the game's cursor beside the focused row, as its menus
+local cursor
+local function RefreshCursor()
+	local row = dropdown and dropdown.gamepad and focusIndex and rows[focusIndex]
+	if row and row:IsShown() then
+		cursor = cursor or IF.Focus.Cursor(dropdown)
+		cursor:Point(row)
+	elseif cursor then
+		cursor:Hide()
+	end
+end
+
 local function Refresh()
 	for i = 1, #entries do
 		RefreshRow(rows[i])
 	end
+	RefreshCursor()
 end
 
 local function SetFocus(index)
@@ -317,6 +331,7 @@ function IQT.ShowMenu(list, options)
 	height = height + INSET.bottom
 
 	local gamepad = (opts.pad or GamepadActive()) and true or false
+	dropdown.gamepad = gamepad
 	if gamepad then
 		dropdown.hint:SetText(Glyph("dpad").." Move   "..Glyph("select").." Select   "..Glyph("close").." Close")
 		dropdown.hint:Show()
