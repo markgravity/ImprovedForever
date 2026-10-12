@@ -24,9 +24,7 @@ function IQT.PlaceTracker(frame)
 		frame:SetFrameLevel(native:GetFrameLevel() + 30)
 		frame:SetPoint("TOPLEFT", native, "TOPLEFT")
 		frame:SetPoint("TOPRIGHT", native, "TOPRIGHT")
-		if not IQT.Off("hooks") then
-			native:HookScript("OnSizeChanged", function() frame:UpdateHeight() end)
-		end
+		native:HookScript("OnSizeChanged", function() frame:UpdateHeight() end)
 	else
 		frame:SetPoint("TOPRIGHT", UIParent, "TOPRIGHT", -85, -180)
 		frame:SetHeight(600)

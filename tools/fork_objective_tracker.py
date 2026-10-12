@@ -27,6 +27,9 @@ ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "ImprovedForever_QuestTracker" / "Tracker"
 REPO = "https://github.com/Ketho/wow-ui-source-forever"
 SUB = "Interface/AddOns/Blizzard_ObjectiveTracker"
+# The game's quest object (QuestMixin is local to it): copied for our own
+# quest cache (IFQuestCache), so ours never fills the game's QuestCache
+QUEST = "Interface/AddOns/Blizzard_ObjectAPI/Mainline/Quest.lua"
 # Not copied: the fonts are the game's own (ObjectiveTrackerLineFont...)
 SKIP = {"Blizzard_ObjectiveTrackerFonts.xml"}
 
@@ -56,6 +59,12 @@ EVERYWHERE = [
     ("MenuUtil.CreateContextMenu(", "IFObjectiveTrackerMenu.CreateContextMenu("),
     ("GamepadMode.FrameControlsManager:FrameHidden(", "IFObjectiveTrackerPad.FrameHidden("),
     ("ShouldShowMawBuffs()", "false --[[ ShouldShowMawBuffs(): no Maw, auras secret ]]"),
+    # The game's shared caches (QuestCache's quest objects, QuestUtil's group
+    # cache): the first caller fills them, so ours would leave tainted
+    # entries the game's tracker then reads, tainting its gamepad focus.
+    # Ours keeps its own (Blizzard_Quest.lua, Core.lua).
+    ("QuestCache:Get(", "IFQuestCache:Get("),
+    ("QuestUtil.CanCreateQuestGroup(", "IFCanCreateQuestGroup("),
 ]
 
 
@@ -65,7 +74,7 @@ def source(arg):
     cache = Path.home() / ".cache" / "wow-ui-source-forever"
     if not cache.exists():
         subprocess.run(["git", "clone", "--depth", "1", "--filter=blob:none", "--sparse", REPO, str(cache)], check=True)
-        subprocess.run(["git", "-C", str(cache), "sparse-checkout", "set", SUB], check=True)
+        subprocess.run(["git", "-C", str(cache), "sparse-checkout", "set", SUB, str(Path(QUEST).parent)], check=True)
     else:
         subprocess.run(["git", "-C", str(cache), "pull", "--ff-only"], check=True)
     return cache
@@ -104,7 +113,8 @@ def renamed(name):
 
 
 def main():
-    src = source(sys.argv[1] if len(sys.argv) > 1 else None) / SUB
+    root = source(sys.argv[1] if len(sys.argv) > 1 else None)
+    src = root / SUB
     files = toc_files(src)
     texts = {f: (src / f).read_text(encoding="utf-8") for f in files}
     names = defined_names(texts)
@@ -142,6 +152,12 @@ def main():
             text = re.sub(r"^(<Ui[^>]*>)", lambda m: m.group(1) + "\n" + XML_HEADER.format(name=f).rstrip(), text, count=1)
         (OUT / out_name).write_text(text, encoding="utf-8")
         written.append(out_name)
+    quest = (root / QUEST).read_text(encoding="utf-8")
+    if "QuestCache = ObjectCache_Create(QuestMixin);" not in quest:
+        sys.exit("Quest.lua: QuestCache line no longer matches")
+    quest = quest.replace("QuestCache = ObjectCache_Create(QuestMixin);", "IFQuestCache = ObjectCache_Create(QuestMixin);")
+    (OUT / "Blizzard_Quest.lua").write_text(HEADER.replace("Blizzard_ObjectiveTracker/{name}", "{name}").format(name="Blizzard_ObjectAPI/Mainline/Quest.lua") + quest, encoding="utf-8")
+    written.insert(0, "Blizzard_Quest.lua")
     print(f"{len(names)} names renamed, {len(written)} files in {OUT.relative_to(ROOT)}")
     print("TOC order:")
     for w in written:

@@ -12,8 +12,8 @@
   untracking and re-tracking quests, and with a full tracker the top-sorted quests show.
 - **Quest Tracker**: the controller works it exactly as the game's tracker (it is the game's
   tracker's own navigation, legend and buttons: D-pad Up on the shortcuts bar, A, X, Y, quest
-  items, L2 / R2, B), the cursor drawn on our list. With a sort on, the D-pad goes through the
-  quests in the game's watch order.
+  items, L2 / R2, B), the cursor drawn on our list. While the controller is on it, the quests show
+  in the game's order (so the D-pad goes top to bottom); the sort comes back when it leaves.
 
 ## 0.5.0
 

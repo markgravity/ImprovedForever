@@ -48,20 +48,6 @@ ImprovedForever.AddCommand("quests", function(args)
 	elseif cmd == "completed" and COMPLETED_ALIASES[arg or ""] then
 		IQT.SetSortCompleted(COMPLETED_ALIASES[arg])
 		PrintStatus()
-	elseif cmd == "bisect" then
-		local parts = { tracker = true, mirror = true, pointer = true, fade = true, hooks = true, all = true }
-		ImprovedForeverDB.qtBisect = ImprovedForeverDB.qtBisect or {}
-		if arg == "none" then
-			ImprovedForeverDB.qtBisect = nil
-			IQT.Print("bisect: everything on after /reload")
-		elseif parts[arg or ""] then
-			ImprovedForeverDB.qtBisect[arg] = not ImprovedForeverDB.qtBisect[arg] or nil
-			local off = {}
-			for k in pairs(ImprovedForeverDB.qtBisect) do off[#off + 1] = k end
-			IQT.Print("bisect: off after /reload: " .. (#off > 0 and table.concat(off, ", ") or "nothing"))
-		else
-			IQT.Print("/if quests bisect tracker||mirror||pointer||fade||hooks||all||none (toggles; /reload after)")
-		end
 	elseif cmd == "debug" then
 		IQT.Debug()
 	elseif cmd == "menu" then

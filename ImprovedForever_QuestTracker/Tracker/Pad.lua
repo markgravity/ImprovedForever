@@ -10,8 +10,8 @@ local IF = ImprovedForever
 -- block, by its id). Nothing here takes a button or binds one: from addon
 -- code either carries taint into the game's navigation (its window closing,
 -- SetPreferredGamepadInteractTarget, gets forbidden).
--- The game's tracker lays its quests out in the watch order: with a sort of
--- ours, the D-pad goes through them in that order, the cursor following.
+-- The game's tracker lays its quests out in the watch order: while it has
+-- the pad, ours shows them in that order too (our sort back after).
 local Pad = {}
 IQT.Pad = Pad
 
@@ -89,31 +89,18 @@ local function Pointer()
 	return nav and nav.Pointer
 end
 
--- The game's cursor drawn at 0 by an animation of ours, its alpha untouched
--- (a property of the game's frames set from addon code taints them)
-local hider
+-- The game's cursor faded (IF.Focus.Fade: its alpha never set)
 local function HidePointer(hide)
-	local pointer = Pointer()
-	if not pointer or IQT.Off("pointer") then return end
-	if not hider then
-		local ok, group = pcall(function()
-			local g = mirror:CreateAnimationGroup()
-			local a = g:CreateAnimation("Alpha")
-			a:SetTarget(pointer)
-			a:SetFromAlpha(0)
-			a:SetToAlpha(0)
-			a:SetDuration(3600)
-			g:SetLooping("REPEAT")
-			return g
-		end)
-		if not ok then return end
-		hider = group
-	end
-	if hide and not hider:IsPlaying() then
-		hider:Play()
-	elseif not hide and hider:IsPlaying() then
-		hider:Stop()
-	end
+	IF.Focus.Fade(Pointer(), hide)
+end
+
+-- While the game's tracker has the pad, ours lists its quests in the
+-- game's order (Patch.lua: no sort of ours), so the D-pad, the game's,
+-- goes through them top to bottom
+local function PadOrder(on)
+	if IQT.padOrder == on then return end
+	IQT.padOrder = on
+	IQT.Refresh()
 end
 
 local function Stop()
@@ -121,14 +108,15 @@ local function Stop()
 	mirroring, pointed = false, nil
 	if cursor then cursor:Hide() end
 	HidePointer(false)
+	PadOrder(false)
 end
 
-if IQT.Off("mirror") then mirror:Hide() end
 mirror:SetScript("OnUpdate", function()
 	if not NativeFocused() or not IFObjectiveTrackerFrame:IsVisible() then
 		return Stop()
 	end
 	mirroring = true
+	PadOrder(true)
 	local nav = _G.SmartNavigation
 	local ok, current = pcall(function() return nav and nav:GetCurrentButton() end)
 	local target = ok and Target(current) or nil
@@ -169,6 +157,4 @@ local function FollowCollapse()
 		end
 	end
 end
-if not IQT.Off("hooks") then
-	EventUtil.ContinueAfterAllEvents(FollowCollapse, "PLAYER_ENTERING_WORLD", "VARIABLES_LOADED")
-end
+EventUtil.ContinueAfterAllEvents(FollowCollapse, "PLAYER_ENTERING_WORLD", "VARIABLES_LOADED")

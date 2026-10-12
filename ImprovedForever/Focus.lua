@@ -55,15 +55,54 @@ local function InRow(f)
 end
 
 ---------------------------------------------------------------------------
+-- A game frame faded out: F.Fade(region, hide). Never by its alpha: a
+-- property of the game's frames set from addon code taints them (closing
+-- the game's tracker after it gets SetPreferredGamepadInteractTarget
+-- forbidden). An alpha animation of ours, aimed at it, draws it at 0
+-- instead; its own alpha untouched.
+---------------------------------------------------------------------------
+local fader = CreateFrame("Frame")
+local fades = {}
+
+function F.Fade(region, hide)
+    if not (region and region.GetObjectType) then return end
+    local group = fades[region]
+    if not group then
+        if not hide then return end
+        local ok
+        ok, group = pcall(function()
+            local g = fader:CreateAnimationGroup()
+            g:CreateAnimation("Alpha"):SetTarget(region)
+            return g
+        end)
+        if not ok or not group then
+            group = region:CreateAnimationGroup()
+            group:CreateAnimation("Alpha")
+        end
+        local a = group:GetAnimations()
+        a:SetFromAlpha(0)
+        a:SetToAlpha(0)
+        a:SetDuration(3600)
+        group:SetLooping("REPEAT")
+        fades[region] = group
+    end
+    if hide and not group:IsPlaying() then
+        group:Play()
+    elseif not hide and group:IsPlaying() then
+        group:Stop()
+    end
+end
+
+---------------------------------------------------------------------------
 -- The game's focus dimmed while ours has the pad. Each owner (one of our
 -- windows) keeps what it dimmed, and puts it back.
 ---------------------------------------------------------------------------
 local dims = {}
 
 local function Dim(list, f)
-    if f and f.SetAlpha and f:GetAlpha() > 0 then
+    if f and f.GetAlpha and f:GetAlpha() > 0 then
         list[#list + 1] = f
-        f:SetAlpha(0)
+        F.Fade(f, true)
     end
 end
 
@@ -88,7 +127,7 @@ function F.DimNative(owner, hide, extra)
     local list = dims[owner] or {}
     dims[owner] = list
     -- (what was dimmed before back first: another window may be focused now)
-    for _, f in ipairs(list) do f:SetAlpha(1) end
+    for _, f in ipairs(list) do F.Fade(f, false) end
     wipe(list)
     if not hide then return end
     local nav = _G.SmartNavigation

@@ -840,46 +840,12 @@ function TK.MenuPress(name)
     end
 end
 
--- Where it goes: in the right side's column of the game's own frames
--- (RightManagedFrameContainer: frames stacked top to bottom by their
--- layoutIndex; the tracker's is 50), before the tracker (40): the game
--- stacks it under the minimap's gap, puts "All Objectives" under it and
--- makes the tracker as much shorter (ObjectiveTrackerFrame:UpdateHeight),
--- all its own layout. The column missing (or in combat): beside the
--- tracker, on its left.
-panel.layoutIndex = 40
-panel.topPadding = 30           -- (the column's own padding: room under the minimap)
-panel.align = "right"
-panel.isRightManagedFrame = true
-local managed = false           -- in the column
-local managedHeight
-
-local function Column()
-    local get = _G.GetRightManagedFrameContainer
-    local column = get and get()
-    return column and column.AddManagedFrame and column or nil
-end
-
-local function Unmanage()
-    local column = Column()
-    if managed and column and not IF.InCombat() then
-        column:RemoveManagedFrame(panel)
-        managed, managedHeight = false, nil
-    end
-end
-
+-- Where it goes: beside the tracker, on its left. Never in the game's own
+-- right column (RightManagedFrameContainer:AddManagedFrame): from addon
+-- code that lays the column out tainted, resizing the game's tracker
+-- (ObjectiveTrackerFrame:UpdateHeight) and so its gamepad focus (closing
+-- it gets SetPreferredGamepadInteractTarget forbidden).
 local function Place()
-    local column = Column()
-    -- In the column: laid out again by the game when its height changes
-    -- (out of combat; in it, at its end)
-    if column and not IF.InCombat() then
-        if not managed or managedHeight ~= panel:GetHeight() then
-            column:AddManagedFrame(panel)
-            managed, managedHeight = true, panel:GetHeight()
-        end
-        return
-    end
-    if managed then return end
     local tracker = _G.ObjectiveTrackerFrame
     panel:ClearAllPoints()
     if tracker and tracker:GetTop() then
@@ -901,7 +867,6 @@ function TK.RenderTracker()
     end
     if #tasks == 0 or IF.Auction.Settings().tasksTracker == false then
         if focus.on then TK.TakePad(false) end
-        Unmanage()
         panel:Hide()
         return
     end
@@ -997,7 +962,6 @@ function TK.RenderTracker()
     end
     for i = #tasks + 1, #blocks do blocks[i]:Hide() end
     panel:SetHeight(-y)
-    -- (shown first: the column only takes shown frames)
     panel:Show()
     Place()
 end
@@ -1027,13 +991,13 @@ function TK.TakePad(on)
     if catcher.EnableGamePadButton then catcher:EnableGamePadButton(focus.on) end
     local tracker = _G.ObjectiveTrackerFrame
     local legend = tracker and tracker.gamepadFooter and tracker.gamepadFooter.inputLegend
-    if legend then legend:SetAlpha(focus.on and 0 or 1) end
+    if legend then IF.Focus.Fade(legend, focus.on) end
     local nav = _G.SmartNavigation
     if focus.on and nav and nav.Pointer then
         hiddenPointer = nav.Pointer
-        hiddenPointer:SetAlpha(0)
+        IF.Focus.Fade(hiddenPointer, true)
     elseif hiddenPointer then
-        hiddenPointer:SetAlpha(1)
+        IF.Focus.Fade(hiddenPointer, false)
         hiddenPointer = nil
     end
     TK.RenderTracker()
@@ -1168,7 +1132,7 @@ keys:SetScript("OnUpdate", function()
 end)
 
 -- (beside the tracker: placed again now and then, the tracker moves with
--- Edit Mode; in the column: laid out again once combat ends)
+-- Edit Mode)
 local placer, waited = CreateFrame("Frame"), 0
 placer:SetScript("OnUpdate", function(_, elapsed)
     waited = waited + elapsed

@@ -18,15 +18,24 @@ IF.AddModule({ key = "quests", label = "Quest Tracker", icon = IF.TEX .. "ic_mod
 -- Our copy uses the game's tracker fonts (Edit Mode's text size) and is
 -- placed over the game's own: both must be there before Tracker/'s XML
 if C_AddOns and C_AddOns.IsAddOnLoaded and not C_AddOns.IsAddOnLoaded("Blizzard_ObjectiveTracker") then
-	IQT.loadedTracker = true
 	pcall(C_AddOns.LoadAddOn, "Blizzard_ObjectiveTracker")
 end
 
--- Debugging a taint: parts of the tracker turned off, until /reload
--- (/if quests bisect <part>; ImprovedForeverDB.qtBisect)
-local bisect = ImprovedForeverDB and ImprovedForeverDB.qtBisect or {}
-function IQT.Off(part)
-	return bisect[part] or bisect.all or false
+-- Our tracker's own caches, never the game's shared ones (QuestCache,
+-- QuestUtil's group cache): an entry made first by our code is tainted,
+-- and the game's tracker reading it taints its gamepad focus (closing it
+-- gets SetPreferredGamepadInteractTarget forbidden). The fork calls these
+-- instead (tools/fork_objective_tracker.py): IFQuestCache is made in
+-- Tracker/Blizzard_Quest.lua (the game's quest object, copied).
+
+local canCreateGroup = {}
+function IFCanCreateQuestGroup(questID)
+	local can = canCreateGroup[questID]
+	if can == nil then
+		can = C_LFGList and C_LFGList.CanCreateQuestGroup and C_LFGList.CanCreateQuestGroup(questID) or false
+		canCreateGroup[questID] = can
+	end
+	return can
 end
 
 -- Sort modes ("none": the game's own order)
@@ -91,12 +100,8 @@ end
 local ticker
 local function Login()
 	IQT.Settings()
-	if ImprovedForeverDB and ImprovedForeverDB.qtBisect then
-		local off = {}
-		for k in pairs(ImprovedForeverDB.qtBisect) do off[#off + 1] = k end
-		IQT.Print("bisect: off: " .. table.concat(off, ", ") .. "; the game's tracker loaded by "
-			.. (IQT.loadedTracker and "US (tainted?)" or "the game"))
-	end
+	-- (the taint bisect's switches, gone)
+	if ImprovedForeverDB then ImprovedForeverDB.qtBisect = nil end
 	if not C_QuestLog.GetDistanceSqToQuest then
 		for i, entry in ipairs(IQT.SORTS) do
 			if entry.id == "distance" then

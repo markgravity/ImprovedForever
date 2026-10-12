@@ -342,7 +342,7 @@ function IFBonusObjectiveTrackerMixin:SetUpQuestBlock(block, forceShowCompleted)
 	local questLogIndex = C_QuestLog.GetLogIndexForQuestID(questID);
 	local isQuestComplete = C_QuestLog.IsComplete(questID);
 
-	if QuestUtil.CanCreateQuestGroup(questID) then
+	if IFCanCreateQuestGroup(questID) then
 		block:AddRightEdgeFrame(self.findGroupButtonSettings, questID);
 	end
 	if questLogIndex and QuestUtil.QuestShowsItemByIndex(questLogIndex, isQuestComplete) then

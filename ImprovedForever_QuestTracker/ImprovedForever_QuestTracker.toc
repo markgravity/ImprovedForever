@@ -15,6 +15,7 @@ Core.lua
 Sort.lua
 ObjectiveSound.lua
 Dropdown.lua
+Tracker/Blizzard_Quest.lua
 Tracker/Blizzard_ObjectiveTrackerManager.lua
 Tracker/Blizzard_ObjectiveTrackerShared.lua
 Tracker/Blizzard_ObjectiveTrackerShared.xml

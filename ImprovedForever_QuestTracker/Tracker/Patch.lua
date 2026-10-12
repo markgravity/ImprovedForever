@@ -1,4 +1,5 @@
 local _, IQT = ...
+local IF = ImprovedForever
 
 -- Our tracker in the game's place:
 -- * The game's tracker keeps running, unseen (its header, background and
@@ -20,8 +21,8 @@ end
 
 -- The game's tracker's parts we hide (the quest timer stays). Never by
 -- their alpha (SetAlpha): a property of the game's frames set from addon
--- code taints its gamepad focus (closing it gets forbidden). An alpha
--- animation of ours draws them at 0 instead, their own alpha untouched.
+-- code taints its gamepad focus (closing it gets forbidden): IF.Focus.Fade,
+-- an animation of ours, draws them at 0, their own alpha untouched.
 local function NativeParts()
 	local native = ObjectiveTrackerFrame
 	local parts = { native.Header, native.NineSlice }
@@ -29,32 +30,6 @@ local function NativeParts()
 		parts[#parts + 1] = module
 	end
 	return parts
-end
-
-local hiders = {}   -- part -> its animation group
-
-local function Hider(part)
-	local group = hiders[part]
-	if group then return group end
-	-- (ours, aimed at the part; else made on it)
-	local ok
-	ok, group = pcall(function()
-		local g = IQT.holder:CreateAnimationGroup()
-		local a = g:CreateAnimation("Alpha")
-		a:SetTarget(part)
-		return g
-	end)
-	if not ok or not group then
-		group = part:CreateAnimationGroup()
-		group:CreateAnimation("Alpha")
-	end
-	local a = group:GetAnimations()
-	a:SetFromAlpha(0)
-	a:SetToAlpha(0)
-	a:SetDuration(3600)
-	group:SetLooping("REPEAT")
-	hiders[part] = group
-	return group
 end
 
 local function Watch()
@@ -70,20 +45,11 @@ local function Watch()
 		ours:SetFrameLevel(native:GetFrameLevel() + 30)
 	end
 	for _, part in ipairs(NativeParts()) do
-		local group = Hider(part)
-		if edit then
-			if group:IsPlaying() then group:Stop() end
-		elseif not group:IsPlaying() then
-			group:Play()
-		end
+		IF.Focus.Fade(part, not edit)
 	end
 end
 
-if IQT.Off("tracker") then
-	IFObjectiveTrackerManager:SetCanAddModules(false)
-end
-
-if ObjectiveTrackerFrame and not IQT.Off("fade") then
+if ObjectiveTrackerFrame then
 	local watcher = CreateFrame("Frame")
 	local since = 0
 	watcher:SetScript("OnUpdate", function(_, elapsed)
@@ -111,17 +77,19 @@ local function MirrorOpacity()
 	end
 end
 
-if ObjectiveTrackerManager and not IQT.Off("hooks") then
+if ObjectiveTrackerManager then
 	hooksecurefunc(ObjectiveTrackerManager, "SetOpacity", MirrorOpacity)
 	-- (the fonts already changed: lay ours out again)
 	hooksecurefunc(ObjectiveTrackerManager, "SetTextSize", function() IFObjectiveTrackerManager:UpdateAll() end)
 	EventUtil.ContinueAfterAllEvents(MirrorOpacity, "PLAYER_ENTERING_WORLD", "VARIABLES_LOADED")
 end
 
--- The quests in our order
+-- The quests in our order (the game's while its tracker has the pad:
+-- Pad.lua)
 for _, module in ipairs({ IFQuestObjectiveTracker, IFCampaignQuestObjectiveTracker }) do
 	local Build = module.BuildQuestWatchInfos
 	module.BuildQuestWatchInfos = function(self)
+		if IQT.padOrder then return Build(self) end
 		return IQT.SortWatchInfos(Build(self))
 	end
 end

@@ -62,7 +62,7 @@ function IFQuestObjectiveTrackerMixin:OnBlockHeaderClick(block, mouseButton)
 				C_QuestLog.RemoveQuestWatch(questID);
 			end
 		else
-			local quest = QuestCache:Get(questID);
+			local quest = IFQuestCache:Get(questID);
 			if quest.isAutoComplete and quest:IsComplete() then
 				self:RemoveAutoQuestPopUp(questID);
 				ShowQuestComplete(questID);
@@ -187,7 +187,7 @@ function IFQuestObjectiveTrackerMixin:BuildQuestWatchInfos()
 	for i = 1, C_QuestLog.GetNumQuestWatches() do
 		local questID = C_QuestLog.GetQuestIDForQuestWatchIndex(i);
 		if questID then
-			local quest = QuestCache:Get(questID);
+			local quest = IFQuestCache:Get(questID);
 			if self:ShouldDisplayQuest(quest) then
 				table.insert(infos, { quest = quest, index = i });
 			end
@@ -301,7 +301,7 @@ function IFQuestObjectiveTrackerMixin:UpdateSingle(quest)
 	local block, isExistingBlock = self:GetBlock(questID);
 	local title = SetQuestTitleLevelAndDifficultyColor(questID, quest.title);
 
-	if QuestUtil.CanCreateQuestGroup(questID) then
+	if IFCanCreateQuestGroup(questID) then
 		block:AddRightEdgeFrame(self.findGroupButtonSettings, questID);
 	end
 	if QuestUtil.QuestShowsItemByIndex(questLogIndex, isComplete) then

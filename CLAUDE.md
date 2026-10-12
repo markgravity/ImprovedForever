@@ -19,7 +19,14 @@ focus the way Forever's native windows do. The shared code is
   it doesn't, as native windows do.
 - While ours has the pad, dim the game's focus (cursor, focused window's glow
   and footer) with `IF.Focus.DimNative(win, true)`, and restore it with
-  `false`. This only changes alpha. Nothing of the game's state is written.
+  `false`. It draws them at alpha 0 with an animation of ours.
+- Never set a property of the game's frames (`SetAlpha`, `Hide`, `SetPoint`...)
+  from addon code: it taints them, and closing a gamepad-focused window later
+  gets `SetPreferredGamepadInteractTarget` forbidden. To hide one, use
+  `IF.Focus.Fade(region, true)` (an animation of ours aimed at it).
+- Never add our frames to the game's managed frames
+  (`RightManagedFrameContainer:AddManagedFrame`): it lays them out tainted and
+  resizes the objective tracker from addon code.
 
 ### L2 / R2
 - Build the window's switch with `IF.Focus.Switch(win, { onChange, other?, label? })`:
