@@ -1,7 +1,7 @@
 -- The Quest Tracker tab, a tab of settings (IF.SettingsPage, SettingsPage.lua):
 -- how the quest tracker sorts (Sort.lua) and the objective sound
--- (ObjectiveSound.lua). The same as the tracker's own sort menu (its filter
--- button, or R3 while it has the controller).
+-- (ObjectiveSound.lua). The same as the tracker's own sort menu (the filter
+-- button on its Quests header, or R3 while it has the controller).
 local IF = ImprovedForever
 
 local IQT = IF.QuestTracker

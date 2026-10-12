@@ -10,26 +10,14 @@ local SOUND = SOUNDKIT.UI_QUEST_ROLLING_FORWARD_01 or 43936
 -- questID -> { [objectiveIndex] = finished }
 local objectives = {}
 
--- Tracked quests as questID -> questLogIndex, for either tracker
+-- Tracked quests as questID -> questLogIndex
 local function TrackedQuests()
 	local quests = {}
-	if IQT.backend == "watchframe" then
-		for i = 1, GetNumQuestWatches() do
-			local questIndex = GetQuestIndexForWatch(i)
-			if questIndex then
-				local questID = select(8, GetQuestLogTitle(questIndex))
-				if questID then
-					quests[questID] = questIndex
-				end
-			end
-		end
-	else
-		for i = 1, C_QuestLog.GetNumQuestWatches() do
-			local questID = C_QuestLog.GetQuestIDForQuestWatchIndex(i)
-			local questIndex = questID and C_QuestLog.GetLogIndexForQuestID(questID)
-			if questIndex then
-				quests[questID] = questIndex
-			end
+	for i = 1, C_QuestLog.GetNumQuestWatches() do
+		local questID = C_QuestLog.GetQuestIDForQuestWatchIndex(i)
+		local questIndex = questID and C_QuestLog.GetLogIndexForQuestID(questID)
+		if questIndex then
+			quests[questID] = questIndex
 		end
 	end
 	return quests

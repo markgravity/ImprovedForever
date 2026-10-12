@@ -1,6 +1,6 @@
 ## Interface: 16001, 16002, 16003, 16100, 16101, 16200
 ## Title: Improved Forever: Quest Tracker
-## Notes: Sort options for the quest tracker (zone, level, title, distance, completed) and an objective complete sound.
+## Notes: The objective tracker, rebuilt as the game's own: sorted quests (zone, level, title, distance, completed), an objective complete sound, full controller support.
 ## Author: markg
 ## Version: 0.5.0
 ## X-Website: https://github.com/markgravity/ImprovedForever
@@ -9,11 +9,56 @@
 ## IconTexture: Interface\AddOns\ImprovedForever\textures\ic_mod_quests
 ## Group: ImprovedForever
 ## Dependencies: ImprovedForever
+## OptionalDeps: Blizzard_ObjectiveTracker
 
 Core.lua
 Sort.lua
 ObjectiveSound.lua
 Dropdown.lua
-Menu.lua
+Tracker/Blizzard_ObjectiveTrackerManager.lua
+Tracker/Blizzard_ObjectiveTrackerShared.lua
+Tracker/Blizzard_ObjectiveTrackerShared.xml
+Tracker/Blizzard_ObjectiveTrackerBlock.lua
+Tracker/Blizzard_ObjectiveTrackerBlock.xml
+Tracker/Blizzard_ObjectiveTrackerModule.lua
+Tracker/Blizzard_ObjectiveTrackerModule.xml
+Tracker/Blizzard_ObjectiveTrackerContainer.lua
+Tracker/Blizzard_ObjectiveTrackerContainer.xml
+Tracker/Blizzard_ObjectiveTrackerAnimTemplates.xml
+Tracker/Blizzard_ObjectiveTrackerAnimTemplates.lua
+Tracker/Blizzard_ObjectiveTrackerQuestPOIBlock.xml
+Tracker/Blizzard_ObjectiveTrackerQuestPOIBlock.lua
+Tracker/Blizzard_AchievementObjectiveTracker.lua
+Tracker/Blizzard_AchievementObjectiveTracker.xml
+Tracker/Blizzard_MonthlyActivitiesObjectiveTracker.lua
+Tracker/Blizzard_MonthlyActivitiesObjectiveTracker.xml
+Tracker/Blizzard_ProfessionsRecipeTracker.lua
+Tracker/Blizzard_ProfessionsRecipeTracker.xml
+Tracker/Blizzard_ScenarioObjectiveTracker.lua
+Tracker/Blizzard_ScenarioObjectiveTracker.xml
+Tracker/Blizzard_AutoQuestPopUpTracker.lua
+Tracker/Blizzard_AutoQuestPopUpTracker.xml
+Tracker/Blizzard_QuestObjectiveTracker.lua
+Tracker/Blizzard_QuestObjectiveTrackerOverride.lua
+Tracker/Blizzard_QuestObjectiveTracker.xml
+Tracker/Blizzard_CampaignQuestObjectiveTracker.lua
+Tracker/Blizzard_CampaignQuestObjectiveTracker.xml
+Tracker/Blizzard_BonusObjectiveTracker.lua
+Tracker/Blizzard_BonusObjectiveTracker.xml
+Tracker/Blizzard_AdventureObjectiveTracker.lua
+Tracker/Blizzard_AdventureObjectiveTracker.xml
+Tracker/Blizzard_ObjectiveTrackerUIWidgetContainer.lua
+Tracker/Blizzard_ObjectiveTrackerUIWidgetContainer.xml
+Tracker/Blizzard_WorldQuestObjectiveTracker.lua
+Tracker/Blizzard_WorldQuestObjectiveTracker.xml
+Tracker/Blizzard_InitiativeTasksObjectiveTracker.lua
+Tracker/Blizzard_InitiativeTasksObjectiveTracker.xml
+Tracker/Blizzard_ObjectiveTracker.lua
+Tracker/PatchEarly.lua
+Tracker/Blizzard_ObjectiveTracker.xml
+Tracker/Menu.lua
+Tracker/Items.lua
+Tracker/Patch.lua
+Tracker/Pad.lua
 Slash.lua
 QuestTrackerEditor.lua

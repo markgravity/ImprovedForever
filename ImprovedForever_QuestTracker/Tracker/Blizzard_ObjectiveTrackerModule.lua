@@ -1,0 +1,803 @@
+-- Forked from WoW Forever's Blizzard_ObjectiveTracker/Blizzard_ObjectiveTrackerModule.lua by
+-- tools/fork_objective_tracker.py: don't edit, rerun the script.
+IFObjectiveTrackerModuleState = EnumUtil.MakeEnum(
+	"Skipped",			-- module did not try to layout (due to availableHeight being 0)
+	"NoObjectives",		-- module has no objectives to show
+	"NotShown",			-- module has objectives but there was not enough room to display anything
+	"ShownPartially",	-- at least 1 objective is shown
+	"ShownFully"		-- all objectives are shown, or header is collapsed and at least 1 objective could have shown
+);
+
+local settings = {
+	isModule = true,			-- for identification
+
+	-- settings
+	blockTemplate = "IFObjectiveTrackerBlockTemplate",
+	lineTemplate = "IFObjectiveTrackerLineTemplate",
+	progressBarTemplate = "IFObjectiveTrackerProgressBarTemplate",
+	headerHeight = 25,			-- how much vertical room the the header takes up (including any spacing from the top of the module)
+	fromHeaderOffsetY = -10,	-- the vertial spacing between header and first block
+	blockOffsetX = 20,			-- the horizontal spacing for a block from the left side
+	fromBlockOffsetY = -10,		-- the vertical spacing between header and first block
+	lineSpacing = 4,			-- the vertical spacing between lines
+	bottomSpacing = 0,			-- spacing between last block and bottom of module
+	rightEdgeFrameSpacing = 0,	-- spacing between rightEdgeFrames, or between one and the lines
+	leftMargin = 0,				-- margin for module from left side of container, used at container level
+	hasDisplayPriority = false,	-- modules with priority will consume available space first, regardless of their uiOrder
+	mustFit = false,			-- modules that must fit will adjust the height of custom-placed containers if needed, overriding the height specified by the user
+
+	-- dynamic
+	state = IFObjectiveTrackerModuleState.Skipped,
+	isDirty = false,			-- whether module needs to update
+	isCollapsed = false,		-- whether module is collapsed
+	hasTriedBlocks = false,		-- whether the module tried to fit any objectives (could not have tried at all if availableHeight was 0)
+	hasSkippedBlocks = false,	-- whether there was not enough room to display all the objectives of the module (can be true if header is collapsed)
+	hasContents = false,		-- whether the module should show
+	contentsHeight = 0,			-- height as elements are added
+	availableHeight = 0,		-- room available for the module to display
+	uiOrder = nil,				-- will be assigned by a manager:AssignModulesOrder call
+	wasDisplayedLastLayout = false,	-- whether the module was already displayed before the current Update
+	
+	-- caching
+	cachedOrderList,				-- list of block IDs that existed when any block was cached
+	cacheIndex,					-- Per layout action, the index of where processing is in the cachedOrderList
+	numCachedBlocks = 0,		-- number of cached blocks in cachedOrderList
+};
+
+IFObjectiveTrackerModuleMixin = CreateFromMixins(IFObjectiveTrackerSlidingMixin, settings);
+
+function IFObjectiveTrackerModuleMixin:OnLoad()
+	self.usedBlocks = { };			-- list of displayed blocks
+	
+	if self.headerText then
+		self:SetHeader(self.headerText);
+	end
+end
+
+function IFObjectiveTrackerModuleMixin:OnEvent(event, ...)
+	-- override in your mixin
+end
+
+function IFObjectiveTrackerModuleMixin:OnHide()
+	self:EndSlide();
+end
+
+function IFObjectiveTrackerModuleMixin:SetContainer(container)
+	self.parentContainer = container;
+	self:SetParent(container);
+	self:ClearAllPoints();
+	self:SetPoint("TOPLEFT");
+
+	if not self.init then
+		self.init = true;
+		-- register events
+		if self.events then
+			for i, event in ipairs(self.events) do
+				self:RegisterEvent(event);
+			end
+		end
+		-- custom init
+		self:InitModule();
+	end
+end
+
+function IFObjectiveTrackerModuleMixin:InitModule()
+	-- override in your mixin, called the first time the module is added to a container
+end
+
+function IFObjectiveTrackerModuleMixin:MarkDirty()
+	if self.parentContainer then
+		self.isDirty = true;
+		self.parentContainer:MarkDirty();
+	end
+end
+
+function IFObjectiveTrackerModuleMixin:IsDirty()
+	return self.isDirty;
+end
+
+function IFObjectiveTrackerModuleMixin:HasContents()
+	return self.hasContents;
+end
+
+function IFObjectiveTrackerModuleMixin:IsDisplayable()
+	return self.state >= IFObjectiveTrackerModuleState.ShownPartially;
+end
+
+function IFObjectiveTrackerModuleMixin:IsFullyDisplayable()
+	return self.state == IFObjectiveTrackerModuleState.ShownFully;
+end
+
+function IFObjectiveTrackerModuleMixin:IsComplete()
+	return self.state == IFObjectiveTrackerModuleState.NoObjectives or self:IsFullyDisplayable();
+end
+
+function IFObjectiveTrackerModuleMixin:IsTruncated()
+	return self.state == IFObjectiveTrackerModuleState.NotShown or self.state == IFObjectiveTrackerModuleState.ShownPartially;
+end
+
+function IFObjectiveTrackerModuleMixin:GetContentsHeight()
+	return self:IsDisplayable() and self.contentsHeight or 0;
+end
+
+function IFObjectiveTrackerModuleMixin:SetHeader(text)
+	self.Header.Text:SetText(text);
+end
+
+-- returns heightUsed, isTruncated
+function IFObjectiveTrackerModuleMixin:Update(availableHeight, dirtyUpdate)
+	-- If the parent container is collapsed, the update must run, otherwise funky things can happen.
+	-- Specifically, if the scenario module is sliding, it will not disappear when its container is collapsed until the slide is over.
+	if not self:CanUpdate() and not self.parentContainer:IsCollapsed() then
+		return self:GetContentsHeight(), self:IsTruncated();
+	end
+
+	-- if it's a dirty update but this module isn't dirty, it's one or more other modules that need updating
+	if dirtyUpdate and not self:IsDirty() then
+		-- so no need to do anything if the module is complete
+		if self:IsComplete() and self.contentsHeight <= availableHeight and not self:IsCollapsed() then
+			local isTruncated = false;
+			return self:GetContentsHeight(), isTruncated;
+		end
+	end
+
+	self:BeginLayout();
+	
+	-- add objectives and update the state
+	if availableHeight > 0 then
+		self.availableHeight = availableHeight;
+		self:LayoutContents();
+		self:CheckCachedBlocks();
+		if self.hasContents then
+			if self.hasSkippedBlocks and not self:IsCollapsed() then
+				self.state = IFObjectiveTrackerModuleState.ShownPartially;
+			else
+				self.state = IFObjectiveTrackerModuleState.ShownFully;
+			end
+		else
+			if self.hasTriedBlocks then
+				self.state = IFObjectiveTrackerModuleState.NotShown;
+			else
+				self.state = IFObjectiveTrackerModuleState.NoObjectives;
+			end
+		end
+	end
+
+	self:EndLayout();
+	
+	return self:GetContentsHeight(), self:IsTruncated();
+end
+
+function IFObjectiveTrackerModuleMixin:BeginLayout()
+	-- must run before self.firstBlock is cleared
+	self:UpdateCachedOrderList();
+
+	self.wasDisplayedLastLayout = self:IsDisplayable();
+	self.isDirty = false;
+	self.hasTriedBlocks = false;
+	self.hasSkippedBlocks = false;
+	self.hasContents = false;
+
+	self.lastBlock = nil;
+	self.firstBlock = nil;
+	self.contentsHeight = self.headerHeight or 0;
+
+	self:MarkBlocksUnused();
+	self:MarkTimerBarsUnused();
+	self:MarkProgressBarsUnused();
+	self:MarkRightEdgeFramesUnused();
+
+	self.state = IFObjectiveTrackerModuleState.Skipped;
+end
+
+function IFObjectiveTrackerModuleMixin:CanUpdate()
+	-- override in your mixin
+	return true;
+end
+
+function IFObjectiveTrackerModuleMixin:LayoutContents()
+	-- override in your mixin
+	-- must return soon as a LayoutBlock fails
+end
+
+function IFObjectiveTrackerModuleMixin:EndLayout()
+	self:FreeUnusedBlocks();
+	self:FreeUnusedTimerBars();
+	self:FreeUnusedProgressBars();
+	self:FreeUnusedRightEdgeFrames();
+	if self:IsDisplayable() and not self.parentContainer:IsCollapsed() then
+		self.lastBlock = self.lastBlock;
+		self:UpdateHeight();
+		self:Show();
+		if not self.wasDisplayedLastLayout then
+			self.Header:PlayAddAnimation();
+		end
+	else
+		self:Hide();
+	end
+	self:ClearFanfares();
+end
+
+function IFObjectiveTrackerModuleMixin:HasSkippedBlocks()
+	return self.hasSkippedBlocks;
+end
+
+function IFObjectiveTrackerModuleMixin:UpdateHeight()
+	local heightModifier = 0;
+	if self.heightModifiers then
+		for key, height in pairs(self.heightModifiers) do
+			heightModifier = heightModifier + height;
+		end
+	end
+	self:SetHeight(self.contentsHeight + self.bottomSpacing + heightModifier);
+end
+
+function IFObjectiveTrackerModuleMixin:SetHeightModifier(key, height)
+	if not self.heightModifiers then
+		self.heightModifiers = { };
+	end
+	self.heightModifiers[key] = height;
+	self:UpdateHeight();
+end
+
+function IFObjectiveTrackerModuleMixin:ClearHeightModifier(key)
+	if self.heightModifiers then
+		self.heightModifiers[key] = nil;
+	end
+	self:UpdateHeight();
+end
+
+function IFObjectiveTrackerModuleMixin:AcquireFrame(template)
+	local frame, isNew = IFObjectiveTrackerManager:AcquireFrame(self, template);
+	frame:SetParent(self.ContentsFrame);
+	return frame, isNew;
+end
+
+function IFObjectiveTrackerModuleMixin:GetBlock(id, optTemplate)
+	local template = optTemplate or self.blockTemplate;
+	if not self.usedBlocks[template] then
+		self.usedBlocks[template] = {};
+	end
+
+	-- first try to return existing block
+	local wasAlreadyActive = true;
+	local block = self.usedBlocks[template][id];
+
+	if not block then
+		local isNew;
+		block, isNew = self:AcquireFrame(template);
+		block.parentModule = self;
+		if isNew then
+			block:Init();
+		end
+		self.usedBlocks[template][id] = block;
+		block.id = id;
+		wasAlreadyActive = false;
+	end
+
+	block:Reset();
+
+	-- anchor it first so measurements are correct
+	self:AnchorBlock(block);
+
+	return block, wasAlreadyActive;
+end
+
+function IFObjectiveTrackerModuleMixin:EnumerateActiveBlocks(callback)
+	for template, blocks in pairs(self.usedBlocks) do
+		for blockID, block in pairs(blocks) do
+			callback(block);
+		end
+	end
+end
+
+function IFObjectiveTrackerModuleMixin:GetExistingBlock(id, optTemplate)
+	local template = optTemplate or self.blockTemplate;
+
+	local blocks = self.usedBlocks[template];
+	if blocks then
+		return blocks[id];
+	end
+
+	return nil;
+end
+
+function IFObjectiveTrackerModuleMixin:MarkBlocksUnused()
+	for template, blocks in pairs(self.usedBlocks) do
+		for blockID, block in pairs(blocks) do
+			block.used = nil;
+		end
+	end
+end
+
+function IFObjectiveTrackerModuleMixin:FreeUnusedBlocks()
+	for template, blocks in pairs(self.usedBlocks) do
+		for blockID, block in pairs(blocks) do
+			if not block.used then
+				self:FreeBlock(block);
+			end
+		end
+	end
+end
+
+function IFObjectiveTrackerModuleMixin:FreeBlock(block)
+	local fromFreeBlock = true;
+	self:RemoveBlockFromCache(block, fromFreeBlock);
+	block:Free();
+	self.usedBlocks[block.template][block.id] = nil;
+	IFObjectiveTrackerManager:ReleaseFrame(block);
+	self:OnFreeBlock(block);
+end
+
+function IFObjectiveTrackerModuleMixin:OnFreeBlock(block)
+	-- override in your mixin
+end
+
+function IFObjectiveTrackerModuleMixin:ForceRemoveBlock(block)
+	block.used = nil;
+	self:FreeBlock(block);
+	self:MarkDirty();
+end
+
+-- returns anchorFrame, offsetY, relativePoint
+function IFObjectiveTrackerModuleMixin:GetNextBlockAnchoring()
+	if self.lastBlock then
+		return self.lastBlock, self.fromBlockOffsetY, "BOTTOM";
+	else
+		return self.ContentsFrame, self.fromHeaderOffsetY, "TOP";
+	end
+end
+
+function IFObjectiveTrackerModuleMixin:LayoutBlock(block)
+	if not block.cached then
+		self:CheckCachedBlocks(block);
+	end
+
+	block:SetHeight(block.height);
+	if self:AddBlock(block) then
+		block.used = true;
+		block:Show();
+		if block.FreeUnusedLines then
+			block:FreeUnusedLines();
+		end
+		if block.OnLayout then
+			block:OnLayout();
+		end
+		return true;
+	else
+		return false;
+	end
+end
+
+function IFObjectiveTrackerModuleMixin:AddBlock(block)
+	self.hasTriedBlocks = true;
+
+	local blockAdded = false;
+	if self:CanFitBlock(block) then
+		blockAdded = self:InternalAddBlock(block);
+	end
+
+	if not blockAdded then
+		self.hasSkippedBlocks = true;
+	end
+
+	return blockAdded;
+end
+
+function IFObjectiveTrackerModuleMixin:CanFitBlock(block)
+	local anchorFrame, offsetY = self:GetNextBlockAnchoring();
+	local height = block.height - offsetY;
+	return (self.contentsHeight + height) <= self.availableHeight;
+end
+
+function IFObjectiveTrackerModuleMixin:InternalAddBlock(block)
+	-- If this got called, something will show for certain
+	self.hasContents = true;
+
+	-- If module is collapsed, don't actually add the block and end the layout. The reason IsCollapsed is only checked now and not before
+	-- trying to add any objectives is to fix a bug with the prior implementation:
+	--	Have 2 modules, A & B
+	--	Collapse B
+	--	Track some more in A so that B is pushed down near the bottom but its header still shows
+	--  Expand B
+	--  --> B disappears because there is not enough room for the header and its first objective
+	if self:IsCollapsed() then
+		return false;
+	end
+
+	block.nextBlock = nil;
+
+	local offsetY = self:AnchorBlock(block);
+	if self.lastBlock then
+		self.lastBlock.nextBlock = block;
+	end
+	self.lastBlock = block;
+	if not self.firstBlock then
+		self.firstBlock = block;
+	end
+
+	self.contentsHeight = self.contentsHeight + block.height - offsetY;
+
+	return true;
+end
+
+function IFObjectiveTrackerModuleMixin:AnchorBlock(block)
+	block:ClearAllPoints();
+	local anchorFrame, offsetY, relativePoint = self:GetNextBlockAnchoring();
+
+	if anchorFrame == block then
+		local currentContentText = "";
+		if self.currentContentList then
+			currentContentText = table.concat(self.currentContentList, ",");
+		end
+		local oldContentText = "";
+		if self.oldContentList then
+			oldContentText = table.concat(self.oldContentList, ",");
+		end
+		local blockText = "";
+		if self.lastBlock then
+			blockText = string.format("block = %s, last block ID = %d, lastBlock = %s", tostring(block), (self.lastBlock.id or 0), tostring(self.lastBlock));
+		end
+		assertsafe(false, "Bad anchor, entry count: %d, old contents = %s, new contents = %s, block ID = %d, %s", (self.entryCount or 0), oldContentText, currentContentText, (block.id or 0), blockText);
+	end
+
+	block:SetPoint("TOP", anchorFrame, relativePoint, 0, offsetY);
+	block:SetPoint("LEFT", block.offsetX or self.blockOffsetX, 0);
+	if not block.fixedWidth then
+		block:SetPoint("RIGHT");
+	end
+
+	return offsetY;
+end
+
+function IFObjectiveTrackerModuleMixin:GetLastBlock()
+	return self.lastBlock or self.Header;
+end
+
+function IFObjectiveTrackerModuleMixin:OnBlockHeaderClick(block, mouseButton)
+	-- override in your mixin
+end
+
+function IFObjectiveTrackerModuleMixin:OnBlockHeaderEnter(block)
+	-- override in your mixin
+end
+
+function IFObjectiveTrackerModuleMixin:OnBlockHeaderLeave(block)
+	-- override in your mixin
+end
+
+function IFObjectiveTrackerModuleMixin:GetContentsHeight()
+	if self:IsDisplayable() then
+		return self.contentsHeight;
+	else
+		return 0;
+	end
+end
+
+function IFObjectiveTrackerModuleMixin:ToggleCollapsed()
+	self:SetCollapsed(not self:IsCollapsed());
+end
+
+function IFObjectiveTrackerModuleMixin:SetCollapsed(collapsed)
+	self.isCollapsed = collapsed;
+	self.ContentsFrame:SetShown(not collapsed);
+	-- update the header
+	self.Header:SetCollapsed(collapsed);
+	-- cancel any slide
+	self:EndSlide();
+	-- update contents
+	self:MarkDirty();
+end
+
+function IFObjectiveTrackerModuleMixin:IsCollapsed()
+	return self.isCollapsed;
+end
+
+function IFObjectiveTrackerModuleMixin:GetContextMenuParent()
+	return IFObjectiveTrackerManager:GetContainerForModule(self);
+end
+
+function IFObjectiveTrackerModuleMixin:GetTimerBar(key)
+	if not self.usedTimerBars then
+		self.usedTimerBars = { };
+	end
+
+	local timerBar = self.usedTimerBars[key];
+	if not timerBar then
+		timerBar = self:AcquireFrame("IFObjectiveTrackerTimerBarTemplate");
+		self.usedTimerBars[key] = timerBar;
+
+		-- store the height since it's fixed
+		if not timerBar.height then
+			timerBar.height = timerBar:GetHeight();
+		end
+
+		timerBar:Show();
+	end
+
+	timerBar.used = true;
+	return timerBar;
+end
+
+function IFObjectiveTrackerModuleMixin:MarkTimerBarsUnused()
+	if self.usedTimerBars then
+		for key, timerBar in pairs(self.usedTimerBars) do
+			timerBar.used = nil;
+		end
+	end
+end
+
+function IFObjectiveTrackerModuleMixin:FreeUnusedTimerBars()
+	if self.usedTimerBars then
+		for key, timerBar in pairs(self.usedTimerBars) do
+			if not timerBar.used then
+				self.usedTimerBars[key] = nil;
+				IFObjectiveTrackerManager:ReleaseFrame(timerBar);
+			end
+		end
+	end
+end
+
+function IFObjectiveTrackerModuleMixin:GetProgressBar(key, ...)
+	if not self.usedProgressBars then
+		self.usedProgressBars = { };
+	end
+
+	local progressBar = self.usedProgressBars[key];
+	local isNew = not progressBar;
+	if not progressBar then
+		progressBar = self:AcquireFrame(self.progressBarTemplate);
+		self.usedProgressBars[key] = progressBar;
+
+		-- store the height since it's fixed
+		if not progressBar.height then
+			progressBar.height = progressBar:GetHeight();
+		end
+
+		progressBar:Show();
+	end
+
+	progressBar.used = true;
+	if progressBar.OnGet then
+		progressBar:OnGet(isNew, ...);
+	end
+	return progressBar;
+end
+
+function IFObjectiveTrackerModuleMixin:MarkProgressBarsUnused()
+	if self.usedProgressBars then
+		for key, progressBar in pairs(self.usedProgressBars) do
+			progressBar.used = nil;
+		end
+	end
+end
+
+function IFObjectiveTrackerModuleMixin:FreeUnusedProgressBars()
+	if self.usedProgressBars then
+		for key, progressBar in pairs(self.usedProgressBars) do
+			if not progressBar.used then
+				self.usedProgressBars[key] = nil;
+				if progressBar.OnFree then
+					progressBar:OnFree();
+				end
+				IFObjectiveTrackerManager:ReleaseFrame(progressBar);
+			end
+		end
+	end
+end
+
+local function MakeRightEdgeFrameKey(settings, identifier)
+	return tostring(settings) .. identifier;
+end
+
+function IFObjectiveTrackerModuleMixin:GetRightEdgeFrame(settings, identifier)
+	if not self.usedRightEdgeFrames then
+		self.usedRightEdgeFrames = { };
+	end
+
+	local key = MakeRightEdgeFrameKey(settings, identifier);
+	local frame = self.usedRightEdgeFrames[key];
+	if not frame then
+		frame = self:AcquireFrame(settings.template);
+		frame:Show();
+		self.usedRightEdgeFrames[key] = frame;
+	end
+
+	frame.used = true;
+	return frame;
+end
+
+function IFObjectiveTrackerModuleMixin:MarkRightEdgeFramesUnused()
+	if self.usedRightEdgeFrames then
+		for key, frame in pairs(self.usedRightEdgeFrames) do
+			frame.used = nil;
+		end
+	end
+end
+
+function IFObjectiveTrackerModuleMixin:FreeUnusedRightEdgeFrames()
+	if self.usedRightEdgeFrames then
+		for key, frame in pairs(self.usedRightEdgeFrames) do
+			if not frame.used then
+				self.usedRightEdgeFrames[key] = nil;
+				IFObjectiveTrackerManager:ReleaseFrame(frame);
+			end
+		end
+	end
+end
+
+function IFObjectiveTrackerModuleMixin:AdjustSlideAnchor(offsetY)
+	-- Slide might have been cancelled by an update, firstBlock would be cleared out
+	if self.firstBlock then
+		self.firstBlock:SetPoint("TOP", self.ContentsFrame, "TOP", 0, offsetY + self.fromHeaderOffsetY);
+	end
+end
+
+function IFObjectiveTrackerModuleMixin:SetNeedsFanfare(key)
+	if key then
+		if not self.fanfares then
+			self.fanfares = { };
+		end
+		self.fanfares[key] = true;
+	end
+end
+
+function IFObjectiveTrackerModuleMixin:NeedsFanfare(key)
+	return self.fanfares and self.fanfares[key];
+end
+
+function IFObjectiveTrackerModuleMixin:ClearFanfares()
+	self.fanfares = nil;
+end
+
+function IFObjectiveTrackerModuleMixin:ForceExpand()
+	if self:IsCollapsed() then
+		self:ToggleCollapsed();
+	end
+	if self.parentContainer then
+		self.parentContainer:ForceExpand();
+	end
+	self:MarkDirty();
+end
+
+-- Cached Blocks
+-- These are blocks temporarily cached so they can still be displayed even after their backing information is gone (quest untracked, turned in, etc).
+-- Caching will also automatically expire if a block's .used is cleared, for example from minimizing the module, or from something else being tracked
+-- 		pushing the cached block out of the visible area.
+-- An individual module only needs to call AddBlockToCache and RemoveBlockFromCache.
+-- At the beginning of a layout, the cachedOrderList is built if there are any cached blocks. This list is built from all existing blocks in the module,
+-- 		and contains either IDs of non-cached blocks or the cached blocks themselves.
+-- Then during the layout, before adding any block the list is checked to see if any cached blocks need to be inserted before this upcoming block.
+-- Finally, one more check is done at the end of the layout, for any remaining cached blocks.
+
+function IFObjectiveTrackerModuleMixin:AddBlockToCache(block)
+	if not block.cached then
+		block.cached = true;
+		self.numCachedBlocks = self.numCachedBlocks + 1;
+	end
+end
+
+function IFObjectiveTrackerModuleMixin:RemoveBlockFromCache(block, fromFreeBlock)
+	if block.cached then
+		block.cached = false;
+		self.numCachedBlocks = self.numCachedBlocks - 1;
+		assert(self.numCachedBlocks >= 0);
+		if not fromFreeBlock then
+			self:MarkDirty();
+		end
+	end
+end
+
+function IFObjectiveTrackerModuleMixin:UpdateCachedOrderList()
+	if self.numCachedBlocks == 0 then
+		self.cachedOrderList = nil;
+		return;
+	end
+
+	self.cachedOrderList = { };
+	self.cacheIndex = 1;
+	local block = self.firstBlock;
+	while block do
+		if block.cached then
+			table.insert(self.cachedOrderList, block);
+		else
+			-- ID is more unique than blocks
+			table.insert(self.cachedOrderList, block.id);
+		end
+		block = block.nextBlock;
+	end
+end
+
+function IFObjectiveTrackerModuleMixin:CheckCachedBlocks(upcomingBlock)
+	if not self.cachedOrderList then
+		return;
+	end
+
+	local numItems = #self.cachedOrderList;	
+	local targetBlockID = upcomingBlock and upcomingBlock.id;
+	-- If this block's id is not in the remainder of the list, don't insert any cached blocks before it.
+	if targetBlockID then
+		local found = false;
+		for i = self.cacheIndex, numItems do
+			if self.cachedOrderList[i] == targetBlockID then
+				found = true;
+				break;
+			end
+		end
+		if not found then
+			return;
+		end
+	end
+
+	-- Go through the list starting at the cacheIndex until the targetBlockID is found.
+	-- Add any cached blocks encountered to the layout.
+	for i = self.cacheIndex, numItems do	
+		local cacheItem = self.cachedOrderList[i];
+		local isCachedBlock = type(cacheItem) == "table";
+		if isCachedBlock then
+			-- Possible for a block to be cached while still added by a module
+			-- Ignore it if already used
+			if not cacheItem.used then
+				if not self:LayoutBlock(cacheItem) then
+					-- Cached block could not fit, done for this layout pass
+					break;
+				end
+			end
+		elseif cacheItem == targetBlockID then
+			-- Found the upcoming block, done for this call
+			self.cacheIndex = i + 1;
+			return;
+		end
+	end
+
+	-- All the cached blocks that could be added have been added by now
+	self.cacheIndex = numItems + 1;
+end
+
+function IFObjectiveTrackerModuleMixin:MatchesTag(tag)
+	return self:GetTag() == tag;
+end
+
+function IFObjectiveTrackerModuleMixin:GetTag()
+	return self.tag;
+end
+
+function IFObjectiveTrackerModuleMixin:AddTag(tag)
+	self.tag = tag;
+end
+
+-- *****************************************************************************************************
+-- ***** HEADER
+-- *****************************************************************************************************
+
+IFObjectiveTrackerModuleHeaderMixin = {};
+
+function IFObjectiveTrackerModuleHeaderMixin:OnLoad()
+	self.MinimizeButton:SetScript("OnClick", GenerateClosure(self.OnToggle, self));
+	local collapsed = false;
+	self:SetCollapsed(collapsed);
+end
+
+function IFObjectiveTrackerModuleHeaderMixin:PlayAddAnimation()
+	self.AddAnim:Restart();
+end
+
+function IFObjectiveTrackerModuleHeaderMixin:OnToggle()
+	PlaySound(SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON);
+	-- module is in charge of state
+	local module = self:GetParent();
+	module:ToggleCollapsed();
+end
+
+function IFObjectiveTrackerModuleHeaderMixin:SetCollapsed(collapsed)
+	local normalTexture = self.MinimizeButton:GetNormalTexture();
+	local pushedTexture = self.MinimizeButton:GetPushedTexture();
+
+	if collapsed then
+		normalTexture:SetAtlas("ui-questtrackerbutton-secondary-expand", true);
+		pushedTexture:SetAtlas("ui-questtrackerbutton-secondary-expand-pressed", true);
+	else
+		normalTexture:SetAtlas("ui-questtrackerbutton-secondary-collapse", true);
+		pushedTexture:SetAtlas("ui-questtrackerbutton-secondary-collapse-pressed", true);
+	end
+end

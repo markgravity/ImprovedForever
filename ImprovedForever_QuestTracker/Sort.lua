@@ -1,114 +1,18 @@
 local _, IQT = ...
 
+-- The order our tracker shows the quests in. Its quest module builds its
+-- list of tracked quests (BuildQuestWatchInfos, in the game's watch order)
+-- and lays them out in that order (Tracker/Patch.lua): here the list is
+-- sorted as the settings say, before the layout. The game's watch list is
+-- never changed.
+
 local tsort = table.sort
-local tinsert = table.insert
-local tremove = table.remove
 local strlower = string.lower
-
--- WatchFrame (MoP Classic) draws quests in watch-list order: we reorder the
--- watch list with ShiftQuestWatches, like Blizzard's "Move Up/Down".
--- ObjectiveTracker (Forever) has no shift API: we re-anchor its quest blocks
--- after each layout, and we also move watches by remove + re-add
--- (AddQuestWatch appends) when the watch order matters: the tracker is full
--- (it only lays out the watches that fit, in watch order), or the gamepad UI
--- is on (the game's navigation follows watch order: header down and focus
--- go to its first block, item buttons to the next/previous watch).
-
-local pending = false
-local suppressHooks = false
-
----------------------------------------------------------------------------
--- Backend: WatchFrame (MoP Classic)
----------------------------------------------------------------------------
-
-local WatchFrameBackend = {}
-
-function WatchFrameBackend.Collect()
-	local headers, current = {}, nil
-	for i = 1, GetNumQuestLogEntries() do
-		local title, _, _, isHeader = GetQuestLogTitle(i)
-		if isHeader then
-			current = title
-		else
-			headers[i] = current
-		end
-	end
-
-	local playerZone = GetRealZoneText() or ""
-	local playerMap = C_Map.GetBestMapForUnit("player")
-	local money = GetMoney()
-	local list = {}
-
-	for i = 1, GetNumQuestWatches() do
-		local questIndex = GetQuestIndexForWatch(i)
-		if questIndex then
-			local title, level, _, _, _, isComplete, _, questID, startEvent = GetQuestLogTitle(questIndex)
-			local numObjectives = GetNumQuestLeaderBoards(questIndex)
-			local completed = (isComplete == 1)
-				or (numObjectives == 0 and money >= GetQuestLogRequiredMoney(questIndex) and not startEvent)
-			local zone = headers[questIndex] or ""
-			local inZone = (zone == playerZone)
-				or (questID and playerMap and GetQuestUiMapID(questID) == playerMap)
-			list[#list + 1] = {
-				key = questIndex,
-				questID = questID or 0,
-				title = strlower(title or ""),
-				level = level or 0,
-				zone = zone,
-				inZone = inZone and true or false,
-				completed = completed and true or false,
-			}
-		end
-	end
-	return list
-end
-
--- Native sort must be "Manual" or Blizzard reorders on top of us
-local function EnsureNativeManual()
-	if WATCHFRAME_SORT_TYPE ~= WATCHFRAME_SORT_MANUAL then
-		suppressHooks = true
-		WatchFrame_SetSorting(WATCHFRAME_SORT_MANUAL)
-		suppressHooks = false
-	end
-end
-
-function WatchFrameBackend.Apply(list)
-	EnsureNativeManual()
-	local changed = false
-	for pos, q in ipairs(list) do
-		local cur = GetQuestWatchIndex(q.key)
-		if cur and cur ~= pos then
-			ShiftQuestWatches(cur, pos)
-			changed = true
-		end
-	end
-	if changed then
-		WatchFrame_Update()
-	end
-end
-
-function WatchFrameBackend.Init()
-	-- Picking a Blizzard sort option hands control back to Blizzard
-	hooksecurefunc("WatchFrame_SetSorting", function()
-		if not suppressHooks then
-			IQT.Disable("Blizzard sort selected, custom sort turned off.")
-		end
-	end)
-	-- Moving a quest by hand means the user wants a manual order
-	hooksecurefunc("WatchFrame_MoveQuest", function()
-		IQT.Disable("Quest moved by hand, custom sort turned off.")
-	end)
-end
-
----------------------------------------------------------------------------
--- Backend: ObjectiveTracker (Forever / modern C_QuestLog)
----------------------------------------------------------------------------
-
-local TrackerBackend = {}
 
 -- Squared distance to the quest's POI; quests off this continent or without
 -- a POI sort last.
 local function DistanceTo(questID)
+	if not C_QuestLog.GetDistanceSqToQuest then return math.huge end
 	local distanceSq, onContinent = C_QuestLog.GetDistanceSqToQuest(questID)
 	if distanceSq and onContinent then
 		return distanceSq
@@ -116,291 +20,46 @@ local function DistanceTo(questID)
 	return math.huge
 end
 
-function TrackerBackend.Collect()
-	local infoByID, headers, current = {}, {}, nil
+-- The quest log's zone headers, by questID
+local function ZoneHeaders()
+	local headers, current = {}, nil
 	for i = 1, C_QuestLog.GetNumQuestLogEntries() do
 		local info = C_QuestLog.GetInfo(i)
 		if info then
 			if info.isHeader then
 				current = info.title
 			elseif info.questID then
-				infoByID[info.questID] = info
-				headers[info.questID] = current
+				headers[info.questID] = { zone = current, info = info }
 			end
 		end
 	end
-
-	local playerZone = GetRealZoneText() or ""
-	local list = {}
-
-	for i = 1, C_QuestLog.GetNumQuestWatches() do
-		local questID = C_QuestLog.GetQuestIDForQuestWatchIndex(i)
-		if questID then
-			local info = infoByID[questID]
-			local zone = headers[questID] or ""
-			local title = (info and info.title) or C_QuestLog.GetTitleForQuestID(questID) or ""
-			local level = info and (info.level or info.difficultyLevel) or 0
-			local completed = C_QuestLog.IsComplete(questID) or C_QuestLog.ReadyForTurnIn(questID)
-			-- Like WatchFrame / Kaliel's Tracker: no objectives = ready to hand in
-			local logIndex = C_QuestLog.GetLogIndexForQuestID(questID)
-			if not completed and logIndex and GetNumQuestLeaderBoards(logIndex) == 0
-					and GetMoney() >= (C_QuestLog.GetRequiredMoney(questID) or 0)
-					and not (info and info.startEvent) then
-				completed = true
-			end
-			local inZone = (zone == playerZone) or (info and info.isOnMap)
-			list[#list + 1] = {
-				key = questID,
-				questID = questID,
-				title = strlower(title),
-				level = level,
-				zone = zone,
-				inZone = inZone and true or false,
-				distance = DistanceTo(questID),
-				completed = completed and true or false,
-			}
-		end
-	end
-	return list
+	return headers
 end
 
-local function QuestName(questID)
-	return C_QuestLog.GetTitleForQuestID(questID) or tostring(questID)
+-- What the sort needs of a quest
+local function Describe(questID, headers, playerZone, money)
+	local entry = headers[questID] or {}
+	local info = entry.info
+	local zone = entry.zone or ""
+	local title = (info and info.title) or C_QuestLog.GetTitleForQuestID(questID) or ""
+	local completed = C_QuestLog.IsComplete(questID) or C_QuestLog.ReadyForTurnIn(questID)
+	-- Like WatchFrame / Kaliel's Tracker: no objectives = ready to hand in
+	local logIndex = C_QuestLog.GetLogIndexForQuestID(questID)
+	if not completed and logIndex and GetNumQuestLeaderBoards(logIndex) == 0
+			and money >= (C_QuestLog.GetRequiredMoney(questID) or 0)
+			and not (info and info.startEvent) then
+		completed = true
+	end
+	return {
+		questID = questID,
+		title = strlower(title),
+		level = info and (info.level or info.difficultyLevel) or 0,
+		zone = zone,
+		inZone = (zone == playerZone) or (info and info.isOnMap) and true or false,
+		distance = IQT.Settings().sort == "distance" and DistanceTo(questID) or math.huge,
+		completed = completed and true or false,
+	}
 end
-
-local function IsQuestBlock(module, block)
-	local blocks = module.usedBlocks and module.usedBlocks[module.blockTemplate]
-	return blocks and block.id and blocks[block.id] == block
-end
-
--- Blocks in the order Blizzard laid them out (read only, never written)
-local function BlockChain(module)
-	local chain = {}
-	local block = module.firstBlock
-	while block and #chain < 200 do
-		chain[#chain + 1] = block
-		block = block.nextBlock
-	end
-	return chain
-end
-
--- Same anchors as ObjectiveTrackerModuleMixin:AnchorBlock. Only frame points
--- change; Blizzard's own fields (firstBlock, nextBlock...) stay untouched.
-local function AnchorChain(module, order)
-	local previous
-	for _, block in ipairs(order) do
-		block:ClearAllPoints()
-		if previous then
-			block:SetPoint("TOP", previous, "BOTTOM", 0, module.fromBlockOffsetY)
-		else
-			block:SetPoint("TOP", module.ContentsFrame, "TOP", 0, module.fromHeaderOffsetY)
-		end
-		block:SetPoint("LEFT", block.offsetX or module.blockOffsetX, 0)
-		if not block.fixedWidth then
-			block:SetPoint("RIGHT")
-		end
-		previous = block
-	end
-end
-
-local function CurrentWatchOrder()
-	local ids = {}
-	for i = 1, C_QuestLog.GetNumQuestWatches() do
-		ids[i] = C_QuestLog.GetQuestIDForQuestWatchIndex(i)
-	end
-	return ids
-end
-
-local attemptedSignature
-
--- Untracking a quest clears it as the focused (super-tracked) quest; put the
--- focus back once the watches are re-added.
-local function RestoreFocus(questID)
-	if questID and questID ~= 0 and C_SuperTrack.GetSuperTrackedQuestID() ~= questID
-			and C_QuestLog.GetLogIndexForQuestID(questID) then
-		C_SuperTrack.SetSuperTrackedQuestID(questID)
-	end
-end
-local lastWatchMove = 0
-local DISTANCE_WATCH_MOVE_INTERVAL = 30
-
--- Move watches so the watch order matches the sort. Two passes (remove,
--- then re-add next frame: same-frame remove + add can leave a quest
--- unwatched), each sorted order tried once, and any quest that ends up
--- unwatched is re-added.
-local function ReorderWatches(list)
-	if IQT.reordering or InCombatLockdown() then return end
-	local current = CurrentWatchOrder()
-	local first
-	for pos, q in ipairs(list) do
-		if current[pos] ~= q.key then
-			first = pos
-			break
-		end
-	end
-	if not first then return end
-
-	-- Each sorted order tried once from each starting order: the game's own
-	-- SortQuestWatches (zone change) reorders the watches again
-	local signature = {}
-	for i, q in ipairs(list) do signature[i] = q.key end
-	signature = table.concat(signature, ",") .. "|" .. table.concat(current, ",")
-	if signature == attemptedSignature then return end
-	if IQT.Settings().sort == "distance" and GetTime() - lastWatchMove < DISTANCE_WATCH_MOVE_INTERVAL then
-		return
-	end
-	attemptedSignature = signature
-	lastWatchMove = GetTime()
-
-	local toMove = {}
-	for pos = first, #list do
-		toMove[#toMove + 1] = list[pos].key
-	end
-
-	IQT.reordering = true
-	local focused = C_SuperTrack.GetSuperTrackedQuestID()
-	for _, questID in ipairs(toMove) do
-		C_QuestLog.RemoveQuestWatch(questID)
-	end
-	C_Timer.After(0, function()
-		for _, questID in ipairs(toMove) do
-			C_QuestLog.AddQuestWatch(questID)
-		end
-		RestoreFocus(focused)
-		C_Timer.After(1, function()
-			IQT.reordering = false
-			for _, questID in ipairs(current) do
-				if C_QuestLog.GetQuestWatchType(questID) == nil then
-					C_QuestLog.AddQuestWatch(questID)
-				end
-			end
-			-- The client may clear the focus after a delay too
-			RestoreFocus(focused)
-		end)
-	end)
-end
-
--- Quest blocks take the sorted order; other blocks (auto-quest pop-ups)
--- keep their slots.
-function TrackerBackend.Apply(list)
-	local module = QuestObjectiveTracker
-	if not module then return end
-	local chain = BlockChain(module)
-	if #chain < 2 then return end
-
-	local order = chain
-	if IQT.IsActive() then
-		local rank = {}
-		for i, q in ipairs(list) do
-			rank[q.key] = i
-		end
-		local quests = {}
-		for _, block in ipairs(chain) do
-			if IsQuestBlock(module, block) and rank[block.id] then
-				quests[#quests + 1] = block
-			end
-		end
-		tsort(quests, function(a, b) return rank[a.id] < rank[b.id] end)
-
-		order = {}
-		local q = 1
-		for i, block in ipairs(chain) do
-			if IsQuestBlock(module, block) and rank[block.id] then
-				order[i] = quests[q]
-				q = q + 1
-			else
-				order[i] = block
-			end
-		end
-	end
-	local names = {}
-	for i, block in ipairs(order) do
-		names[i] = tostring(block.id)
-	end
-	local signature = table.concat(names, ",")
-	if signature ~= IQT.lastOrder or module.firstBlock ~= IQT.lastFirstBlock then
-		AnchorChain(module, order)
-	end
-	IQT.lastOrder = signature
-	IQT.lastFirstBlock = module.firstBlock
-
-	-- Make Blizzard's own order match: when full, it lays out the top-sorted
-	-- quests; with a gamepad, its navigation goes down the sorted list
-	local gamepad = InputUtil and InputUtil.IsGamepadUIEnabled and InputUtil.IsGamepadUIEnabled()
-	if IQT.IsActive() and (module.hasSkippedBlocks or gamepad) and not module:IsCollapsed() then
-		-- not from inside Blizzard's layout pass
-		C_Timer.After(0, function() ReorderWatches(list) end)
-	end
-
-end
-
--- Quest blocks the native tracker is currently showing, by questID
-local function ShownQuestBlocks()
-	local shown = {}
-	local module = QuestObjectiveTracker
-	if module and module.usedBlocks then
-		for _, blocks in pairs(module.usedBlocks) do
-			for id, block in pairs(blocks) do
-				if block:IsShown() then
-					shown[id] = true
-				end
-			end
-		end
-	end
-	return shown
-end
-
-function IQT.Debug()
-	if IQT.backend ~= "tracker" then
-		IQT.Print("backend: "..tostring(IQT.backend))
-		return
-	end
-	local module = QuestObjectiveTracker
-	local shown = ShownQuestBlocks()
-	local completed = {}
-	for _, q in ipairs(TrackerBackend.Collect()) do
-		completed[q.key] = q.completed
-	end
-	IQT.Print("R3 binding: "..tostring(GetBindingAction("PADRSTICK", true)))
-	IQT.Print(("layouts hooked %d, last applied order: %s"):format(IQT.layoutCount or 0, IQT.lastOrder or "none"))
-	IQT.Print(("watches %d, availableHeight %s, contentsHeight %s, skipped %s, collapsed %s"):format(
-		C_QuestLog.GetNumQuestWatches(),
-		tostring(module and module.availableHeight), tostring(module and module.contentsHeight),
-		tostring(module and module.hasSkippedBlocks), tostring(module and module:IsCollapsed())))
-	for i = 1, C_QuestLog.GetNumQuestWatches() do
-		local questID = C_QuestLog.GetQuestIDForQuestWatchIndex(i)
-		IQT.Print(("%d. %s [%s] complete=%s shown=%s"):format(i, QuestName(questID), tostring(questID),
-			tostring(completed[questID] or false), tostring(shown[questID] or false)))
-	end
-end
-
-local function HookTracker()
-	-- Runs after every native layout of the quest module; the hook's taint
-	-- doesn't spread into Blizzard's update.
-	hooksecurefunc(QuestObjectiveTracker, "LayoutContents", function()
-		IQT.layoutCount = (IQT.layoutCount or 0) + 1
-		IQT.SortNow()
-	end)
-	IQT.SortNow()
-end
-
-function TrackerBackend.Init()
-	-- The tracker doesn't re-layout as you move; refresh distance order
-	C_Timer.NewTicker(2, function()
-		if IQT.Settings().sort == "distance" and QuestObjectiveTracker and QuestObjectiveTracker:IsVisible() then
-			IQT.SortNow()
-		end
-	end)
-	if QuestObjectiveTracker then
-		HookTracker()
-	elseif EventUtil and EventUtil.ContinueOnAddOnLoaded then
-		EventUtil.ContinueOnAddOnLoaded("Blizzard_ObjectiveTracker", HookTracker)
-	end
-end
-
----------------------------------------------------------------------------
--- Sorting
----------------------------------------------------------------------------
 
 local function ByTitle(a, b)
 	if a.title ~= b.title then
@@ -436,125 +95,82 @@ local COMPARATORS = {
 	end,
 	title = ByTitle,
 	distance = function(a, b)
-		local da, db = a.distance or math.huge, b.distance or math.huge
-		if da ~= db then
-			return da < db
+		if a.distance ~= b.distance then
+			return a.distance < b.distance
 		end
 		return ByTitle(a, b)
 	end,
 }
 
--- Stable move of completed quests to the top or bottom
-local function PlaceCompleted(list, where)
-	local done, open = {}, {}
-	for _, q in ipairs(list) do
-		if q.completed then
-			done[#done + 1] = q
-		else
-			open[#open + 1] = q
-		end
-	end
-	local first, second = open, done
-	if where == "top" then
-		first, second = done, open
-	end
-	local result = {}
-	for _, q in ipairs(first) do result[#result + 1] = q end
-	for _, q in ipairs(second) do result[#result + 1] = q end
-	return result
-end
-
--- The focused (super-tracked) quest first, the rest in order
-local function PlaceFocused(list)
-	local focused = IQT.FocusedQuestID()
-	if not focused then return list end
-	for i, q in ipairs(list) do
-		if q.questID == focused then
-			if i > 1 then
-				tremove(list, i)
-				tinsert(list, 1, q)
-			end
-			break
-		end
-	end
-	return list
-end
-
-local function Backend()
-	return IQT.backend == "watchframe" and WatchFrameBackend or TrackerBackend
-end
-
-function IQT.SortNow()
-	local watchFrame = IQT.backend == "watchframe"
-	-- The tracker backend also runs when inactive, to restore Blizzard's order
-	if (watchFrame and not IQT.IsActive()) or IQT.forbidden then return end
-	-- Never change the watch list in combat; PLAYER_REGEN_ENABLED sorts again
-	if watchFrame and InCombatLockdown() then return end
+-- infos: the quest module's list ({ quest, index }), in the game's order;
+-- sorted in place as the settings say
+function IQT.SortWatchInfos(infos)
+	if not IQT.IsActive() or #infos < 2 then return infos end
 	local db = IQT.Settings()
-
-	local list = Backend().Collect()
+	local headers, playerZone, money = ZoneHeaders(), GetRealZoneText() or "", GetMoney()
+	local described = {}
+	for i, info in ipairs(infos) do
+		local d = Describe(info.quest:GetID(), headers, playerZone, money)
+		d.info, d.order = info, i
+		described[i] = d
+	end
 
 	local cmp = COMPARATORS[db.sort]
-	if cmp then
-		tsort(list, cmp)
-	end
-	if db.sortCompleted ~= "none" then
-		list = PlaceCompleted(list, db.sortCompleted)
-	end
-	if db.focusFirst then
-		list = PlaceFocused(list)
-	end
-
-	Backend().Apply(list)
-end
-
-function IQT.RequestSort()
-	if pending then return end
-	pending = true
-	C_Timer.After(0.1, function()
-		pending = false
-		IQT.SortNow()
+	local focused = db.focusFirst and IQT.FocusedQuestID()
+	-- (stable: ties keep the game's order)
+	tsort(described, function(a, b)
+		if focused and (a.questID == focused) ~= (b.questID == focused) then
+			return a.questID == focused
+		end
+		if db.sortCompleted ~= "none" and a.completed ~= b.completed then
+			if db.sortCompleted == "top" then return a.completed end
+			return b.completed
+		end
+		if cmp and cmp(a, b) ~= cmp(b, a) then
+			return cmp(a, b)
+		end
+		return a.order < b.order
 	end)
-end
-
-function IQT.OnCombatEnd()
-	IQT.RequestSort()
+	for i, d in ipairs(described) do
+		infos[i] = d.info
+	end
+	return infos
 end
 
 function IQT.SetSort(id)
 	IQT.Settings().sort = id
-	attemptedSignature = nil
-	IQT.RequestSort()
+	IQT.Refresh()
 end
 
 function IQT.SetSortCompleted(id)
 	IQT.Settings().sortCompleted = id
-	attemptedSignature = nil
-	IQT.RequestSort()
+	IQT.Refresh()
 end
 
 function IQT.SetFocusFirst(on)
 	IQT.Settings().focusFirst = on and true or false
-	attemptedSignature = nil
-	IQT.RequestSort()
+	IQT.Refresh()
 end
 
 function IQT.SetCurrentZoneFirst(on)
 	IQT.Settings().currentZoneFirst = on and true or false
-	IQT.RequestSort()
+	IQT.Refresh()
 end
 
-function IQT.Disable(reason)
-	local db = IQT.Settings()
-	if not IQT.IsActive() then return end
-	db.sort = "none"
-	db.sortCompleted = "none"
-	db.focusFirst = false
-	if reason then
-		IQT.Print(reason)
+-- Tracked quests, in the order shown, with whether the tracker shows them
+function IQT.Debug()
+	local module = IFQuestObjectiveTracker
+	if not module then
+		IQT.Print("tracker not loaded")
+		return
 	end
-end
-
-function IQT.InitSort()
-	Backend().Init()
+	local infos = module:BuildQuestWatchInfos()
+	IQT.Print(("watches %d, shown %s, collapsed %s, skipped %s"):format(C_QuestLog.GetNumQuestWatches(),
+		tostring(IFObjectiveTrackerFrame:IsShown()), tostring(module:IsCollapsed()), tostring(module:HasSkippedBlocks())))
+	for i, info in ipairs(infos) do
+		local questID = info.quest:GetID()
+		local block = module:GetExistingBlock(questID)
+		IQT.Print(("%d. %s [%d] shown=%s"):format(i, C_QuestLog.GetTitleForQuestID(questID) or "?", questID,
+			tostring(block and block:IsShown() or false)))
+	end
 end

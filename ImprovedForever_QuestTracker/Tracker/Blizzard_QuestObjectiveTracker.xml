@@ -1,0 +1,29 @@
+<Ui xmlns="http://www.blizzard.com/wow/ui/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.blizzard.com/wow/ui/
+..\..\..\..\..\WoW\Data\Interface\AddOns\Blizzard_SharedXML\UI.xsd">
+<!-- Forked from WoW Forever's Blizzard_ObjectiveTracker/Blizzard_QuestObjectiveTracker.xml by
+     tools/fork_objective_tracker.py: don't edit, rerun the script. -->
+
+	<Frame name="IFQuestObjectiveWaypointLineTemplate" inherits="IFObjectiveTrackerLineTemplate" virtual="true">
+		<Size x="200" y="0"/>
+		<Layers>
+			<Layer level="ARTWORK">
+				<Texture parentKey="Icon" atlas="poi-traveldirections-arrow">
+					<Size x="13" y="17"/>
+					<Anchors>
+						<Anchor point="TOPLEFT" x="10" y="-4"/>
+					</Anchors>
+				</Texture>
+			</Layer>
+		</Layers>
+		<Scripts>
+			<OnLoad>
+				self.Text:ClearAllPoints();
+				self.Text:SetPoint("LEFT", self.Icon, "RIGHT", 2, 1);
+			</OnLoad>
+		</Scripts>
+	</Frame>
+	
+	<Frame name="IFQuestObjectiveLineTemplate" inherits="IFObjectiveTrackerAnimLineTemplate" mixin="IFQuestObjectiveLineMixin" hidden="true" virtual="true"/>
+
+	<Frame name="IFQuestObjectiveTracker" mixin="IFQuestObjectiveTrackerMixin" inherits="IFObjectiveTrackerModuleTemplate"/>
+</Ui>

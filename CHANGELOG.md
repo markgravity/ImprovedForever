@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- **Quest Tracker**: the game's objective tracker is replaced by our own copy of it: the game's
+  own templates, art, fonts, animations and modules (quests, achievements, recipes, scenarios...),
+  where Edit Mode puts the game's, its opacity and text size. Sorting now just orders it: no more
+  untracking and re-tracking quests, and with a full tracker the top-sorted quests show.
+- **Quest Tracker**: the controller works it exactly as the game's tracker (it is the game's
+  tracker's own navigation, legend and buttons: D-pad Up on the shortcuts bar, A, X, Y, quest
+  items, L2 / R2, B), the cursor drawn on our list. With a sort on, the D-pad goes through the
+  quests in the game's watch order.
+
 ## 0.5.0
 
 - **Junk** (formerly Destroy): the module now finds what the bags no longer need and marks it junk,

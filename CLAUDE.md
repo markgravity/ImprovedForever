@@ -86,6 +86,22 @@ focus the way Forever's native windows do. The shared code is
 - This includes the Improved Forever config window. Center only
   confirmations, the way the game centres its dialogs.
 
+## Quest Tracker: our fork of the game's tracker
+- `ImprovedForever_QuestTracker/Tracker/Blizzard_*` is Forever's own
+  Blizzard_ObjectiveTracker, every global renamed with an `IF` prefix, made by
+  `python3 tools/fork_objective_tracker.py`. Never edit those files: rerun the
+  script after a client update and check the diff.
+- Our changes go in `Tracker/PatchEarly.lua` (the frame mixin, before its XML),
+  `Tracker/Patch.lua` (instances), `Tracker/Menu.lua`, `Pad.lua`, `Items.lua`,
+  `Secure.lua`, or as a text patch in the script (`PATCHES`).
+- The game's tracker keeps running unseen under ours (its header, background
+  and modules at alpha 0, never hidden or emptied: an empty one errors in the
+  frame manager when the D-pad focuses it). Edit Mode places it, ours follows.
+- The controller is the game's tracker's own: never take its buttons (no catcher,
+  no pad override bindings, no propagating presses): that taints its navigation
+  (SetPreferredGamepadInteractTarget forbidden on close). `Tracker/Pad.lua` only
+  draws our cursor on our element matching SmartNavigation's current button.
+
 ## Item verdict: one, in the core
 - Whether a bag item is junk, kept, for the auction house or for a vendor is
   `IF.ItemValue.Judge(bag, slot)` (`ImprovedForever/ItemValue.lua`). Every module
