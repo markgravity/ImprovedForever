@@ -12,6 +12,7 @@
 
 Module.lua
 Journal.lua
+JournalPeople.lua
 JournalWriter.lua
 JournalBook.lua
 JournalEditor.lua

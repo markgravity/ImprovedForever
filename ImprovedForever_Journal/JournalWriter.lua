@@ -447,6 +447,105 @@ local MILESTONES = {
     [60] = "I had grown as strong as anyone I knew; little now could stand against me",
 }
 
+---------------------------------------------------------------------------
+-- People: who they are, how long I've known them, what they did
+---------------------------------------------------------------------------
+local function Person(name) return J.People and J.People.Get(name) end
+
+-- "a dwarf priest of ‹Olympus Ohio›" (what's known of them)
+local function WhoIs(p)
+    if not p then return nil end
+    local kind = BK.Join({ p.race and p.race:lower(), p.class and p.class:lower() }, " ")
+    local said = kind ~= "" and BK.A_plain(kind) or nil
+    if p.guild then said = (said or "one") .. " of ‹" .. p.guild .. "›" end
+    return said
+end
+
+-- Days between two days' keys
+local function DaysBetween(a, b)
+    local ta, tb = J.KeyTime(a), J.KeyTime(b)
+    return ta and tb and math.floor((tb - ta) / 86400 + 0.5) or nil
+end
+
+local AGO = { "the day before", "two days before", "three days before", "four days before", "five days before",
+    "six days before", "a week before" }
+
+-- How I knew them on that day: nil (met that day), "we'd met three days
+-- before", "my old companion"
+local function Known(p, key)
+    if not (p and p.first and p.first.day) or p.first.day >= key then return nil end
+    if (p.dayCount or 0) >= 5 then return "old" end
+    local d = DaysBetween(p.first.day, key)
+    return d and (AGO[d] and ("we'd met " .. AGO[d]) or "we'd met some time before") or nil
+end
+
+-- Someone named the first time in a day's telling: who they are, how I knew
+-- them ("my old companion Jelly", "Jelly, a dwarf priest; we'd met ...")
+-- (in the middle of a sentence: the description closed with a comma)
+local function Introduce(key, ctx, name, inside)
+    if ctx.named[name] then return Name(name) end
+    ctx.named[name] = true
+    local p = Person(name)
+    local known = Known(p, key)
+    if known == "old" then return "my old companion " .. Name(name) end
+    local who = WhoIs(p)
+    return Name(name) .. (who and (", " .. who .. (inside and "," or "")) or ""), known
+end
+
+-- A line quoted: its first letter up, "“Heading out?” Rice asked", "“Fine,” I said"
+local function Quoted(text, who, verb)
+    text = text:sub(1, 1):upper() .. text:sub(2)
+    if text:match("[%.!%?…]$") then return "“" .. text .. "” " .. who .. " " .. (text:match("%?$") and "asked" or verb) end
+    return "“" .. text .. ",” " .. who .. " " .. verb
+end
+
+-- The names of those with me: "Jelly", "Jelly and Bob"
+local function WithNames(list)
+    local named = {}
+    for n, name in ipairs(list or {}) do named[n] = Name(name) end
+    return #named > 0 and Names(Shorten(named, 3)) or nil
+end
+
+-- An emote's words, in the past and from my side: "Rice waves at you." ->
+-- "Rice waved at me.", "You bow before Rice." -> "I bowed before Rice."
+local PAST = { give = "gave", take = "took", sit = "sat", stand = "stood", kneel = "knelt", eat = "ate", drink = "drank",
+    sing = "sang", fall = "fell", run = "ran", tell = "told", say = "said", think = "thought", bite = "bit",
+    hold = "held", shake = "shook", throw = "threw", blow = "blew", spit = "spat", flee = "fled", feel = "felt",
+    lie = "lay", hit = "hit", read = "read", cry = "cried", ["do"] = "did", go = "went", make = "made" }
+local function Past(base)
+    base = base:lower()
+    if PAST[base] then return PAST[base] end
+    if base:match("e$") then return base .. "d" end
+    if base:match("[^aeiou]y$") then return base:sub(1, -2) .. "ied" end
+    if #base <= 4 and base:match("[^aeiou][aeiou][^aeiouwxy]$") then return base .. base:sub(-1) .. "ed" end
+    return base .. "ed"
+end
+local function Base(verb)
+    verb = verb:lower()
+    if verb:match("ies$") then return verb:sub(1, -4) .. "y" end
+    if verb:match("[cs]hes$") or verb:match("sses$") or verb:match("xes$") or verb:match("zes$") then return verb:sub(1, -3) end
+    if verb:match("s$") and not verb:match("ss$") then return verb:sub(1, -2) end
+    return verb
+end
+local function EmoteWords(e)
+    local text = tostring(e.text or ""):gsub("%.$", "")
+    local said
+    if e.dir == "out" then
+        local verb, rest = text:match("^%a+ (%a+)(.*)$")
+        if not verb then return nil end
+        said = "I " .. Past(verb) .. rest
+    else
+        local who = e.with or ""
+        local rest = text:sub(#who + 2)
+        local verb, tail = rest:match("^(%a+)(.*)$")
+        if not verb or text:sub(1, #who) ~= who then return nil end
+        said = Name(who) .. " " .. Past(Base(verb)) .. tail
+    end
+    said = said:gsub("%f[%a]your%f[%A]", "my"):gsub("%f[%a]you%f[%A]", "me")
+    if e.with and e.dir == "out" then said = said:gsub(e.with:gsub("%p", "%%%0"), Name(e.with), 1) end
+    return said .. ".", e.dir == "out" and text:match("^%a+ (%a+)") or Base(text:sub(#(e.with or "") + 2):match("^(%a+)") or "")
+end
+
 -- A run of the same things (taken on, seen through, new lands...): one sentence
 local RUNS = { accept = true, quest = true, loot = true, zone = true, discover = true, equip = true }
 
@@ -847,12 +946,90 @@ local function Sentence(key, list, i, ctx)
     if k == "party" then
         local m = e.members or {}
         if #m == 0 then return nil end
+        ctx.party = m
         if #m > 3 then return "I fell in with a band of " .. (NUMBER_WORDS[#m] or #m) .. ", " .. Name(m[1]) .. " among them." end
-        local named = {}
-        for n, name in ipairs(m) do named[n] = Name(name) end
-        return Vary(key, "party", { "I fell in with ", "I joined up with " }) .. Names(named) .. "."
+        -- (who asked me along first; each described the first time; how I knew them)
+        local list, knowns = {}, {}
+        local inviter = e.invitedBy and tContains(m, e.invitedBy) and e.invitedBy
+        if inviter then
+            local said, known = Introduce(key, ctx, inviter, true)
+            list[1] = said
+            knowns[#knowns + 1] = known
+        end
+        for _, name in ipairs(m) do
+            if name ~= inviter then
+                local said, known = Introduce(key, ctx, name)
+                list[#list + 1] = said
+                knowns[#knowns + 1] = known
+            end
+        end
+        local after = knowns[1] and ("; " .. knowns[1]) or ""
+        if inviter then
+            return list[1] .. " invited me along" .. (#list > 1 and (", with " .. Names({ unpack(list, 2) })) or "") .. after .. "."
+        end
+        return Vary(key, "party", { "I fell in with ", "I joined up with " }) .. Names(list) .. after .. "."
     end
-    if k == "alone" then return Vary(key, "alone", { "We went our separate ways.", "After that, I went on alone." }) end
+    if k == "alone" then
+        local who = WithNames(ctx.party)
+        ctx.party = nil
+        return who and (who .. " and I went our separate ways.")
+            or Vary(key, "alone", { "We went our separate ways.", "After that, I went on alone." })
+    end
+    if k == "talk" then
+        -- Talk: how it went, a line from each side
+        local who = Introduce(key, ctx, e.with, true)
+        local theirs, mine
+        for _, line in ipairs(e.said or {}) do
+            if line[1] == 1 then mine = mine or line[2] else theirs = theirs or line[2] end
+        end
+        local function quote(text) return "“" .. text:sub(1, 1):upper() .. text:sub(2) .. "”" end
+        -- (one side only: the line said with it)
+        if not (theirs and mine) then
+            local lead = e.channel == "whisper" and (theirs and (who:gsub(",$", "") .. " whispered to me") or ("I whispered to " .. who:gsub(",$", "")))
+                or theirs and (who:gsub(",$", "") .. " spoke to me") or ("I said to " .. who:gsub(",$", ""))
+            local line = theirs or mine
+            return lead .. ": " .. quote(line) .. (line:match("[%.!%?…]$") and "" or ".")
+        end
+        local said = e.channel == "whisper" and (who .. " and I traded whispers")
+            or (e.lines or 0) >= 4 and (who .. Vary(key, "talked", { " and I talked for a while", " and I fell to talking" }))
+            or (who .. " and I exchanged a few words")
+        return said .. ". " .. Quoted(theirs, Name(e.with), "said") .. "; " .. Quoted(mine, "I", "answered") .. "."
+    end
+    if k == "emote" then
+        local said, verb = EmoteWords(e)
+        if not said then
+            return e.dir == "out" and ("I gestured to " .. Name(e.with) .. ".") or (Name(e.with) .. " gestured to me.")
+        end
+        ctx.named[e.with] = true
+        -- (answered in kind: one sentence)
+        local back = list[i + 1]
+        if e.dir == "in" and back and back.k == "emote" and back.dir == "out" and back.with == e.with then
+            ctx.skip = 1
+            local _, theirs = EmoteWords(back)
+            if theirs and verb and theirs:lower() == verb:lower() then
+                return said:gsub("%.$", "") .. ", and I " .. Past(theirs) .. " back."
+            end
+            return said:gsub("%.$", "") .. "; " .. (EmoteWords(back) or ""):gsub("^I", "I")
+        end
+        return said
+    end
+    if k == "trade" then
+        local who = Introduce(key, ctx, e.with, true)
+        local function goods(items, money)
+            local list = {}
+            for n, it in ipairs(items or {}) do list[n] = (it[2] or 1) > 1 and ItemName(it[1], it[2]) or AnItem(it[1]) end
+            if money then list[#list + 1] = Name(Coins(money)) end
+            return #list > 0 and Names(Shorten(list, 3)) or nil
+        end
+        local gave, got = goods(e.gave, e.gaveMoney), goods(e.got, e.gotMoney)
+        if gave and got then return who .. " and I traded: I gave " .. gave .. " and got " .. got .. "." end
+        if got then return who .. " gave me " .. got .. "." end
+        if gave then return "I gave " .. who .. " " .. gave .. "." end
+        return nil
+    end
+    if k == "ally_level" then
+        return Name(e.who) .. Vary(key, "allyLevel", { " grew stronger too.", " was growing stronger as well." })
+    end
     if k == "duel" then
         local foe = Name(e.opponent or "someone")
         if e.fled then return e.won and (foe .. " fled from our duel.") or ("I yielded our duel to " .. foe .. ".") end
@@ -896,9 +1073,12 @@ local LEAVES = { effort = true, fights = true, deaths = true, dive = true, fligh
 -- (plain "mail": money while the mailbox seemed open, no letter matched to
 -- it; a guess, not told as the mail's)
 local MAIL_MONEY = { sale = true, refund = true, letter = true }
+-- What a group does together: "Jelly and I cut down ..."
+local TOGETHER = { effort = true, fights = true, quest = true, dive = true, discover = true, instance = true,
+    zone = true, flight = true }
 local CONNECTS = { accept = true, quest = true, effort = true, dive = true, fights = true, flight = true, hearth = true,
     zone = true, discover = true, instance = true, ready = true, money = true, lesson = true, bind = true, party = true,
-    duel = true, flightpath = true, post = true }
+    duel = true, flightpath = true, post = true, talk = true, emote = true, trade = true }
 
 local function Sessions(day)
     local list = {}
@@ -1158,7 +1338,7 @@ function J.Write(key, day)
     wipe(turns)
     local sessions = Sessions(day)
     if #sessions == 0 then return { "Little happened worth writing down." } end
-    local ctx = { fare = {}, first = true, stray = 0, met = {} }
+    local ctx = { fare = {}, first = true, stray = 0, met = {}, named = {} }
     local paragraphs = {}
     local wake = sessions[1].rfrom
     local before                 -- the last paragraph's end (realm minutes)
@@ -1210,6 +1390,15 @@ function J.Write(key, day)
                 local npc = ctx.npc
                 ctx.posFrom, ctx.noJoin = nil, nil
                 local sentence = Sentence(key, told, i, ctx)
+                -- (done with others: "Jelly and I ...", the first time with them)
+                local group = ev.group or ev.by and (ev.by.group or ev.by.hunts and ev.by.hunts[1].group)
+                    or ev.hunts and ev.hunts[1].group or ev.goal and ev.goal.group
+                local them = WithNames(group)
+                if sentence and them and TOGETHER[ev.k] and sentence:match("^I ") and not sentence:match("^I fell")
+                    and ctx.together ~= them then
+                    ctx.together = them
+                    sentence = them .. " and I " .. sentence:sub(3)
+                end
                 -- (where I am now: the last thing told's place)
                 local at = ctx.posFrom or told[i + ctx.skip]
                 at = at and (at.x and at or at.by and at.by.x and at.by) or nil
@@ -1261,6 +1450,31 @@ function J.Write(key, day)
     end
     if #closing > 0 then paragraphs[#paragraphs + 1] = table.concat(closing, " ") end
     return paragraphs
+end
+
+-- A companion's page: when we met, what we've done together, the last word
+function J.PersonStory(name)
+    local p = Person(name)
+    if not p then return { "I hardly know them." } end
+    local n = p.n or {}
+    local out = {}
+    local first = p.first or {}
+    out[#out + 1] = "I first met " .. Name(name) .. (first.day and (" on " .. J.DayTitle(first.day, true)) or "")
+        .. ((first.sub or first.zone) and (", at " .. Name(first.sub or first.zone)) or "") .. "."
+    local deeds = {}
+    if (n.grouped or 0) >= 60 then deeds[#deeds + 1] = "spent " .. J.Played(n.grouped) .. " on the road together" end
+    if (n.quests or 0) > 0 then deeds[#deeds + 1] = "seen " .. Plural(n.quests, "task", "tasks") .. " through" end
+    if (n.kills or 0) > 0 then deeds[#deeds + 1] = "slain " .. Plural(n.kills, "foe", "foes") .. " side by side" end
+    if #deeds > 0 then out[#out + 1] = "Since then we have " .. Names(deeds) .. "." end
+    local ties = {}
+    if (n.revivedMe or 0) > 0 then ties[#ties + 1] = Name(name) .. " has brought me back " .. Times(n.revivedMe) end
+    if (n.trades or 0) > 0 then ties[#ties + 1] = "we have traded " .. Times(n.trades) end
+    if (n.gifts or 0) > 0 then ties[#ties + 1] = "letters from " .. Name(name) .. " have come " .. Times(n.gifts) end
+    if (n.duels or 0) > 0 then ties[#ties + 1] = "we have dueled " .. Times(n.duels) end
+    if (n.talks or 0) > 0 then ties[#ties + 1] = "we have talked " .. Times(n.talks) end
+    if #ties > 0 then out[#out + 1] = BK.Capital(Names(ties)) .. "." end
+    if p.heard then out[#out + 1] = "The last I heard, " .. Name(name) .. " said, “" .. p.heard .. "”" end
+    return out
 end
 
 -- The journal so far, for its first page

@@ -33,7 +33,12 @@
 -- (to), "flightpath", "party" (members) / "alone", "duel" (opponent, won),
 -- "standing" (faction, standing), "mail" (from, subject, kind: "won", "expired",
 -- "removed", "sold", "outbid", "letter"; items = { { id, count } }: what I
--- took from a letter), "sent" (to, subject, money, items). A death also keeps how I came back
+-- took from a letter), "sent" (to, subject, money, items).
+-- People (JournalPeople.lua): "talk" (with, channel, lines, mine, said =
+-- { { mine, text } }), "emote" (with, dir: "in" / "out", text), "trade"
+-- (with, gave, got, gaveMoney, gotMoney), "ally_level" (who, level); what I
+-- did with a group keeps who was with me (group = { names }); a "party" keeps
+-- who invited me (invitedBy). A death also keeps how I came back
 -- (revived: "spirit", "corpse", "player"; reviver). A session keeps how it
 -- began: level, money, rested, inn, zone, sub.
 -- No combat log in Forever, nor nameplates: kills come from the experience
@@ -58,7 +63,12 @@ local HEARTHSTONE = 8690       -- the hearthstone's spell (Forever's)
 local NOTABLE = { elite = "Elite", rareelite = "Rare Elite", rare = "Rare", worldboss = "Boss" }
 J.NOTABLE = NOTABLE
 -- Kinds kept but not told: a hunt goes on over them, the story skips them
-J.QUIET = { bank = true, meal = true, close = true, achievement = true, mailbox = true }
+J.QUIET = { bank = true, meal = true, close = true, achievement = true, mailbox = true, aloud = true }
+-- Kinds about people: told, but a hunt goes on over them
+J.SOCIAL = { talk = true, emote = true, ally_level = true }
+-- What I do that a group shares: kept with who was with me
+local SHARED = { hunt = true, kill = true, quest = true, accept = true, ready = true, objective = true, dive = true,
+    death = true, instance = true, discover = true, flight = true, lesson = true }
 -- The gathering spells, by name (each rank its own id): herbs, ore, hides, fish
 local GATHER_SPELLS = { 1235236, 2575, 8613, 7620 }
 local GATHER_KINDS = { "herb", "ore", "hide", "fish" }   -- (theirs, in that order)
@@ -164,6 +174,9 @@ local function Sub()
     return sub ~= "" and sub or nil
 end
 
+local added = {}                -- fn(event): told of each event as it's kept
+function J.OnAdd(fn) added[#added + 1] = fn end
+
 local function Add(kind, fields)
     local day = J.Day()
     if #day.events >= MAX_EVENTS then return end
@@ -181,7 +194,9 @@ local function Add(kind, fields)
             end
         end
     end
+    if fields.group == nil and SHARED[kind] and J.People then fields.group = J.People.Companions() end
     day.events[#day.events + 1] = fields
+    for _, fn in ipairs(added) do pcall(fn, fields) end
     Changed()
     return fields
 end
@@ -650,7 +665,7 @@ function J.Hunt()
     for i = #events, 1, -1 do
         local e = events[i]
         if e.k == "hunt" then return (time() - (e.last or e.t) < HUNT_GAP and e.zone == Zone()) and e or nil end
-        if e.k ~= "loot" and e.k ~= "kill" and not J.QUIET[e.k] then return nil end
+        if e.k ~= "loot" and e.k ~= "kill" and not J.QUIET[e.k] and not J.SOCIAL[e.k] then return nil end
     end
 end
 
@@ -677,6 +692,7 @@ local function Revived()
     d.revived = by and "player" or spiritHealed and "spirit" or "corpse"
     d.reviver = by and by.name or nil
     reviver, spiritHealed = nil, nil
+    if d.reviver and J.People then J.People.Revived(d.reviver) end
     Changed()
 end
 
@@ -798,7 +814,7 @@ local function MoneyChanged()
     if h == hint then
         -- (a hint says what one change was for: each letter taken says so again)
         hint = nil
-        if h.src == "quest" or h.src == "coin" or h.src == "postage" then
+        if h.src == "quest" or h.src == "coin" or h.src == "postage" or h.src == "trade" then
             Absorb(h.src, delta)
             return Changed()
         end
@@ -1067,7 +1083,7 @@ local function Roster()
     party = now
     if #list > 0 then
         table.sort(list)
-        Add("party", { members = list })
+        Add("party", { members = list, invitedBy = J.People and J.People.InvitedBy() or nil })
     elseif had and next(now) == nil then
         Add("alone", {})
     end
@@ -1264,6 +1280,10 @@ events:SetScript("OnEvent", function(_, event, ...)
     local fn = HANDLERS[event]
     if fn then fn(...) end
 end)
+
+-- For JournalPeople.lua
+J.Internal = { Add = Add, Last = Last, Secret = Secret, Recent = Recent, Zone = Zone, Sub = Sub, Changed = Changed,
+    On = On, Hint = Hint, Store = Store, Match = Match, Pattern = Pattern, Patterns = Patterns, ItemID = ItemID }
 
 IF.OnLogin(function()
     J.Settings()

@@ -15,7 +15,8 @@ local BK = IF.Book
 
 local ICON = "Interface\\Icons\\"
 local DAY_ICON = ICON .. "INV_Scroll_03"
-local LISTS = { quests = "Quests", places = "Places", foes = "Foes", spoils = "Spoils", crafting = "Crafting" }
+local LISTS = { quests = "Quests", places = "Places", foes = "Foes", spoils = "Spoils", crafting = "Crafting",
+    people = "Companions" }
 local LIST_ICONS = {
     quests = ICON .. "INV_Misc_Note_01", places = ICON .. "INV_Misc_Map_01",
     foes = ICON .. "INV_Misc_Bone_HumanSkull_01", spoils = ICON .. "INV_Misc_Bag_10",
@@ -305,12 +306,88 @@ function Contents:heading()
         kind = Join({ UnitRace("player"), UnitClass("player") }, " "),
         owned = #keys == 0 and "Nothing written yet"
             or (Plural(#keys, "day", "days") .. " written since " .. J.DayTitle(keys[#keys], true)),
-        chapter = "Journal",
+        chapter = self.tab == "people" and "Companions" or "Journal",
     }
+end
+
+-- Companions: everyone I've had dealings with (talk overheard alone isn't
+-- enough), the best known first
+local COMPANION = ICON .. "INV_Misc_GroupLooking"
+local function Companions()
+    local list = {}
+    local PE = J.People
+    if not PE then return list end
+    local people = IF.charDB and IF.charDB.journal and IF.charDB.journal.people or {}
+    for name, p in pairs(people) do
+        local n = p.n or {}
+        local dealt = (n.grouped or 0) > 0 or (n.talks or 0) > 0 or (n.emotesIn or 0) + (n.emotesOut or 0) > 0
+            or (n.trades or 0) + (n.gifts or 0) + (n.sent or 0) + (n.duels or 0) + (n.revivedMe or 0) > 0
+        if dealt then list[#list + 1] = { name = name, p = p, score = PE.Score(p) } end
+    end
+    table.sort(list, function(a, b)
+        if a.score ~= b.score then return a.score > b.score end
+        return a.name < b.name
+    end)
+    return list
+end
+
+local Person = {}
+Person.__index = Person
+
+local function PersonPage(name)
+    return setmetatable({ name = name }, Person)
+end
+
+function Person:heading()
+    local p = J.People and J.People.Get(self.name) or {}
+    return {
+        icon = COMPANION, round = true, title = self.name,
+        kind = Join({ p.race, p.class }, " "),
+        owned = Join({ p.guild and ("‹" .. p.guild .. "›"), p.dayCount and Plural(p.dayCount, "day", "days") .. " met" }),
+        chapter = "Companion",
+    }
+end
+
+function Person:notes()
+    local p = J.People and J.People.Get(self.name) or {}
+    -- (the days we met: their pages)
+    local keys, lines = {}, {}
+    for key in pairs(p.days or {}) do keys[#keys + 1] = key end
+    table.sort(keys, function(a, b) return a > b end)
+    if #keys > 0 then lines[1] = { header = "Days We Met", info = #keys } end
+    for _, key in ipairs(keys) do
+        if J.Day(key) then
+            lines[#lines + 1] = { kind = "day", key = key, icon = DAY_ICON, name = J.DayTitle(key), line = J.DayLine(J.Day(key)) }
+        end
+    end
+    return J.PersonStory(self.name), nil, lines
+end
+
+function Person:activate(line, bk)
+    if line.key then bk:Push(DayPage(line.key)) end
+end
+
+function Person:verb(line) return line.key and "Read" or nil end
+
+function Contents:list(key)
+    if key ~= "people" then return {} end
+    local lines = {}
+    for _, c in ipairs(Companions()) do
+        local p = c.p
+        lines[#lines + 1] = { kind = "person", person = c.name, round = true, icon = COMPANION, name = c.name,
+            line = Join({ Join({ p.race, p.class }, " "), p.last and ("last seen " .. date("%d %b", p.last)) }) }
+    end
+    return lines
 end
 
 function Contents:notes()
     local keys, lines, header = J.Days(), {}, nil
+    -- (the people of the road, first)
+    local companions = #Companions()
+    if companions > 0 then
+        lines[1] = { go = "people", icon = COMPANION, name = "Companions",
+            line = Plural(companions, "person", "people") .. " met on the road" }
+    end
     for _, key in ipairs(keys) do
         local month = J.MonthTitle(key)
         if not header or header.header ~= month then
@@ -325,10 +402,11 @@ function Contents:notes()
 end
 
 function Contents:activate(line, bk)
-    if line.key then bk:Push(DayPage(line.key)) end
+    if line.key then return bk:Push(DayPage(line.key)) end
+    if line.person then return bk:Push(PersonPage(line.person)) end
 end
 
-function Contents:verb(line) return line.key and "Read" or nil end
+function Contents:verb(line) return (line.key or line.person) and "Read" or nil end
 
 ---------------------------------------------------------------------------
 -- The book
