@@ -17,6 +17,7 @@ the core, **Improved Forever**:
 | `ImprovedForever_Auction` | The controller auction window, prices over time, tasks. |
 | `ImprovedForever_Junk` | Finds and marks junk, sells it with the vendor's Sell All Junk, destroys it from the bags or the loot window. Formerly Destroy. |
 | `ImprovedForever_Library` | Everything about an item. |
+| `ImprovedForever_Journal` | A diary of your days, read as a book. |
 | `ImprovedForever_QuestTracker` | The objective tracker, rebuilt as the game's own: sorted quests (zone, level, title, distance, completed), an objective complete sound, full controller support. Formerly Improved Quest Tracker. |
 
 ## Features
@@ -36,6 +37,10 @@ the core, **Improved Forever**:
   it, who sells it, the recipes that make or use it, its quests and auction prices. Drops, vendors and
   quests come from [QuestieDB](https://github.com/Questie/QuestieDB)'s data: the addon when installed, else
   a copy that ships with this one.
+- **Journal**: a diary of each day you play, per character: the lands you passed through, the quests you
+  finished, your fights and falls, what you looted, earned and made, written in your own words. Read it in
+  the Library's book (`/if journal`, a key binding or a wheel); with the Library, a quest, creature or item
+  in it opens its page.
 
 Double-tap **Menu** (or `/if`) to open the configuration: a tab per loaded module down the right
 (L1 / R1, or the right stick), the module's sections down the left (the left stick, or L2 / R2), its

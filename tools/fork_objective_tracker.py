@@ -46,11 +46,16 @@ PATCHES = [
     ("Blizzard_ObjectiveTrackerContainer.lua",
      "\t\tif EditModeManagerFrame:IsEditModeActive() then",
      "\t\tif EditModeManagerFrame and EditModeManagerFrame:IsEditModeActive() then"),
+    # No Maw on Forever, and its buff check reads the player's auras, secret
+    # (in combat) to addon code: ours never shows the Maw block
+    ("Blizzard_ScenarioObjectiveTracker.xml",
+     '<Button parentKey="Container" inherits="MawBuffsContainer">', '<Button parentKey="Container">'),
 ]
 # Everywhere: the game's menu and frame manager swapped for ours (Menu.lua, Pad.lua)
 EVERYWHERE = [
     ("MenuUtil.CreateContextMenu(", "IFObjectiveTrackerMenu.CreateContextMenu("),
     ("GamepadMode.FrameControlsManager:FrameHidden(", "IFObjectiveTrackerPad.FrameHidden("),
+    ("ShouldShowMawBuffs()", "false --[[ ShouldShowMawBuffs(): no Maw, auras secret ]]"),
 ]
 
 

@@ -640,6 +640,7 @@ local function RecipeLine(spell, row, go)
     local line = {
         kind = "recipe", spell = spell, skill = row[1], make = make, row = row, taught = taught,
         icon = make and ItemIcon(make) or ICONS.recipes, quality = 1, item = go, tip = make,
+        getName = RecipeName,
     }
     line.name = RecipeName(line)
     return line, taught
@@ -726,17 +727,9 @@ function LB.Learn()
     if changed then GD.ResetRecipes() end
 end
 
----------------------------------------------------------------------------
--- A creature's portrait, as the game draws one, from its look's display id
--- (WorldData.lua's: the server alone knows them; a model can't be handed
--- one the client hasn't met). LB.Portrait(npcID, texture) -> true: drawn
----------------------------------------------------------------------------
-function LB.Portrait(npcID, texture)
-    local looks = IF.WorldData and IF.WorldData.displays
-    local display = npcID and looks and looks[npcID]
-    if not (display and SetPortraitTextureFromCreatureDisplayID) then return false end
-    return pcall(SetPortraitTextureFromCreatureDisplayID, texture, display)
-end
+-- A creature's portrait, as the game draws one (the book's, Book.lua):
+-- LB.Portrait(npcID, texture) -> true: drawn
+LB.Portrait = IF.Book.Portrait
 
 ---------------------------------------------------------------------------
 -- For the page (LibraryPage.lua): the helpers it shares, the waypoint

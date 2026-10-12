@@ -1,0 +1,17 @@
+## Interface: 16001, 16002, 16003, 16100, 16101, 16200
+## Title: Improved Forever: Journal
+## Notes: A diary of your days: levels, quests, places, fights, loot, gold and crafting, read back as a book.
+## Author: markg
+## Version: 0.5.0
+## X-Website: https://github.com/markgravity/ImprovedForever
+## X-License: MIT
+## IconTexture: Interface\AddOns\ImprovedForever\textures\ic_mod_journal
+## Group: ImprovedForever
+## Dependencies: ImprovedForever
+## OptionalDeps: QuestieDB, ImprovedForever_Library
+
+Module.lua
+Journal.lua
+JournalWriter.lua
+JournalBook.lua
+JournalEditor.lua

@@ -107,7 +107,7 @@ end
 function IFScenarioObjectiveTrackerMixin:OnEvent(event, ...)
 	if event == "UNIT_AURA" then
 		local isShowingMawBuffs = self:IsShown() and self.MawBuffsBlock:IsShown();
-		if ShouldShowMawBuffs() ~= isShowingMawBuffs then
+		if false --[[ ShouldShowMawBuffs(): no Maw, auras secret ]] ~= isShowingMawBuffs then
 			self:MarkDirty();
 		end
 	elseif event == "SPELL_UPDATE_COOLDOWN" then
@@ -186,7 +186,7 @@ function IFScenarioObjectiveTrackerMixin:LayoutContents()
 	textureKit = textureKit or "evergreen-scenario"
 
 	local isInScenario = numStages > 0;
-	local shouldShowMawBuffs = ShouldShowMawBuffs();
+	local shouldShowMawBuffs = false --[[ ShouldShowMawBuffs(): no Maw, auras secret ]];
 	if not isInScenario and (not shouldShowMawBuffs or IsOnGroundFloorInJailersTower()) then
 		-- clear out data
 		self.currentStage = nil;

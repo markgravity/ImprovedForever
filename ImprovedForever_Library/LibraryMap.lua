@@ -2,8 +2,9 @@
 -- (Cross on a zone, Square on an entry) opens the game's map and quest panel
 -- at its zone, its areas drawn as the quest areas are (a soft blue fill, a
 -- lit rim: its spawns, near ones together), the game's own waypoint at the
--- nearest spawn (its pin, the arrow in the world). The Library steps aside
--- while the map is up and comes back, on the same page, once it's closed.
+-- nearest spawn (its pin, the arrow in the world). The book it's shown from
+-- (the Library's, the Journal's) steps aside while the map is up and comes
+-- back, on the same page, once it's closed.
 -- The areas are drawn on the map's canvas by a data provider of ours (no pin
 -- templates or the map's own pin pools: HereBeDragons' way).
 local IF = ImprovedForever
@@ -105,15 +106,18 @@ local function Hook()
     return true
 end
 
--- The map closed: the areas gone, the Library back
+-- The map closed: the areas gone, the book back
 local hooked = false
+local away                     -- the book stepped aside for the map
 local function WatchMap()
     if hooked or not WorldMapFrame then return end
     hooked = true
     WorldMapFrame:HookScript("OnHide", function()
         shown = nil
         Draw()
-        if LB.Resume then LB.Resume() end
+        local book = away
+        away = nil
+        if book then book:Resume() end
     end)
 end
 
@@ -131,9 +135,9 @@ local function Zone(line)
     return area, points
 end
 
--- -> true: shown (false: nowhere to show it: an instance, a zone the map
--- doesn't have)
-function LB.ShowOnMap(line)
+-- book: the one it's shown from (nil: the Library's). -> true: shown (false:
+-- nowhere to show it: an instance, a zone the map doesn't have)
+function LB.ShowOnMap(line, book)
     if IF.InCombat() or not line then return false end
     local area, points = Zone(line)
     local map = LB.UiMap(area)
@@ -147,7 +151,8 @@ function LB.ShowOnMap(line)
     shown = { map = map, boxes = Clusters(points) }
     LB.Waypoint(line)
     if IF.Vibe and IF.Vibe.Confirm then IF.Vibe.Confirm() end
-    LB.Suspend()
+    away = book or LB.book
+    away:Suspend()
     OpenWorldMap(map)
     Draw()
     return true

@@ -10,6 +10,7 @@ shapes, green accents, holes cut; shapes drawn with radial_icon's helpers):
   ic_mod_destroy      a bin, a green cross over it (the Junk module's Destroy panel)
   ic_mod_junk         a sack, a green junk coin in front
   ic_mod_library      an open book, a green bookmark
+  ic_mod_journal      a closed diary (its lines cut), a green quill
   ic_mod_quests       a quest list (its "!" and lines cut), green sort arrows
 
 Run: python3 tools/make_module_icons.py   (needs Pillow)
@@ -200,6 +201,20 @@ def make():
     mark, dm = new()
     icon.polygon(dm, [(84, 20), (100, 20), (100, 60), (92, 52), (84, 60)])
     save("ic_mod_library", [(book, GOLD), (mark, GREEN)])
+
+    # Journal: a closed diary, its spine and two lines cut in the cover, a
+    # quill (green) across it
+    diary, dd = new()
+    rounded(dd, 18, 14, 90, 114, 8)
+    cover, dv = new()
+    icon.stroke(dv, [(32, 16), (32, 112)], 4)
+    icon.stroke(dv, [(46, 44), (76, 44)], 5)
+    icon.stroke(dv, [(46, 58), (70, 58)], 5)
+    diary = icon.cut(diary, cover)
+    quill, dq = new()
+    icon.polygon(dq, [(118, 10), (110, 34), (92, 62), (74, 88), (80, 66), (96, 38)])
+    icon.stroke(dq, [(76, 86), (62, 108)], 4)
+    save("ic_mod_journal", [(diary, GOLD), (quill, GREEN)])
 
     # Quest Tracker: a list (a "!" and three lines cut in it), green arrows
     # up and down beside it (sorting)

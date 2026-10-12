@@ -125,6 +125,8 @@ local WINDOWS = {
     -- corner opens it the same way)
     { key = "peekmap", label = "Peek map", ours = true, icon = IF.TEX .. "ic_mod_map",
         buttons = { "WorldMapMicroButton", "MiniMapWorldMapButton", "QuestLogMicroButton" } },
+    { key = "journal", label = "Journal", ours = true, icon = IF.TEX .. "ic_mod_journal",
+        buttons = { "ImprovedForeverJournalToggle" } },
     { key = "icmenu", label = "Improved Forever panel", ours = true, icon = IF.TEX .. "ic_addon", buttons = { "ImprovedForeverMenuToggle" } },
     -- (no longer offered; kept for what holds it already)
     { key = "map", label = "World Map", hidden = true, icon = "Interface\\Icons\\INV_Misc_Map_01",

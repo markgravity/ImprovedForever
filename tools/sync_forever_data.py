@@ -9,7 +9,7 @@
 3. WorldData.lua (core) rebuilt (tools/make_library_data.py).
 4. The IDs and names written into the code checked against Forever's data:
    Tasks' vendor reagents, Vibration's spells (moves, food and drink),
-   Gather's node names.
+   Gather's node names, the Journal's hearthstone.
 5. The Lua checks: syntax of the data files, tools/loadcheck.lua.
 
 A Lua 5.1 is needed for step 1 (LuaJIT can't load QuestieDB's largest
@@ -137,6 +137,12 @@ def check_code():
     for sid in (int(x) for x in re.findall(r"spell = (\d+)", src)):
         if sid not in names:
             problems.append(f"Vibration.lua: spell {sid} isn't in Forever ({build})")
+
+    # Journal: the hearthstone's spell
+    src = (ROOT / "ImprovedForever_Journal" / "Journal.lua").read_text()
+    m = re.search(r"local HEARTHSTONE = (\d+)", src)
+    if not m or names.get(int(m.group(1))) != "Hearthstone":
+        problems.append(f"Journal.lua HEARTHSTONE: spell {m and m.group(1)} isn't Forever's Hearthstone ({build})")
 
     # Gather: herb and ore nodes Forever has that NodeScan doesn't know
     src = (ROOT / "ImprovedForever_Gather" / "NodeScan.lua").read_text()

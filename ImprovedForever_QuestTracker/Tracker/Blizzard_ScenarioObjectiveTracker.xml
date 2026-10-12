@@ -356,7 +356,7 @@
 					<KeyValue key="height" value="50" type="number"/>
 				</KeyValues>
 				<Frames>
-					<Button parentKey="Container" inherits="MawBuffsContainer">
+					<Button parentKey="Container">
 						<Anchors>
 							<Anchor point="TOPRIGHT"/>
 						</Anchors>

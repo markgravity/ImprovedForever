@@ -1,45 +1,25 @@
--- The Library's page (Library.lua knows what is shown): a page of a book,
--- in Forever's spellbook window (its frame, its page). The item is the page's title (its
--- icon in the spellbook's frame), under the rule its notes: what a traveller
--- wrote about it, then an entry a subject (where it is found, its people,
--- what it's crafted from, what it's a reagent for, its quests): Cross opens
--- that list. A list: the creatures, objects and people by zone (Cross: a
--- waypoint at the nearest spawn; a container: its page), the recipes by
--- profession (Cross: the other item's page), the quests; Circle goes back to
--- the notes, then to the item before.
--- Entries in two columns as the spellbook's spells (an item in a square
--- frame, a creature, a place, a quest or a subject in a round one), as many
--- pages as they need: the D-pad reads on from page to page, L2 / R2 turn
--- them.
+-- The Library's page (Library.lua knows what is shown): a page of the core's
+-- book (ImprovedForever's Book.lua: Forever's spellbook window). The item is
+-- the page's title (its icon in the spellbook's frame), under the rule its
+-- notes: what a traveller wrote about it, then an entry a subject (where it
+-- is found, its people, what it's crafted from, what it's a reagent for, its
+-- quests): Cross opens that list. A list: the creatures, objects and people
+-- by zone (Cross: a waypoint at the nearest spawn; a container: its page),
+-- the recipes by profession (Cross: the other item's page), the quests;
+-- Circle goes back to the notes, then to the item before. A creature's, a
+-- chest's, a quest's page likewise. LB.Page(kind, id) is a page for any book
+-- (the Journal's too).
 -- Never in combat.
 local IF = ImprovedForever
 
-local K = IF.ConfigKit
 local A = IF.Auction
 local BY = IF.AuctionBuy
 local LB = IF.Library
+local BK = IF.Book
 
 ---------------------------------------------------------------------------
--- The book's looks
+-- The lists' words and icons
 ---------------------------------------------------------------------------
-local PARCHMENT = "spellbook-Page-Right-C60"
-local WINDOW_W = 680                     -- (the spellbook window, made smaller)
-local TITLE_H, INSET_X, INSET_Y = 15, 2, 3   -- (where the window's page sits: PlayerSpellsFrame)
-local ART_W = WINDOW_W - 2 * INSET_X - 1
-local ART_H = math.floor(ART_W * 682 / 810 + 0.5)      -- (the page atlas's proportions)
-local BAND = math.floor(ART_H * 0.085 + 0.5)           -- (its dark strip on top: the tabs', left empty)
-local PAGE_W, PAGE_H = ART_W, ART_H - BAND             -- the parchment, where everything is written
-local LEFT, RIGHT = 66, 58               -- the writing's margins (room left for the cursor)
-local TOP = 112                          -- the notes' top, under the rule
-local AREA_W = PAGE_W - LEFT - RIGHT
-local AREA_H = PAGE_H - TOP - 62
-local GAP = 20
-local CELL_W, CELL_H = (AREA_W - GAP) / 2, 58
-local HEAD_H = 34
-local CELLS = 2 * math.floor(AREA_H / CELL_H)
-local HEADS = math.floor(AREA_H / HEAD_H)
-local HEADING_FONT = "Fonts\\MORPHEUS.TTF"
-
 -- The lists: what they're about (the page's top right), their entry's icon
 local ICON = "Interface\\Icons\\"
 local LISTS = {
@@ -69,339 +49,21 @@ local LIST_ICONS = {
     people = ICON .. "INV_Misc_GroupLooking", quests = ICON .. "INV_Misc_Note_01",
 }
 
--- The spellbook's ink (SPELLBOOK_FONT_COLOR), and darker accents of it
-local INK = { 0.23, 0.16, 0.09 }
-if _G.SPELLBOOK_FONT_COLOR and SPELLBOOK_FONT_COLOR.GetRGB then INK = { SPELLBOOK_FONT_COLOR:GetRGB() } end
-local ACCENT_RGB = { 0.43, 0.16, 0.05 }
-local ACCENT = "|cff6e2a0c"
--- An item's quality, in an ink that reads on parchment
-local QUALITY_INK = { [0] = "|cff5c5c5c", [1] = "|cff3b2a1a", [2] = "|cff1a6b12", [3] = "|cff0b4c96",
-    [4] = "|cff6a1b9a", [5] = "|cffa64b00", [6] = "|cff8a6d2b" }
-local QUALITY_NAMES = { [0] = "Poor", [1] = "Common", [2] = "Uncommon", [3] = "Rare", [4] = "Epic",
-    [5] = "Legendary", [6] = "Artifact" }
-
-local function Atlas(tex, name)
-    if IF.HasAtlas(name) then
-        tex:SetAtlas(name)
-        return true
-    end
-end
-
--- A font of the game's (the spellbook's), in its ink, no shadow
-local function Ink(fs, font, fallback, color)
-    local object = _G[font] or _G[fallback]
-    if object then fs:SetFontObject(object) end
-    local c = color or INK
-    fs:SetTextColor(c[1], c[2], c[3])
-    fs:SetShadowOffset(0, 0)
-    return fs
-end
-
-local function Text(parent, font, fallback, layer)
-    return Ink(parent:CreateFontString(nil, layer or "ARTWORK"), font, fallback)
-end
-
--- The page's subject (top right): the game's book font (Morpheus), in the
--- accent
-local function Heading(parent, size)
-    local fs = Text(parent, "QuestTitleFont", "GameFontNormalLarge")
-    pcall(fs.SetFont, fs, HEADING_FONT, size, "")
-    fs:SetTextColor(ACCENT_RGB[1], ACCENT_RGB[2], ACCENT_RGB[3])
-    return fs
-end
-
--- The notes' writing: the spellbook's own (Friz), easy to read
-local function Body(parent)
-    local fs = Text(parent, "SystemFont_Med3", "GameFontNormal")
-    fs:SetJustifyH("LEFT")
-    fs:SetJustifyV("TOP")
-    fs:SetSpacing(4)
-    fs:SetWidth(AREA_W)
-    return fs
-end
-
-local function Sound(kit)
-    local id = SOUNDKIT and SOUNDKIT[kit]
-    if id and PlaySound then pcall(PlaySound, id) end
-end
+-- An item's quality, in an ink that reads on parchment (the book's)
+local QUALITY_INK, QUALITY_NAMES = BK.QUALITY_INK, BK.QUALITY_NAMES
 
 local function Glyph(key, size) return IF.GlyphText(key, size) end
-
----------------------------------------------------------------------------
--- The window: the spellbook's (PortraitFrameTemplate: its gold frame, a
--- book in its portrait, "Library" on its title bar), its page inside; the
--- page's strip on top, where the spellbook has its tabs, left empty
----------------------------------------------------------------------------
-local ok, window = pcall(K.NewFrame, "Frame", "ImprovedForeverLibrary", UIParent, "PortraitFrameTemplate")
-if not ok then window = K.NewFrame("Frame", "ImprovedForeverLibrary", UIParent) end
-window:SetSize(WINDOW_W, ART_H + INSET_Y + TITLE_H)
--- (over the auction window, a DIALOG)
-window:SetFrameStrata("FULLSCREEN_DIALOG")
-window:SetPoint("CENTER")
-window:EnableMouse(true)
-window:SetClampedToScreen(true)
-window:Hide()
-pcall(function()
-    if window.SetTitle then window:SetTitle("Library") end
-    if window.SetPortraitToAsset then window:SetPortraitToAsset("Interface\\Icons\\INV_Misc_Book_09") end
-end)
-
-local art = window:CreateTexture(nil, "BACKGROUND", nil, 2)
-art:SetPoint("BOTTOMLEFT", INSET_X, INSET_Y)
-art:SetSize(ART_W, ART_H)
-if not Atlas(art, PARCHMENT) then art:SetColorTexture(0.85, 0.75, 0.58, 1) end
-
--- The parchment under the strip: everything on the page is placed on it
-local page = K.NewFrame("Frame", nil, window)
-page:SetPoint("BOTTOMLEFT", INSET_X, INSET_Y)
-page:SetSize(PAGE_W, PAGE_H)
--- (whose tooltips are the Library's: Library.lua's focus leaves them out)
-LB.panel = page
-
--- The game's own focus glow: PortraitFrameTemplate has it (FrameGlow, a
--- FrameGlowTemplate laid out for that template, its colour and opacity from
--- the controller options); shown while the Library has the pad
-local function Glow(on)
-    IF.Focus.Glow(window, on)
-end
-
--- Which has the pad: "library" (ours) or "window" (the one it was opened
--- from: the bags, the loot window, the auction house; L2 / R2 between them)
-LB.focus = "library"
-local switch              -- (L2 / R2 to the other window: below, IF.Focus.Switch)
-function LB.HasFocus()
-    return window:IsShown() and LB.focus == "library"
-end
-
--- A spellbook icon: the spell's frame round a masked icon (square: an item;
--- round: a creature, a place, a quest), its hover glow for the focus. f =
--- IconFrame(parent, size); f:Set(icon, round); f:SetFocus(on)
-local function IconFrame(parent, size)
-    local f = K.NewFrame("Frame", nil, parent)
-    f:SetSize(size, size)
-    local k = size / 40
-    f.shadow = f:CreateTexture(nil, "ARTWORK", nil, 1)
-    Atlas(f.shadow, "spellbook-item-iconframe-shadow")
-    f.shadow:SetPoint("TOPLEFT", -12 * k, 3 * k)
-    f.shadow:SetPoint("BOTTOMRIGHT", 2 * k, -8 * k)
-    f.icon = f:CreateTexture(nil, "ARTWORK", nil, -1)
-    f.icon:SetSize(36 * k, 36 * k)
-    f.icon:SetPoint("CENTER")
-    local function Mask(atlas)
-        if not (f.CreateMaskTexture and IF.HasAtlas(atlas)) then return nil end
-        local m = f:CreateMaskTexture()
-        m:SetAtlas(atlas)
-        m:SetAllPoints(f.icon)
-        return m
-    end
-    f.masks = { square = Mask("spellbook-item-spellicon-mask"), round = Mask("talents-node-circle-mask") }
-    f.border = f:CreateTexture(nil, "OVERLAY", nil, 1)
-    f.glow = f:CreateTexture(nil, "OVERLAY", nil, 2)
-    f.glow:SetAllPoints()
-    f.glow:SetBlendMode("ADD")
-    f.glow:Hide()
-    function f:Set(icon, round)
-        self.icon:SetTexture(icon or LB.ICONS.none)
-        local mask = self.masks[round and "round" or "square"]
-        if self.mask ~= mask then
-            if self.mask then self.icon:RemoveMaskTexture(self.mask) end
-            if mask then self.icon:AddMaskTexture(mask) end
-            self.mask = mask
-        end
-        self.icon:SetTexCoord(mask and 0 or 0.07, mask and 1 or 0.93, mask and 0 or 0.07, mask and 1 or 0.93)
-        self.border:ClearAllPoints()
-        if round then
-            if not Atlas(self.border, "spellbook-passive-iconframe") then Atlas(self.border, "talents-node-circle-gray") end
-            self.border:SetPoint("TOPLEFT", -3 * k, 3 * k)
-            self.border:SetPoint("BOTTOMRIGHT", 3 * k, -3 * k)
-            Atlas(self.glow, "spellbook-item-iconframe-passive-hover")
-        else
-            Atlas(self.border, "spellbook-item-iconframe")
-            self.border:SetPoint("TOPLEFT", -11 * k, 1 * k)
-            self.border:SetPoint("BOTTOMRIGHT", 1 * k, -7 * k)
-            Atlas(self.glow, "spellbook-item-iconframe-hover")
-        end
-        self.shadow:SetShown(not round)
-    end
-    function f:SetFocus(on)
-        self.glow:SetShown(on and true or false)
-        self.glow:SetAlpha(0.5)
-    end
-    return f
-end
-
--- The game's gamepad cursor left of the focus (ImprovedForever's Focus.lua)
-local function Pointer(parent)
-    return IF.Focus.Cursor(parent)
-end
-
--- The title: the item's icon, its name, what it is, the rule under them
-local head = IconFrame(page, 46)
-head:SetPoint("TOPLEFT", LEFT + 2, -34)
-local title = Text(page, "SystemFont_Huge2", "GameFontNormalHuge")
-title:SetPoint("TOPLEFT", head, "TOPRIGHT", 16, 2)
-title:SetPoint("RIGHT", page, "RIGHT", -RIGHT - 150, 0)
-title:SetJustifyH("LEFT")
-title:SetWordWrap(false)
-local kind = Text(page, "SystemFont_Med1", "GameFontNormal")
-kind:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -5)
-kind:SetPoint("RIGHT", page, "RIGHT", -RIGHT, 0)
-kind:SetJustifyH("LEFT")
-kind:SetWordWrap(false)
-local owned = Text(page, "SystemFont_Med1", "GameFontNormal")
-owned:SetPoint("TOPLEFT", kind, "BOTTOMLEFT", 0, -3)
-owned:SetPoint("RIGHT", page, "RIGHT", -RIGHT, 0)
-owned:SetJustifyH("LEFT")
-owned:SetAlpha(0.75)
--- What is read: "Field Notes", or the list's subject, at the top right
-local chapter = Heading(page, 17)
-chapter:SetPoint("TOPRIGHT", -RIGHT, -38)
-chapter:SetJustifyH("RIGHT")
-local rule = page:CreateTexture(nil, "ARTWORK")
-rule:SetHeight(11)
-rule:SetPoint("TOPLEFT", LEFT - 30, -TOP + 22)
-rule:SetPoint("TOPRIGHT", -RIGHT + 6, -TOP + 22)
-if not Atlas(rule, "spellbook-divider") then rule:SetColorTexture(INK[1], INK[2], INK[3], 0.5) rule:SetHeight(1) end
-
--- "Page 1/3", at the bottom right, as the spellbook's
-local pageNo = Text(page, "SystemFont_Med3", "GameFontNormalLarge")
-pageNo:SetPoint("BOTTOMRIGHT", -RIGHT - 6, 30)
-
-local emptyText = Text(page, "SystemFont_Med3", "GameFontNormalLarge")
-emptyText:SetPoint("TOP", page, "TOP", 0, -TOP - 60)
-emptyText:SetAlpha(0.7)
-
--- A list's entry: its icon in its frame, its name, a line under it; the
--- spellbook's faint backplate behind it, full under the focus
-local cells = {}
-for i = 1, CELLS do
-    local c = K.NewFrame("Button", nil, page)
-    c:SetSize(CELL_W, CELL_H - 6)
-    c.backplate = c:CreateTexture(nil, "BACKGROUND", nil, 1)
-    c.backplate:SetSize(CELL_W + 36, 64)
-    c.backplate:SetPoint("CENTER", 5, -5)
-    if not Atlas(c.backplate, "spellbook-item-backplate") then c.backplate:Hide() end
-    c.icon = IconFrame(c, 40)
-    c.icon:SetPoint("LEFT", 0, 0)
-    c.name = Text(c, "SystemFont_Large", "GameFontNormalLarge")
-    c.name:SetPoint("RIGHT", c, "RIGHT", -4, 0)
-    c.name:SetJustifyH("LEFT")
-    c.name:SetWordWrap(false)
-    c.sub = Text(c, "SystemFont_Med1", "GameFontNormal")
-    c.sub:SetPoint("TOPLEFT", c.name, "BOTTOMLEFT", 0, -2)
-    c.sub:SetPoint("RIGHT", c, "RIGHT", -4, 0)
-    c.sub:SetJustifyH("LEFT")
-    c.sub:SetWordWrap(true)
-    if c.sub.SetMaxLines then c.sub:SetMaxLines(2) end
-    c.pointer = Pointer(c)
-    c.pointer:SetPoint("RIGHT", c.icon, "LEFT", 2, 0)
-    c:SetScript("OnClick", function(self)
-        if self.index then LB.Pick(self.index, true) end
-    end)
-    cells[i] = c
-end
-
--- A list's section header (a zone, a profession): its name, how many, a
--- faint rule
-local heads = {}
-for i = 1, HEADS do
-    local h = K.NewFrame("Frame", nil, page)
-    h:SetSize(AREA_W, HEAD_H)
-    h.text = Text(h, "SystemFont_Med3", "GameFontNormalLarge")
-    h.text:SetPoint("BOTTOMLEFT", 0, 10)
-    h.text:SetPoint("RIGHT", -60, 0)
-    h.text:SetJustifyH("LEFT")
-    h.text:SetWordWrap(false)
-    h.info = Text(h, "SystemFont_Med1", "GameFontNormal")
-    h.info:SetPoint("BOTTOMRIGHT", 0, 11)
-    h.info:SetAlpha(0.7)
-    h.rule = h:CreateTexture(nil, "ARTWORK")
-    h.rule:SetHeight(6)
-    h.rule:SetPoint("BOTTOMLEFT", -10, 2)
-    h.rule:SetPoint("BOTTOMRIGHT", 6, 2)
-    if not Atlas(h.rule, "spellbook-divider") then h.rule:SetColorTexture(INK[1], INK[2], INK[3], 0.4) h.rule:SetHeight(1) end
-    h.rule:SetAlpha(0.55)
-    heads[i] = h
-end
-
--- The notes' paragraphs, made as they're needed
-local function Pool(make)
-    local pool = { used = 0 }
-    function pool:Next()
-        self.used = self.used + 1
-        local f = self[self.used]
-        if not f then
-            f = make()
-            self[self.used] = f
-        end
-        return f
-    end
-    function pool:Reset() self.used = 0 end
-    function pool:HideRest()
-        for i = self.used + 1, #self do self[i]:Hide() end
-    end
-    return pool
-end
-
-local paragraphs = Pool(function() return Body(page) end)
--- (a paragraph's height before it's placed)
-local measure = Body(page)
-measure:Hide()
-
-local legend = IF.InputLegend(window)
-legend:SetPoint("TOP", window, "BOTTOM", 0, -4)
 
 ---------------------------------------------------------------------------
 -- The notes: written from what is known (a traveller's words, a section a
 -- subject, each with a link to its list)
 ---------------------------------------------------------------------------
-local function Count(lines)
-    local n = 0
-    for _, l in ipairs(lines or {}) do
-        if not l.header then n = n + 1 end
-    end
-    return n
-end
-
-local function Plural(n, one, many)
-    return n .. " " .. (n == 1 and one or many)
-end
-
-local function Capital(text)
-    return text:sub(1, 1):upper() .. text:sub(2)
-end
-
--- "a, b and c"
-local function Names(list)
-    if #list <= 1 then return list[1] or "" end
-    return table.concat(list, ", ", 1, #list - 1) .. " and " .. list[#list]
-end
-
-local function Name(s) return ACCENT .. s .. "|r" end
-
--- "a Battered Chest", "an Alliance Chest" (A_: the name in the accent)
-local function A_plain(name)
-    return (name:match("^[AEIOUaeiou]") and "an " or "a ") .. name
-end
-
-local function A_(name)
-    return (name:match("^[AEIOUaeiou]") and "an " or "a ") .. Name(name)
-end
+local Count, Plural, Names, Name = BK.Count, BK.Plural, BK.Names, BK.Name
+local Capital, A_plain, A_, Coins, Shorten = BK.Capital, BK.A_plain, BK.A_, BK.Coins, BK.Shorten
 
 local function ItemName(id)
     local name = LB.ItemInfo(id)
     return name and Name(name) or "another item"
-end
-
--- 6420 -> "64 silver 20 copper" (words read better in a sentence than coins)
-local function Coins(copper)
-    copper = math.floor(copper or 0)
-    local parts = {}
-    local gold, silver, rest = math.floor(copper / 10000), math.floor(copper % 10000 / 100), copper % 100
-    if gold > 0 then parts[#parts + 1] = gold .. " gold" end
-    if silver > 0 then parts[#parts + 1] = silver .. " silver" end
-    if rest > 0 or #parts == 0 then parts[#parts + 1] = rest .. " copper" end
-    return table.concat(parts, " ")
 end
 
 local PEOPLE = {
@@ -507,16 +169,6 @@ local function Unique(lines)
         end
     end
     return names
-end
-
--- "a, b, c and 4 more" (names put in the accent)
-local function Shorten(names, keep)
-    local out = {}
-    for i = 1, math.min(#names, keep) do
-        out[i] = names[i]:find("|c") and names[i] or Name(names[i])
-    end
-    if #names > keep then out[#out + 1] = (#names - keep) .. " more" end
-    return out
 end
 
 -- What is written about it, a traveller's words (not a list), by subject:
@@ -786,27 +438,6 @@ local function Subjects(p)
     return lines
 end
 
----------------------------------------------------------------------------
--- What is shown: a stack of items (Cross on another item: its page; Circle:
--- back), each { id, link, tab ("notes" or a list's), tabs = { [key] = lines
--- }, views = { [key] = { pages, cells, sel, page } } }
----------------------------------------------------------------------------
-LB.stack = {}
-
--- The tooltip shows as everywhere else: the game's own setting (CVar
--- GamepadDisableTooltips), which R3 turns on and off here as in the bags
-local function TipsOn()
-    local get = C_CVar and C_CVar.GetCVarBool or GetCVarBool
-    return not (get and get("GamepadDisableTooltips"))
-end
-
-local function ToggleTips()
-    local set = C_CVar and C_CVar.SetCVar or SetCVar
-    if set then set("GamepadDisableTooltips", TipsOn() and "1" or "0") end
-end
-
-local function Top() return LB.stack[#LB.stack] end
-
 -- A merged list's section: its title, then a list's entries (one by zone
 -- read flat: each entry names its zone)
 local function Section(into, title, lines)
@@ -1049,44 +680,6 @@ local function Build(p)
     p.views = {}
 end
 
--- A list laid out in pages: headers across, entries two a row; a section
--- going on over a page has its header again there. (pages, list, y: going
--- on from the notes)
-local function ListLayout(lines, pages, list, startY)
-    pages, list = pages or {}, list or {}
-    local current = pages[#pages]
-    local y, col, header = startY or 0, 0, nil
-    local function newPage()
-        current = { items = {} }
-        pages[#pages + 1] = current
-        y, col = 0, 0
-        if header then
-            current.items[#current.items + 1] = { header = header.header, info = "continued", y = y }
-            y = y + HEAD_H
-        end
-    end
-    if not current then newPage() end
-    for _, line in ipairs(lines) do
-        if line.header then
-            if col > 0 then y, col = y + CELL_H, 0 end
-            header = nil
-            if y + HEAD_H + CELL_H > AREA_H then newPage() end
-            header = line
-            current.items[#current.items + 1] = { header = line.header, info = line.info, y = y }
-            y = y + HEAD_H
-        else
-            if col == 0 and y + CELL_H > AREA_H then newPage() end
-            local c = { line = line, page = #pages, col = col, x = col * (CELL_W + GAP), y = y }
-            current.items[#current.items + 1] = c
-            list[#list + 1] = c
-            c.index = #list
-            col = col + 1
-            if col == 2 then y, col = y + CELL_H, 0 end
-        end
-    end
-    return pages, list
-end
-
 -- An item a profession makes: its recipe's sections under the notes, as a
 -- list's (the first recipe's, when there are several): its reagents (Cross:
 -- their pages), where it's learnt (the recipe item: its page; a trainer)
@@ -1117,33 +710,58 @@ local function Recipe(p)
     return lines
 end
 
--- A page laid out: its paragraphs (and who wrote them), then its lines
-local PARA_GAP = 10
-local function PageLayout(paragraphs, signed, lines)
-    local current = { items = {} }
-    local pages, y = { current }, 0
-    local function place(kind, text, h)
-        if y > 0 and y + h > AREA_H then
-            current = { items = {} }
-            pages[#pages + 1] = current
-            y = 0
-        end
-        current.items[#current.items + 1] = { doc = kind, text = text, y = y }
-        y = y + h
+---------------------------------------------------------------------------
+-- A page: its data (Build), and what the book asks of it (Book.lua)
+---------------------------------------------------------------------------
+local Page = {}
+Page.__index = Page
+
+-- (a chest, a node: what it is)
+local THING_KIND = { herb = "Herb", ore = "Mining node", fish = "Fishing pool" }
+
+function Page:heading()
+    local p = self
+    local chapter = LISTS[p.tab] or p.titles and p.titles[p.tab] or "Field Notes"
+    if p.questInfo then
+        local q = p.questInfo
+        return { icon = LB.ICONS.quest, round = true, title = q.name,
+            kind = LB.Join({ q.level and q.level > 0 and ("Level " .. q.level .. " Quest") or "Quest",
+                q.required and q.required > 1 and ("Requires Level " .. q.required) }),
+            owned = q.zone and LB.ZoneName(q.zone) or "", chapter = "Field Notes" }
     end
-    for _, text in ipairs(paragraphs) do
-        measure:SetText(text)
-        place("para", text, math.ceil(measure:GetStringHeight()) + PARA_GAP)
+    if p.creature then
+        local c = p.creature
+        local zones = {}
+        for _, l in ipairs(c.places) do zones[#zones + 1] = l.plain end
+        return { icon = p.npc and LB.ICONS.npc or (c.how and GATHERING[c.how].icon or LB.ICONS.object),
+            round = true, portrait = p.npc, title = c.name,
+            kind = p.npc and c.entry.line or THING_KIND[c.how] or "Chest",
+            owned = #zones == 0 and ""
+                or ("Found in " .. zones[1] .. (#zones > 1 and (" and " .. (#zones - 1) .. " more") or "")),
+            chapter = chapter }
     end
-    if signed then place("sign", Signature(), 34) end
-    return ListLayout(lines, pages, {}, y)
+    local name, link, quality, level, need, itemType, subType, _, _, _, sell = LB.ItemInfo(p.id)
+    p.link = p.link or link
+    if not name and C_Item and C_Item.RequestLoadItemDataByID then C_Item.RequestLoadItemDataByID(p.id) end
+    local q = quality or 1
+    local carried = C_Item and C_Item.GetItemCount and C_Item.GetItemCount(p.id, true) or 0
+    return {
+        icon = LB.ItemIcon(p.id), round = false, title = name or ("Item " .. p.id),
+        kind = LB.Join({ (QUALITY_INK[q] or "") .. (QUALITY_NAMES[q] or "") .. "|r"
+            .. ((subType or itemType) and (" " .. (subType or itemType)) or ""),
+            level and level > 1 and ("Item Level " .. level), need and need > 1 and ("Requires Level " .. need) }),
+        owned = LB.Join({ carried > 0 and ("You carry " .. carried) or "You carry none",
+            sell and sell > 0 and ("sells for " .. (A and A.Money(sell) or GetCoinTextureString(sell))) }),
+        chapter = chapter,
+    }
 end
 
 -- The notes: the paragraphs, who wrote them, the recipe's sections, then the
 -- entries (under "See Also" after those)
-local function NotesLayout(p)
-    if p.creature then return PageLayout(CreatureNotes(p), true, CreatureLines(p)) end
-    if p.questInfo then return PageLayout(QuestNotes(p), true, QuestLines(p)) end
+function Page:notes()
+    local p = self
+    if p.creature then return CreatureNotes(p), Signature(), CreatureLines(p) end
+    if p.questInfo then return QuestNotes(p), Signature(), QuestLines(p) end
     local lines = Recipe(p)
     -- (a container item: what it holds, an entry a class)
     local contents = GroupEntries(p, "contents")
@@ -1154,434 +772,79 @@ local function NotesLayout(p)
     local subjects = Subjects(p)
     if #lines > 0 and #subjects > 0 then lines[#lines + 1] = { header = "See Also" } end
     for _, l in ipairs(subjects) do lines[#lines + 1] = l end
-    return PageLayout(Notes(p), true, lines)
+    return Notes(p), Signature(), lines
 end
 
--- (laid out again each time, the picked entry and page kept: names come in
--- late)
-local function View(p)
-    local key = p.tab
-    local old = p.views[key]
-    local pages, list
-    if key == "notes" then
-        pages, list = NotesLayout(p)
+function Page:list(key)
+    return self.tabs and self.tabs[key] or {}
+end
+
+function Page:about(key)
+    return About(self, key)
+end
+
+-- Cross on an entry: another item's, creature's or quest's page (in the
+-- book it's in), a place on the map
+function Page:activate(line, book)
+    if line.item then return book:Push(LB.Page("item", line.item)) end
+    if line.kind == "npc" or line.kind == "object" then return book:Push(LB.Page(line.kind, line.id)) end
+    if line.kind == "quest" then return book:Push(LB.Page("quest", line.id)) end
+    if line.kind == "place" then return LB.ShowOnMap(line, book) end
+end
+
+-- Square: the entry on the map (a creature, a person, a chest, a node, a
+-- place: LibraryMap.lua)
+function Page:alt(line, book)
+    if line.spot then LB.ShowOnMap(line, book) end
+end
+
+function Page:verb(line)
+    return (line.item or line.kind == "npc" or line.kind == "object" or line.kind == "quest") and "Open"
+        or line.kind == "place" and "Show on Map" or nil
+end
+
+function Page:altVerb(line)
+    return (line.kind == "npc" or line.kind == "object") and line.spot and "Show on Map" or nil
+end
+
+-- A creature's, a chest's, a place's tooltip: its name, title, where
+function Page:tip(line, book)
+    if not (line.kind == "npc" or line.kind == "object" or line.kind == "place") then return false end
+    book:PlaceTip()
+    GameTooltip:SetText(line.plain or "")
+    if line.sub then GameTooltip:AddLine("<" .. line.sub .. ">", 1, 1, 1) end
+    if line.spot then GameTooltip:AddLine(LB.SpotText(line.spot), 1, 1, 1) end
+    GameTooltip:AddLine(Glyph(line.kind == "place" and "A" or "X", 16) .. " Show on Map", 0.6, 0.6, 0.6)
+    GameTooltip:Show()
+    return true
+end
+
+-- A page of the Library, for its own book or another's (the Journal's):
+-- kind "item" (an id or a link), "npc", "object" or "quest"; nil: nothing
+-- known of it
+function LB.Page(kind, id)
+    if not id then return nil end
+    local p
+    if kind == "quest" then
+        p = { quest = id }
+    elseif kind == "npc" or kind == "object" then
+        p = { npc = kind == "npc" and id or nil, object = kind == "object" and id or nil }
     else
-        pages, list = PageLayout({ About(p, key) }, false, p.tabs[key] or {})
+        local item = LB.ItemID(id)
+        if not item then return nil end
+        p = { id = item, link = type(id) == "string" and id or nil }
     end
-    local view = { pages = pages, cells = list, sel = old and math.min(old.sel, math.max(1, #list)) or 1,
-        page = old and old.page or 1 }
-    p.views[key] = view
-    return view
-end
-
--- A list opened from the notes (Circle: back to them)
-function LB.OpenList(key)
-    local p = Top()
-    if not p or Count(p.tabs[key]) == 0 then return end
-    p.tab = key
-    Sound("IG_ABILITY_PAGE_TURN")
-    LB.Render()
-end
-
--- An entry picked (its page turned to); activate: Cross on it too
-function LB.Pick(index, activate)
-    local p = Top()
-    local view = p and View(p)
-    local c = view and view.cells[index]
-    if not c then return end
-    view.sel = index
-    if c.page ~= view.page then
-        view.page = c.page
-        Sound("IG_ABILITY_PAGE_TURN")
-    end
-    if activate then return LB.Activate() end
-    LB.Render()
-end
-
--- The D-pad: left / right reads on (over the page's edge too), up / down
--- the row above / below (the same column when it has one)
-local function Move(name)
-    local p = Top()
-    local view = p and View(p)
-    if not view or #view.cells == 0 then return end
-    local cur = view.cells[view.sel]
-    if name == "LEFT" or name == "RIGHT" then return LB.Pick(view.sel + (name == "RIGHT" and 1 or -1)) end
-    local down = name == "DOWN"
-    local function after(c)
-        if c.page ~= cur.page then return (c.page > cur.page) == down end
-        return c.y ~= cur.y and (c.y > cur.y) == down
-    end
-    local from, to, step = 1, #view.cells, 1
-    if not down then from, to, step = #view.cells, 1, -1 end
-    for i = from, to, step do
-        local c = view.cells[i]
-        if after(c) then
-            -- (that row: the same column, else its nearest)
-            local pick = c
-            for j = i, to, step do
-                local d = view.cells[j]
-                if d.page ~= c.page or d.y ~= c.y then break end
-                if d.col == cur.col then pick = d end
-            end
-            return LB.Pick(pick.index)
-        end
-    end
-end
-
--- L2 / R2: the page before / after (its first entry)
-local function Turn(dir)
-    local p = Top()
-    local view = p and View(p)
-    if not view then return end
-    local want = view.page + dir
-    if want < 1 or want > #view.pages then return end
-    for _, c in ipairs(view.cells) do
-        if c.page == want then return LB.Pick(c.index) end
-    end
-    view.page = want
-    Sound("IG_ABILITY_PAGE_TURN")
-    LB.Render()
-end
-
--- Cross on the picked entry
-function LB.Activate()
-    local p = Top()
-    local view = p and View(p)
-    local c = view and view.cells[view.sel]
-    local line = c and c.line
-    if not line then return end
-    if line.go then return LB.OpenList(line.go) end
-    if line.item then return LB.Push(line.item) end
-    if line.kind == "npc" or line.kind == "object" then return LB.PushCreature(line.kind, line.id) end
-    if line.kind == "quest" then return LB.PushQuest(line.id) end
-    if line.kind == "place" then return LB.ShowOnMap(line) end
-end
-
--- Square: the picked entry on the map (a creature, a person, a chest, a
--- node, a place: LibraryMap.lua)
-local function MapPicked()
-    local p = Top()
-    local view = p and View(p)
-    local c = view and view.cells[view.sel]
-    if c and c.line and c.line.spot then LB.ShowOnMap(c.line) end
-end
-
-function LB.PushQuest(questID)
-    if not questID then return end
-    local p = { quest = questID, tab = "notes" }
+    setmetatable(p, Page)
     Build(p)
-    if not p.questInfo then return end
-    LB.stack[#LB.stack + 1] = p
-    Sound("IG_ABILITY_PAGE_TURN")
-    LB.Render()
-end
-
--- kind: "npc" (a creature, a person) or "object" (a chest, a node)
-function LB.PushCreature(kind, id)
-    if not id then return end
-    local p = { npc = kind == "npc" and id or nil, object = kind == "object" and id or nil, tab = "notes" }
-    Build(p)
-    if not p.creature then return end
-    LB.stack[#LB.stack + 1] = p
-    Sound("IG_ABILITY_PAGE_TURN")
-    LB.Render()
-end
-
-function LB.Push(item)
-    local id = LB.ItemID(item)
-    if not id then return end
-    local p = { id = id, link = type(item) == "string" and item or nil, tab = "notes" }
-    Build(p)
-    LB.stack[#LB.stack + 1] = p
-    if #LB.stack > 1 then Sound("IG_ABILITY_PAGE_TURN") end
-    LB.Render()
-end
-
--- Circle: from a list its notes, from the notes the item before, or the book
--- closed
-function LB.Back()
-    local p = Top()
-    if p and p.tab ~= "notes" then
-        p.tab = "notes"
-    else
-        table.remove(LB.stack)
-        if #LB.stack == 0 then return LB.Close() end
-    end
-    Sound("IG_ABILITY_PAGE_TURN")
-    LB.Render()
+    if p.quest and not p.questInfo or (p.npc or p.object) and not p.creature then return nil end
+    p.tab = "notes"
+    return p
 end
 
 ---------------------------------------------------------------------------
--- Drawing
+-- The Library's book: opened from the bags, the loot window, any window of
+-- the game's, the auction window (L2 / R2 between them: Book.lua)
 ---------------------------------------------------------------------------
--- (a chest, a node: what it is)
-local THING_KIND = { herb = "Herb", ore = "Mining node", fish = "Fishing pool" }
-
-local function RenderCreatureTitle(p)
-    local c = p.creature
-    if p.npc then
-        head:Set(LB.ICONS.npc, true)
-        LB.Portrait(p.npc, head.icon)
-    else
-        head:Set(c.how and GATHERING[c.how].icon or LB.ICONS.object, true)
-    end
-    title:SetText(c.name)
-    kind:SetText(p.npc and c.entry.line or THING_KIND[c.how] or "Chest")
-    local zones = {}
-    for _, l in ipairs(c.places) do zones[#zones + 1] = l.plain end
-    owned:SetText(#zones == 0 and "" or ("Found in " .. zones[1] .. (#zones > 1 and (" and " .. (#zones - 1) .. " more") or "")))
-    chapter:SetText(LISTS[p.tab] or p.titles and p.titles[p.tab] or "Field Notes")
-end
-
-local function RenderQuestTitle(p)
-    local q = p.questInfo
-    head:Set(LB.ICONS.quest, true)
-    title:SetText(q.name)
-    kind:SetText(LB.Join({ q.level and q.level > 0 and ("Level " .. q.level .. " Quest") or "Quest",
-        q.required and q.required > 1 and ("Requires Level " .. q.required) }))
-    owned:SetText(q.zone and LB.ZoneName(q.zone) or "")
-    chapter:SetText("Field Notes")
-end
-
-local function RenderTitle(p)
-    if p.questInfo then return RenderQuestTitle(p) end
-    if p.creature then return RenderCreatureTitle(p) end
-    local name, link, quality, level, need, itemType, subType, _, _, _, sell = LB.ItemInfo(p.id)
-    p.link = p.link or link
-    head:Set(LB.ItemIcon(p.id), false)
-    title:SetText(name or ("Item " .. p.id))
-    local q = quality or 1
-    kind:SetText(LB.Join({ (QUALITY_INK[q] or "") .. (QUALITY_NAMES[q] or "") .. "|r"
-        .. ((subType or itemType) and (" " .. (subType or itemType)) or ""),
-        level and level > 1 and ("Item Level " .. level), need and need > 1 and ("Requires Level " .. need) }))
-    local carried = C_Item and C_Item.GetItemCount and C_Item.GetItemCount(p.id, true) or 0
-    owned:SetText(LB.Join({ carried > 0 and ("You carry " .. carried) or "You carry none",
-        sell and sell > 0 and ("sells for " .. (A and A.Money(sell) or GetCoinTextureString(sell))) }))
-    chapter:SetText(LISTS[p.tab] or p.titles and p.titles[p.tab] or "Field Notes")
-    if not name and C_Item and C_Item.RequestLoadItemDataByID then C_Item.RequestLoadItemDataByID(p.id) end
-end
-
-local function PlaceTip()
-    GameTooltip:SetOwner(page, "ANCHOR_NONE")
-    GameTooltip:ClearAllPoints()
-    if (page:GetRight() or 0) + 320 < (UIParent:GetRight() or 0) then
-        GameTooltip:SetPoint("TOPLEFT", page, "TOPRIGHT", 4, -20)
-    else
-        GameTooltip:SetPoint("TOPRIGHT", page, "TOPLEFT", -4, -20)
-    end
-end
-
-local function RenderTip(line)
-    if not TipsOn() or not line or line.go then
-        if GameTooltip:GetOwner() == page then GameTooltip:Hide() end
-        return
-    end
-    local tip = line.tip or line.item
-    if line.kind == "npc" or line.kind == "object" or line.kind == "place" then
-        PlaceTip()
-        GameTooltip:SetText(line.plain or "")
-        if line.sub then GameTooltip:AddLine("<" .. line.sub .. ">", 1, 1, 1) end
-        if line.spot then GameTooltip:AddLine(LB.SpotText(line.spot), 1, 1, 1) end
-        GameTooltip:AddLine(Glyph(line.kind == "place" and "A" or "X", 16) .. " Show on Map", 0.6, 0.6, 0.6)
-        GameTooltip:Show()
-    elseif tip then
-        PlaceTip()
-        if pcall(GameTooltip.SetHyperlink, GameTooltip, "item:" .. tip) then GameTooltip:Show() else GameTooltip:Hide() end
-    elseif GameTooltip:GetOwner() == page then
-        GameTooltip:Hide()
-    end
-end
-
-local function Hints(p, view, line)
-    local defs = { { glyph = "DPAD", text = "Move" } }
-    if view and #view.pages > 1 then
-        defs[#defs + 1] = { { "PADLSHOULDER", "PADRSHOULDER" }, { "LB", "RB" }, "Turn Page" }
-    end
-    local verb = line and (line.go and "Read"
-        or (line.item or line.kind == "npc" or line.kind == "object" or line.kind == "quest") and "Open"
-        or line.kind == "place" and "Show on Map")
-    if verb then defs[#defs + 1] = { "PAD1", "A", verb } end
-    if line and (line.kind == "npc" or line.kind == "object") and line.spot then
-        defs[#defs + 1] = { "PAD3", "X", "Show on Map" }
-    end
-    if line and not line.go then defs[#defs + 1] = { "PADRSTICK", "RS", TipsOn() and "Hide Tooltip" or "Tooltip" } end
-    local hint = switch:Hint()
-    if hint then defs[#defs + 1] = hint end
-    defs[#defs + 1] = { "PAD2", "B", p.tab ~= "notes" and "Notes" or #LB.stack > 1 and "Back" or "Close" }
-    return defs
-end
-
--- (legend defs are kept by identity: one table a shape)
-local hintSets = {}
-local function SetHints(defs)
-    local key = {}
-    for _, d in ipairs(defs) do key[#key + 1] = tostring(d[1]) .. "=" .. tostring(d.text or d[3]) end
-    key = table.concat(key, "|")
-    hintSets[key] = hintSets[key] or defs
-    legend:Set(hintSets[key])
-end
-
--- A list entry's words: its name, then its line (an NPC's own <title> on it)
-local function Fill(c, line)
-    local round = line.kind == "npc" or line.kind == "object" or line.kind == "quest" or line.kind == "trainer"
-        or line.kind == "place"
-        or line.go ~= nil
-    local name, sub = line.name, line.line
-    if line.kind == "item" and line.item then
-        local itemName, _, quality, _, _, itemType, subType = LB.ItemInfo(line.item)
-        name = itemName or ("Item " .. line.item)
-        -- (a creature's loot, its wares: what each is, "Uncommon Cloth")
-        sub = line.describe and ((QUALITY_INK[quality or 1] or "") .. (QUALITY_NAMES[quality or 1] or "") .. "|r"
-            .. ((subType or itemType) and (" " .. (subType or itemType)) or "")) or line.line or "a container"
-    elseif line.kind == "recipe" then
-        name, sub = LB.RecipeName(line), nil
-    end
-    c.icon:Set(line.icon or (line.item and LB.ItemIcon(line.item)), round)
-    -- A creature, a person: its own face
-    if line.kind == "npc" or line.portrait then LB.Portrait(line.portrait or line.id, c.icon.icon) end
-    c.name:SetText(name or "")
-    c.sub:SetText((sub and sub ~= "") and sub or "")
-    c.name:ClearAllPoints()
-    if sub and sub ~= "" then
-        c.name:SetPoint("BOTTOMLEFT", c, "LEFT", 52, 1)
-    else
-        c.name:SetPoint("LEFT", c, "LEFT", 52, 0)
-    end
-    c.name:SetPoint("RIGHT", c, "RIGHT", -4, 0)
-end
-
-local function At(frame, x, y)
-    frame:ClearAllPoints()
-    frame:SetPoint("TOPLEFT", page, "TOPLEFT", LEFT + x, -TOP - y)
-    frame:Show()
-end
-
-function LB.Render()
-    local p = Top()
-    if not p or not window:IsShown() then return end
-    RenderTitle(p)
-    local view = View(p)
-    view.page = math.max(1, math.min(view.page, #view.pages))
-    local nc, nh = 0, 0
-    paragraphs:Reset()
-    local picked = view.cells[view.sel]
-    local focused = LB.focus == "library"
-    Glow(focused)
-    for _, item in ipairs(view.pages[view.page].items) do
-        local on = focused and item == picked
-        if item.doc then
-            local fs = paragraphs:Next()
-            fs:SetText(item.text)
-            fs:SetJustifyH(item.doc == "sign" and "RIGHT" or "LEFT")
-            fs:SetAlpha(item.doc == "sign" and 0.7 or 1)
-            At(fs, 0, item.y)
-        elseif item.header then
-            nh = nh + 1
-            local h = heads[nh]
-            if h then
-                h.text:SetText(item.header)
-                h.info:SetText(item.info and tostring(item.info) or "")
-                At(h, 0, item.y)
-            end
-        else
-            nc = nc + 1
-            local c = cells[nc]
-            if c then
-                c.index = item.index
-                Fill(c, item.line)
-                c.icon:SetFocus(on)
-                c.pointer:SetShown(on)
-                c.backplate:SetAlpha(on and 0.9 or 0.25)
-                At(c, item.x, item.y + 2)
-            end
-        end
-    end
-    for i = nc + 1, #cells do cells[i]:Hide() end
-    for i = nh + 1, #heads do heads[i]:Hide() end
-    paragraphs:HideRest()
-    emptyText:SetShown(p.tab ~= "notes" and #view.cells == 0)
-    emptyText:SetText("Nothing is written here yet.")
-    pageNo:SetShown(#view.pages > 1)
-    pageNo:SetText("Page " .. view.page .. "/" .. #view.pages)
-    local line = focused and picked and picked.page == view.page and picked.line or nil
-    RenderTip(line)
-    if focused then
-        SetHints(Hints(p, view, line))
-    else
-        -- (another window with the pad: no footer, as the game's own)
-        legend:Hide()
-    end
-end
-
----------------------------------------------------------------------------
--- The pad, while it's up: a catcher frame takes the buttons (ahead of the
--- bag and loot windows' own navigation); only Escape is bound
----------------------------------------------------------------------------
-local KEYS = {
-    PADDUP = "UP", PADDDOWN = "DOWN", PADDLEFT = "LEFT", PADDRIGHT = "RIGHT",
-    PAD1 = "A", PAD2 = "B", PAD3 = "X", PADLSHOULDER = "LB", PADRSHOULDER = "RB",
-    PADLTRIGGER = "LT", PADRTRIGGER = "RT", PADRSTICK = "RS",
-}
-
-function LB.Press(name, down)
-    -- Circle on its release: closing on the press would hand the release to
-    -- the window under it (the bags: closed)
-    if name == "B" then
-        -- (Circle let go after closing the map: not ours)
-        if not down and LB.skipRelease then
-            LB.skipRelease = nil
-            return
-        end
-        if not down then LB.Back() end
-        return
-    end
-    if not down then return end
-    if name == "UP" or name == "DOWN" or name == "LEFT" or name == "RIGHT" then Move(name)
-    elseif name == "LB" then Turn(-1)
-    elseif name == "RB" then Turn(1)
-    elseif name == "LT" or name == "RT" then switch:Press(name)
-    elseif name == "A" then LB.Activate()
-    elseif name == "X" then MapPicked()
-    elseif name == "RS" then
-        ToggleTips()
-        LB.Render()
-    end
-end
-
-local catcher = K.NewFrame("Frame", nil, window)
-catcher:SetAllPoints(window)
-if catcher.EnableGamePadButton then
-    catcher:SetScript("OnGamePadButtonDown", function(_, button)
-        if KEYS[button] then LB.Press(KEYS[button], true) end
-    end)
-    catcher:SetScript("OnGamePadButtonUp", function(_, button)
-        if KEYS[button] then LB.Press(KEYS[button], false) end
-    end)
-    -- (setting a gamepad handler switches the frame's input on by itself: off
-    -- until it is wanted, else a frame on screen takes the pad from login)
-    catcher:EnableGamePadButton(false)
-end
-
-local function TakePad(on)
-    if catcher.EnableGamePadButton and not IF.InCombat() then catcher:EnableGamePadButton(on and true or false) end
-end
-
--- (on its release, as Circle)
-local escape = K.NewFrame("Button", "ImprovedForeverLibraryEscape")
-escape:RegisterForClicks("AnyUp")
-escape:SetScript("OnClick", function() LB.Back() end)
-
-function LB.IsShown()
-    return window:IsShown()
-end
-
--- Where it sits: as the game's own panels, along the top beside the open
--- windows (ImprovedForever's Focus.lua), again as they come and go
-IF.Focus.Dock(window)
-
--- L2 / R2 between the Library and the window it was opened from, and the
--- game's focus dimmed while the Library has the pad: as the game's own
--- windows (ImprovedForever's Focus.lua)
 -- (the auction window: ours, not in the game's row; it leaves L2 / R2 to
 -- the Library while it's up)
 local function AuctionBehind()
@@ -1589,94 +852,45 @@ local function AuctionBehind()
     return w and w:IsShown() and w or nil
 end
 
-local function NativeFocus(hide)
-    IF.Focus.DimNative(window, hide, LB.origin == "ui" and { LB.originFrame } or nil)
-end
-
--- The trigger to the other window and its label: label, "LT" / "RT"; nil: none
-function LB.Behind()
-    return switch:Behind()
-end
-
-local function BindEscape(on)
-    if IF.InCombat() then return end
-    ClearOverrideBindings(window)
-    if on then SetOverrideBindingClick(window, true, "ESCAPE", escape:GetName()) end
-end
-
-switch = IF.Focus.Switch(window, {
+local book = BK.New({
+    name = "ImprovedForeverLibrary", title = "Library", portrait = "Interface\\Icons\\INV_Misc_Book_09",
     other = AuctionBehind,
     label = function(f) return f == AuctionBehind() and "Auction House" or nil end,
-    onChange = function(focus)
-        local ours = focus == "ours"
-        LB.focus = ours and "library" or "window"
-        TakePad(ours)
-        BindEscape(ours)
-        if LB.origin ~= "auction" then NativeFocus(ours) end
-        LB.Render()
+    onHide = function()
+        if LB.origin == "auction" and BY and BY.Render then BY.Render() end
     end,
 })
+LB.book = book
+-- (whose tooltips are the Library's: Library.lua's focus leaves them out)
+LB.panel = book.panel
+
+function LB.HasFocus() return book:HasFocus() end
+function LB.IsShown() return book:IsShown() end
+function LB.Render() book:Render() end
+function LB.Close() book:Close() end
+function LB.Back() book:Back() end
+function LB.Behind() return book:Behind() end
+function LB.OpenList(key) book:OpenList(key) end
+function LB.Push(item) book:Push(LB.Page("item", item)) end
+function LB.PushQuest(questID) book:Push(LB.Page("quest", questID)) end
+-- kind: "npc" (a creature, a person) or "object" (a chest, a node)
+function LB.PushCreature(kind, id) book:Push(LB.Page(kind, id)) end
 
 -- focus: "library" or "window"
 function LB.SetFocus(focus)
-    switch:Set(focus == "library" and "ours" or "game")
-end
-
--- (opened, back from the map, closed: the Library has the pad)
-local function Ours()
-    switch.focus = "ours"
-    LB.focus = "library"
-end
-
-window:SetScript("OnUpdate", function()
-    switch:Update()
-end)
-
--- item: an id or a link; origin: "bags", "loot", "auction" (where it's opened from)
-function LB.Open(item, origin)
-    if IF.InCombat() or not LB.ItemID(item) then return end
-    wipe(LB.stack)
-    LB.origin = origin
-    Ours()
-    if not window:IsShown() then Sound("IG_SPELLBOOK_OPEN") end
-    window:Show()
-    TakePad(true)
-    BindEscape(true)
-    if origin ~= "auction" then NativeFocus(true) end
-    LB.Push(item)
-end
-
-function LB.Close()
-    if window:IsShown() then Sound("IG_SPELLBOOK_CLOSE") end
-    window:Hide()
+    book:SetFocus(focus == "library" and "ours" or "window")
 end
 
 -- Out of the way while the map is up (LibraryMap.lua), its pages kept; back
 -- once it's closed (in combat: gone)
-local suspended = false
-function LB.Suspend()
-    suspended = true
-    window:Hide()
-end
+function LB.Suspend() book:Suspend() end
+function LB.Resume() book:Resume() end
 
-function LB.Resume()
-    if not suspended then return end
-    suspended = false
-    if IF.InCombat() or #LB.stack == 0 then return wipe(LB.stack) end
-    Ours()
-    window:Show()
-    TakePad(true)
-    BindEscape(true)
-    LB.skipRelease = IsKeyDown and IsKeyDown("PAD2") or nil
-    LB.Render()
+-- item: an id or a link; origin: "bags", "loot", "ui", "auction" (where it's
+-- opened from; "ui": LB.originFrame, Library.lua's)
+function LB.Open(item, origin)
+    if IF.InCombat() or not LB.ItemID(item) then return end
+    LB.origin = origin
+    book:Open(LB.Page("item", item),
+        { dim = origin ~= "auction", extra = origin == "ui" and { LB.originFrame } or nil })
 end
-
-window:SetScript("OnHide", function()
-    Ours()
-    TakePad(false)
-    if LB.origin ~= "auction" then NativeFocus(false) end
-    if not suspended then wipe(LB.stack) end
-    if GameTooltip:GetOwner() == page then GameTooltip:Hide() end
-    if not IF.InCombat() then ClearOverrideBindings(window) end
-    if LB.origin == "auction" and BY and BY.Render then BY.Render() end
-end)

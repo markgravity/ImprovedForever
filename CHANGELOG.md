@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Journal** (new module): keeps a diary of each day you play, per character: levels, quests, places
+  (zones, discoveries, instances, flights), fights (kills, elites and rares, deaths), loot, gold and
+  crafting. Read it in the Library's book: `/if journal`, a key binding, or a wheel's window entry.
+- **Library**: its book is now the core's (shared with the Journal); it looks and works as before.
 - **Quest Tracker**: the game's objective tracker is replaced by our own copy of it: the game's
   own templates, art, fonts, animations and modules (quests, achievements, recipes, scenarios...),
   where Edit Mode puts the game's, its opacity and text size. Sorting now just orders it: no more
