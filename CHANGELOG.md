@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.6.0
 
 - **Journal** (new module): keeps a diary of each day you play, per character: levels, quests, places
   (zones, discoveries, instances, flights), fights (kills, elites and rares, deaths), loot, gold and
@@ -14,6 +14,8 @@
   tracker's own navigation, legend and buttons: D-pad Up on the shortcuts bar, A, X, Y, quest
   items, L2 / R2, B), the cursor drawn on our list. While the controller is on it, the quests show
   in the game's order (so the D-pad goes top to bottom); the sort comes back when it leaves.
+- **Quest Tracker**: R3 on the tracker opens the sort menu (the Quests header's filter button's),
+  driven with the controller, its prompt in the game's legend; B closes it. The game's R3 still works.
 
 ## 0.5.0
 

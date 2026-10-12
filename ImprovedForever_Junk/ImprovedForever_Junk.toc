@@ -2,7 +2,7 @@
 ## Title: Improved Forever: Junk
 ## Notes: Marks what the bags no longer need as junk (quests, recipes, auction prices, class), sells it with the vendor's Sell All Junk, destroys it from the controller.
 ## Author: markg
-## Version: 0.5.0
+## Version: 0.6.0
 ## X-Website: https://github.com/markgravity/ImprovedForever
 ## X-License: MIT
 ## X-Curse-Project-ID: 1736877

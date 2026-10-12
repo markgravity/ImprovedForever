@@ -11,7 +11,8 @@ in CI, or a line in the local .env (git-ignored) when run by hand. Each addon
 is its own CurseForge project: its ID from its TOC (## X-Curse-Project-ID; an
 addon without one isn't uploaded), its slug from its folder (slug() below),
 its TOC's Dependencies / OptionalDeps on our addons sent as the file's
-relations. The game version comes from CF_GAME_VERSION (default 1.60.1, WoW
+relations, its changelog without the entries about an addon that isn't on
+CurseForge. The game version comes from CF_GAME_VERSION (default 1.60.1, WoW
 Forever) or CF_GAME_VERSION_ID.
 """
 import json
@@ -69,6 +70,22 @@ def notes(ver=None):
     if not match:
         sys.exit(f"CHANGELOG.md has no '## {ver}' section")
     return match.group(1).strip() + "\n"
+
+
+def curseforge_notes(ver):
+    """The notes without the entries about an addon of ours that isn't on CurseForge
+    (no '## X-Curse-Project-ID'): its '- **Module** ...' bullets, continuation lines included."""
+    off = [f[len(ADDON):].lstrip("_") for f in module_versions()
+           if f != ADDON and not toc_field("X-Curse-Project-ID", f)]
+    kept, skip = [], False
+    for line in notes(ver).splitlines():
+        if line.startswith("- "):
+            skip = any(line.startswith(f"- **{name}**") for name in off)
+        elif not line.startswith("  "):
+            skip = False
+        if not skip:
+            kept.append(line)
+    return "\n".join(kept).strip() + "\n"
 
 
 def release_type(ver):
@@ -141,7 +158,7 @@ def upload(folder, token, game_version):
         sys.exit(f"{zip_path} is missing: run tools/package.py first")
 
     metadata = {
-        "changelog": notes(ver),
+        "changelog": curseforge_notes(ver),
         "changelogType": "markdown",
         "displayName": f"{toc_field('Title', folder)} {ver}",
         "releaseType": release_type(ver),

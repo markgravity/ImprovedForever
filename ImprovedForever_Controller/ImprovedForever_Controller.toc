@@ -2,7 +2,7 @@
 ## Title: Improved Forever: Controller
 ## Notes: Bag clean-up, touchpad corners and every press on one drawing of the controller.
 ## Author: markg
-## Version: 0.5.0
+## Version: 0.6.0
 ## X-Website: https://github.com/markgravity/ImprovedForever
 ## X-License: MIT
 ## X-Curse-Project-ID: 1736837
