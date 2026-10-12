@@ -143,6 +143,12 @@ def check_code():
     m = re.search(r"local HEARTHSTONE = (\d+)", src)
     if not m or names.get(int(m.group(1))) != "Hearthstone":
         problems.append(f"Journal.lua HEARTHSTONE: spell {m and m.group(1)} isn't Forever's Hearthstone ({build})")
+    want = {"GATHER_SPELLS": {"Herb Gathering", "Mining", "Skinning", "Fishing"}, "MEAL_SPELLS": {"Food", "Drink"}}
+    for table, expected in want.items():
+        m = re.search(r"local " + table + r" = \{([^}]*)\}", src)
+        found = {names.get(sid) for sid in lua_ids(m.group(1))} if m else set()
+        if found != expected:
+            problems.append(f"Journal.lua {table}: spells name {sorted(n or '?' for n in found)}, not {sorted(expected)} ({build})")
 
     # Gather: herb and ore nodes Forever has that NodeScan doesn't know
     src = (ROOT / "ImprovedForever_Gather" / "NodeScan.lua").read_text()

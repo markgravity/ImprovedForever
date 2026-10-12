@@ -70,10 +70,18 @@ function J.Events(day, ...)
 end
 
 -- A day in a line: "Westfall  ·  6 tasks  ·  47 slain"
+-- How a day's growing is said under its title: "grew stronger", "grew
+-- stronger twice"; nil: it didn't
+function J.Grew(day)
+    local n = #J.Events(day, "level")
+    if n == 0 then return nil end
+    return "grew stronger" .. (n == 2 and " twice" or n > 2 and (" " .. n .. " times") or "")
+end
+
 function J.DayLine(day)
     local s = day.stats
     return BK.Join({ J.Zones(day)[1], s.quests > 0 and Plural(s.quests, "task", "tasks") or nil,
-        s.kills > 0 and (s.kills .. " slain") or nil })
+        s.kills > 0 and (s.kills .. " slain") or nil, J.Grew(day) })
 end
 
 -- An elite, a rare, a boss, as someone who met one would say it
@@ -90,9 +98,26 @@ local function Pick(key, salt, options)
     return options[n % #options + 1]
 end
 
+-- A way of saying it the day hasn't used yet: each kind of phrase goes
+-- round its words before any comes back (where it starts: the day's). The
+-- turns are the page's, from the top (J.Write starts them anew)
+local turns = {}
+local function Vary(key, kind, options)
+    local n = turns[kind]
+    if not n then
+        n = #kind
+        for i = 1, #key do n = n + key:byte(i) * i end
+    end
+    n = n + 1
+    turns[kind] = n
+    return options[n % #options + 1]
+end
+
 local function Quest(name) return Name("“" .. (name or "a task") .. "”") end
 
 -- An item's name, in its quality's ink
+local Many                      -- (below: "Young Wolf" -> "Young Wolves")
+
 local function ItemName(id, count)
     local get = C_Item and C_Item.GetItemInfo or GetItemInfo
     local name, _, quality = get(id)
@@ -101,7 +126,8 @@ local function ItemName(id, count)
         return "something"
     end
     local ink = BK.QUALITY_INK[quality or 1] or ""
-    return ((count or 1) > 1 and (count .. " ") or "") .. ink .. name .. "|r"
+    count = count or 1
+    return (count > 1 and (count .. " ") or "") .. ink .. Many(name, count) .. "|r"
 end
 
 local TIMES = { [2] = "twice", [3] = "three times" }
@@ -118,7 +144,7 @@ local SAME = { Vermin = true, Sheep = true, Deer = true, Fish = true, Kin = true
     Hair = true, Silver = true, Iron = true, Tin = true, Copper = true, Gold = true, Mithril = true, Thorium = true }
 local IRREGULAR = { Wolf = "Wolves", Thief = "Thieves", Man = "Men", Woman = "Women", Elf = "Elves",
     Dwarf = "Dwarves", Mouse = "Mice", Wife = "Wives", Child = "Children", Foot = "Feet", Tooth = "Teeth" }
-local function Many(name, n)
+function Many(name, n)
     if n == 1 then return name end
     local head, tail = name:match("^(.-)( of .+)$")
     head, tail = head or name, tail or ""
@@ -146,11 +172,15 @@ end
 -- one, else a while later
 local function When(key, salt, rm, before)
     local part, h = Part(rm), Hour(rm)
-    if before and Part(before) == part then return Pick(key, salt, { "A while later, ", "After a short rest, ", "Later, " }) end
-    if part == "morning" then return Pick(key, salt, { "Later that morning, ", "Before noon, " }) end
-    if part == "afternoon" then return h < 13 and "Toward noon, " or Pick(key, salt, { "In the afternoon, ", "That afternoon, " }) end
-    if part == "evening" then return Pick(key, salt, { "By evening, ", "As evening fell, " }) end
-    return Pick(key, salt, { "Late that night, ", "Deep in the night, " })
+    if before and Part(before) == part then
+        return Vary(key, "later", { "A while later, ", "After a short rest, ", "Later, ", "Some time after, ", "When I was ready, " })
+    end
+    if part == "morning" then return Vary(key, "morning", { "Later that morning, ", "Before noon, " }) end
+    if part == "afternoon" then
+        return h < 13 and "Toward noon, " or Vary(key, "afternoon", { "In the afternoon, ", "That afternoon, " })
+    end
+    if part == "evening" then return Vary(key, "evening", { "By evening, ", "As evening fell, " }) end
+    return Vary(key, "night", { "Late that night, ", "Deep in the night, " })
 end
 
 local function Woke(key, rm)
@@ -300,8 +330,15 @@ local function Deaths(key, list, here)
     local where = (place and place ~= here) and ((d.sub and " near " or " in ") .. Name(place)) or ""
     local function who(name, named) return named and Name(name) or BK.A_(name) end
     if #list == 1 then
+        -- (how I came back, when known: else a word on it)
+        local after = d.revived == "player" and d.reviver and (Name(d.reviver) .. " brought me back.")
+            or d.revived == "spirit" and "I woke at a spirit healer's side."
+            or d.revived == "corpse" and Vary(key, "corpse", { "I made the long walk back to my body.",
+                "I found my way back to my body and went on." })
+            or Vary(key, "fell", { "Embarrassing.", "Not my finest hour.", "I'd rather not dwell on it.",
+                "I picked myself up and went on." })
         return "I fell" .. where .. (d.by and (", " .. Pick(key, 39, { "cut down by ", "bested by " }) .. who(d.by, d.named)) or "")
-            .. ". " .. Pick(key, 40, { "Embarrassing.", "Not my finest hour.", "I came to at a spirit healer's side." })
+            .. ". " .. after
     end
     local by, top = {}, nil
     for _, x in ipairs(list) do
@@ -346,7 +383,7 @@ local function Goal(goal)
             elseif how == "monster" then
                 parts[#parts + 1] = "put down " .. (many or BK.A_plain(what))
             else
-                parts[#parts + 1] = what:sub(1, 1):lower() .. what:sub(2)
+                parts[#parts + 1] = (what:sub(1, 1):lower() .. what:sub(2)):gsub("[%.%s]+$", "")
             end
         end
     end
@@ -354,8 +391,15 @@ local function Goal(goal)
 end
 
 -- A task by who gave it: "Dockmaster Baren's “Selling Fish”"
+-- A name said again: without its nickname (Remy "Two Times" -> Remy)
+local function Short(name)
+    local short = name:gsub('%s*["“].-["”]', "")
+    return short ~= "" and short or name
+end
+
 local function QuestOf(e)
-    return e.giver and (Name(e.giver) .. "'s " .. Quest(e.name)) or Quest(e.name)
+    if not e.giver then return Quest(e.name) end
+    return Name(Short(e.giver)) .. "'s " .. Quest(e.name)
 end
 
 -- "a Medium Armor Kit" (in its quality's ink)
@@ -382,8 +426,29 @@ local function NamedFor(quest, person)
     return quest and person and quest:lower() == person:lower()
 end
 
+-- Growing stronger, each class its own way
+local GROWING = {
+    WARRIOR = "my sword arm felt surer, my breath steadier", PALADIN = "the Light burned brighter within me",
+    HUNTER = "my aim grew truer, my eyes sharper", ROGUE = "my hands felt quicker, my steps quieter",
+    PRIEST = "the Light answered me more readily", SHAMAN = "the spirits spoke louder to me",
+    MAGE = "the arcane came easier to my fingers", WARLOCK = "the shadows bent more willingly to my will",
+    DRUID = "the wild stirred stronger in me",
+}
+-- A new standing with a people, as they'd see it
+local STANDINGS = {
+    Hated = "had come to hate me", Hostile = "had turned against me", Unfriendly = "had grown wary of me",
+    Neutral = "no longer distrusted me", Friendly = "had come to think of me as a friend",
+    Honored = "held me in honor now", Revered = "revered me", Exalted = "counted me as one of their own",
+}
+-- What growing this strong means
+local MILESTONES = {
+    [10] = "I was no longer the green recruit I had been", [20] = "These lands no longer felt new to me",
+    [40] = "Perhaps it was time to think of a mount of my own",
+    [60] = "I had grown as strong as anyone I knew; little now could stand against me",
+}
+
 -- A run of the same things (taken on, seen through, new lands...): one sentence
-local RUNS = { accept = true, quest = true, loot = true, learn = true, zone = true, discover = true }
+local RUNS = { accept = true, quest = true, loot = true, zone = true, discover = true, equip = true }
 
 local function Sentence(key, list, i, ctx)
     local e = list[i]
@@ -422,7 +487,7 @@ local function Sentence(key, list, i, ctx)
                     said = "I went back to " .. Name(giver) .. ", who sent me "
                         .. (carry:match("^to find ") and carry or ("on " .. carry)) .. "."
                 else
-                    said = Name(giver) .. Pick(key, 76, { " sent me ", " asked me to go " }) .. carry .. "."
+                    said = Name(giver) .. Vary(key, "send", { " sent me ", " asked me to go ", " needed someone to go " }) .. carry .. "."
                 end
                 ctx.met[giver], ctx.npc = true, giver
                 return said
@@ -436,15 +501,19 @@ local function Sentence(key, list, i, ctx)
                     said = "I went back to " .. Name(r.giver) .. ", who "
                         .. (goal and ("asked me to " .. goal .. ", for " .. q) or ("had another task for me: " .. q)) .. "."
                 elseif r.giver and r.giver ~= ctx.npc and Moved(ctx, r) == "far" then
-                    said = Pick(key, 77 + n, { "I headed over to ", "I made my way to " }) .. Name(r.giver) .. ", who "
+                    said = Vary(key, "over", { "I headed over to ", "I made my way to ", "I walked over to ", "I sought out " })
+                        .. Name(r.giver) .. ", who "
                         .. (goal and ("needed help with " .. q .. ": to " .. goal) or ("asked for my help with " .. q)) .. "."
                 elseif r.giver and r.giver == ctx.npc then
                     -- (the one just spoken of: no meeting them again)
-                    said = Name(r.giver) .. Pick(key, 75 + n, { " had another task for me: ", " asked something more of me: " })
+                    said = Name(r.giver) .. Vary(key, "another", { " had another task for me: ", " asked something more of me: ",
+                        " still had work for me: ", " had more work for me: " })
                         .. q .. (goal and (", to " .. goal) or "") .. "."
                 elseif r.giver and goal then
-                    said = Pick(key, 70 + n, { Name(r.giver) .. " asked me to " .. goal .. ", for " .. q .. ".",
-                        "I met " .. Name(r.giver) .. ", who needed help with " .. q .. ": to " .. goal .. "." })
+                    said = Vary(key, "ask", { Name(r.giver) .. " asked me to " .. goal .. ", for " .. q .. ".",
+                        "I met " .. Name(r.giver) .. ", who needed help with " .. q .. ": to " .. goal .. ".",
+                        Name(r.giver) .. " needed someone to " .. goal .. ", for " .. q .. ".",
+                        Name(r.giver) .. " was looking for help with " .. q .. ": to " .. goal .. "." })
                 elseif r.giver then
                     said = Name(r.giver) .. " asked for my help with " .. q .. "."
                 elseif goal then
@@ -452,7 +521,9 @@ local function Sentence(key, list, i, ctx)
                 else
                     said = "I took on " .. q .. "."
                 end
-                out[n] = n > 1 and Lead(n == 2 and "then " or "after that, ", said) or said
+                -- (another task taken on the spot: someone nearby)
+                local by = n > 1 and Moved({ pos = run[n - 1] }, r)
+                out[n] = n > 1 and Lead((by == "here" or by == nil) and "nearby, " or "then ", said) or said
                 ctx.npc = r.giver
                 if r.giver then ctx.met[r.giver] = true end
             end
@@ -495,40 +566,63 @@ local function Sentence(key, list, i, ctx)
                 if #more > 0 then ctx.gaves = (ctx.gaves or 0) + 1 end
                 if #more == 1 then
                     local goal = Goal(more[1].goal)
-                    next = ", then " .. also .. "gave me another task: " .. Quest(more[1].name) .. (goal and (", to " .. goal) or "")
+                    next = ", then " .. also .. Vary(key, "more", { "gave me another task: ", "had more work for me: ",
+                        "asked one more thing of me: ", "set me to a new task: " }) .. Quest(more[1].name) .. (goal and (", to " .. goal) or "")
                 elseif #more > 1 then
                     local tasks = {}
                     for n, r in ipairs(more) do tasks[n] = Quest(r.name) end
-                    next = ", then asked more of me: " .. Names(Shorten(tasks, 3))
+                    next = ", then " .. also .. Vary(key, "moreMany", { "asked more of me: ", "had several more tasks for me: " })
+                        .. Names(Shorten(tasks, 3))
                 end
-                local thanked = (gift and (Pick(key, 72, { "thanked me with ", "rewarded me with " }) .. gift) or "thanked me")
+                local thanked = (gift and format(Vary(key, "gift", { "thanked me with %s", "rewarded me with %s",
+                        "pressed %s into my hands", "handed me %s for my trouble", "gave me %s in thanks", "saw me paid with %s" }), gift)
+                    or Vary(key, "thanks", { "thanked me", "was glad of it", "thanked me warmly", "seemed relieved",
+                        "gave me a grateful nod", "was pleased to see it done", "clasped my hand in thanks" }))
                     .. next .. "."
                 -- (the errand's end: the one it was carried to)
                 if ctx.errand == run[1] then
                     ctx.errand = nil
                     local sub = run[1].sub
                     if moved == "far" then
-                        return Pick(key, 78, { "I made my way to ", "I set off to find " }) .. Name(ender)
+                        return Vary(key, "find", { "I made my way to ", "I set off to find ", "I sought out ", "I tracked down " })
+                            .. Name(ender)
                             .. ((sub and sub ~= ctx.place) and (" at " .. Name(sub)) or "") .. ", who " .. thanked
                     end
-                    return Pick(key, 79, { "When I handed it over, ", "When I passed it on, " }) .. Name(ender) .. " " .. thanked
+                    ctx.noJoin = true
+                    return Vary(key, "handed", { "When I handed it over, ", "When I passed it on, ", "As soon as I delivered it, ",
+                        "Once I'd delivered it, " }) .. Name(ender) .. " " .. thanked
                 end
                 -- (back to the one who gave it, or to someone else)
                 local back = (run[1].giver == nil or run[1].giver == ender) and " back to " or " to "
                 if metBefore and moved == "far" and back == " back to " then
                     return "I went back to " .. Name(ender) .. " with " .. Names(Shorten(names, 3)) .. ", and "
-                        .. Name(ender) .. " " .. thanked
+                        .. Name(Short(ender)) .. " " .. thanked
                 end
-                return "I brought " .. Names(Shorten(names, 3)) .. back .. Name(ender) .. ", who " .. thanked
+                ctx.handins = (ctx.handins or 0) + 1
+                local verb = Vary(key, "bring", { "I brought ", "I took ", "I delivered ", "I carried ", "I returned " })
+                if verb == "I returned " then back = " to " end
+                return verb .. Names(Shorten(names, 3)) .. back .. Name(ender) .. ", who " .. thanked
             end
             return Pick(key, 33, { "I saw ", "I finished " }) .. Names(Shorten(names, 3)) .. Pick(key, 33, { " through", "" })
                 .. (gift and (", and was rewarded with " .. gift) or "") .. "."
         elseif k == "loot" then
             for n, r in ipairs(run) do names[n] = ItemName(r.item, r.count) end
             return Pick(key, 34, { "Luck was with me: I found ", "A rare find came my way: " }) .. Names(Shorten(names, 3)) .. "."
-        elseif k == "learn" then
-            for n, r in ipairs(run) do names[n] = r.name end
-            return "I learned " .. Names(Shorten(names, 3)) .. "."
+        elseif k == "equip" then
+            -- (a reward put on straight away)
+            local prev = list[i - 1]
+            local fromMail = false
+            for _, p in ipairs(prev and prev.k == "post" and prev.parts or {}) do
+                for _, it in ipairs(p.items or {}) do if it[1] == run[1].item then fromMail = true end end
+            end
+            if #run == 1 and prev and prev.k == "quest" and prev.reward == run[1].item then
+                return Vary(key, "wear", { "I put it on at once.", "I wasted no time putting it on." })
+            end
+            if #run == 1 and fromMail then
+                return "I put the " .. ItemName(run[1].item) .. " on at once."
+            end
+            for n, r in ipairs(run) do names[n] = ItemName(r.item) end
+            return Vary(key, "newGear", { "I put on my new ", "I changed into my new " }) .. Names(Shorten(names, 3)) .. "."
         elseif k == "discover" then
             -- (the place I'm in, named already: not news)
             for _, r in ipairs(run) do
@@ -576,28 +670,37 @@ local function Sentence(key, list, i, ctx)
             local foes, names, _, place = FoesOf(e.by.hunts)
             local where = (place and place ~= ctx.place) and (" around " .. Name(place)) or ""
             ctx.place = place or ctx.place
-            said = Pick(key, 73, { "I cut down ", "I fought " }) .. FoesWords(foes, names) .. where
+            said = Vary(key, "fight", { "I cut down ", "I fought ", "I hunted down ", "I put down " }) .. FoesWords(foes, names) .. where
                 .. (g.how == "item" and (" to gather " .. Many(g.what, 2)) or "") .. " for " .. q .. "."
         end
         if e.deaths then
             local n = #e.deaths.deaths
             said = said .. " I fell " .. Times(n) .. " along the way, but managed it in the end."
         elseif g.k == "ready" and e.by.k ~= "dive" then
-            said = said .. " " .. Pick(key, 74, { "Before long I had all I needed.", "It took a while, but I had what I came for." })
+            said = said .. " " .. Vary(key, "gathered", { "Before long I had all I needed.", "It took a while, but I had what I came for.",
+                "Soon enough, I had what was asked.", "In time, the work was done." })
         elseif g.k == "objective" then
             said = said .. " That part of the work was done."
         end
         return said
     end
     if k == "ready" then
+        -- (handed in right after: said then)
+        local nxt = list[i + 1]
+        if nxt and nxt.k == "quest" and nxt.id == e.id then return nil end
         local q = QuestOf(e)
-        local done = Pick(key, 43, { "; all that was left was to report back.", ", and I had only to report back." })
-        if e.what and e.how == "item" then return "With the " .. Without(e.what) .. " in hand, " .. q .. " was done" .. done end
+        local done = Vary(key, "report", { "; all that was left was to report back.", ", and I had only to report back.",
+            "; now to report back.", ", and it was time to head back." })
+        if e.what and e.how == "item" then
+            return "With the " .. Many(Without(e.what), e.need or 1) .. " in hand, " .. q .. " was done" .. done
+        end
         if e.what and e.how == "monster" then return "With enough " .. Many(e.what, 2) .. " dealt with, " .. q .. " was done" .. done end
         return "That settled " .. q .. done
     end
     if k == "objective" then
-        if e.what and e.how == "item" then return "I had the " .. Without(e.what) .. " " .. Quest(e.name) .. " called for." end
+        if e.what and e.how == "item" then
+            return "I had the " .. Many(Without(e.what), e.need or 1) .. " " .. Quest(e.name) .. " called for."
+        end
         if e.what and e.how == "monster" then return "I had dealt with enough " .. Many(e.what, 2) .. " for " .. Quest(e.name) .. "." end
         return "Part of " .. Quest(e.name) .. " was done."
     end
@@ -610,9 +713,157 @@ local function Sentence(key, list, i, ctx)
         return Pick(key, 45, { "I dove deep beneath the water.", "I swam down into the depths." })
     end
     if k == "level" then
+        -- Growing stronger: what brought it on, how it felt (the class's
+        -- own way), what it means at a milestone
         ctx.levels = (ctx.levels or 0) + 1
-        if ctx.levels > 1 then return "And stronger still." end
-        return Pick(key, 41, { "I felt stronger than the day before.", "I could feel myself growing stronger." })
+        if ctx.levels > 2 then return "And again; the road was making me stronger by the hour." end
+        local feel = GROWING[e.class or select(2, UnitClass("player")) or ""] or "I was stronger than I had been"
+        local prev = list[i - 1]
+        local opener
+        if ctx.levels == 2 then
+            opener = "Before the day was out, I felt it again: "
+        elseif prev and (prev.k == "effort" or prev.k == "fights" or prev.k == "deaths") then
+            opener = "Somewhere in that fight, something in me changed: "
+        elseif prev and (prev.k == "quest" or prev.k == "accept") then
+            opener = Vary(key, "justThen", { "Just then, I felt it: ", "In that moment, I felt it: " })
+        elseif prev and (prev.k == "discover" or prev.k == "dive" or prev.k == "zone") and (prev.sub or prev.name) then
+            opener = "Standing in " .. Name(prev.k == "zone" and prev.name or prev.sub or prev.name) .. ", I felt it: "
+        else
+            opener = "I felt a change come over me: "
+        end
+        local said = ctx.levels == 2 and "Before the day was out, I felt it again, stronger still." or (opener .. feel .. ".")
+        local level = tonumber(e.level)
+        local milestone = level and MILESTONES[level]
+        local lessons = level and level % 2 == 0
+        if milestone and lessons then
+            said = said .. " " .. milestone .. ", and my trainer would have new lessons waiting."
+        elseif milestone then
+            said = said .. " " .. milestone .. "."
+        elseif lessons then
+            said = said .. " My trainer would have new lessons waiting."
+        end
+        return said
+    end
+    if k == "post" then
+        -- A visit to the mailbox: what each letter held, what I sent
+        local clauses, letters, order, sent, gained = {}, {}, {}, {}, 0
+        local function letter(from)
+            if not letters[from] then
+                letters[from] = { items = {}, money = 0 }
+                order[#order + 1] = from
+            end
+            return letters[from]
+        end
+        -- (items in words: "5 Red Linen Bags", "a Short Bastard Sword")
+        local function words(list)
+            local names = {}
+            for n, it in ipairs(list or {}) do names[n] = (it[2] or 1) > 1 and ItemName(it[1], it[2]) or AnItem(it[1]) end
+            return names
+        end
+        local function items(list) return Names(Shorten(words(list), 3)) end
+        for _, p in ipairs(e.parts) do
+            if p.k == "money" then
+                gained = gained + math.max(0, p.amount)
+                local n = Name(Coins(math.abs(p.amount)))
+                if p.src == "sale" then
+                    clauses[#clauses + 1] = "the auction house had sold my "
+                        .. (p.what and #p.what > 0 and Names(Shorten(p.what, 2)) or "wares") .. " for " .. n
+                elseif p.src == "refund" then
+                    clauses[#clauses + 1] = n .. " came back from an auction I'd been outbid on"
+                elseif p.src == "letter" and p.from and p.amount > 0 then
+                    local l = letter(p.from)
+                    l.money = l.money + p.amount
+                else
+                    clauses[#clauses + 1] = p.amount > 0 and (n .. " was waiting for me") or ("I paid " .. n .. " on a parcel")
+                end
+            elseif p.k == "mail" then
+                if p.kind == "won" then
+                    clauses[#clauses + 1] = "the " .. items(p.items) .. " I'd won at auction had arrived"
+                elseif p.kind == "expired" or p.kind == "removed" then
+                    clauses[#clauses + 1] = "my " .. items(p.items) .. " came back from the auction house unsold"
+                else
+                    local l = letter(p.from or "someone")
+                    for _, it in ipairs(p.items or {}) do
+                        -- (the same item in several letters: counted together)
+                        local same
+                        for _, have in ipairs(l.items) do if have[1] == it[1] then same = have end end
+                        if same then same[2] = (same[2] or 1) + (it[2] or 1) else l.items[#l.items + 1] = { it[1], it[2] or 1 } end
+                    end
+                end
+            elseif p.k == "sent" then
+                sent[#sent + 1] = p
+            end
+        end
+        for _, from in ipairs(order) do
+            local l = letters[from]
+            local gifts = words(l.items)
+            if l.money > 0 then gifts[#gifts + 1] = Name(Coins(l.money)) end
+            gifts = Shorten(gifts, 4)
+            if #gifts > 0 then clauses[#clauses + 1] = (from == "someone" and "someone" or Name(from)) .. " had sent me " .. Names(gifts) end
+        end
+        local out = {}
+        if #clauses > 0 then
+            local joined = #clauses == 1 and clauses[1]
+                or (table.concat(clauses, "; ", 1, #clauses - 1) .. "; and " .. clauses[#clauses])
+            ctx.noJoin = ctx.first or nil
+            out[1] = (ctx.first and "Before anything else I went through my mail: "
+                or Vary(key, "mail", { "I went through my mail: ", "I checked my mail: " })) .. joined .. "."
+            if ctx.first and gained >= 10000 then out[#out + 1] = "A good start." end
+        end
+        for _, p in ipairs(sent) do
+            local what = {}
+            what = words(p.items)
+            if p.money then what[#what + 1] = Name(Coins(p.money)) end
+            out[#out + 1] = "I sent " .. Name(p.to or "a friend") .. (#what > 0 and (" " .. Names(what)) or " a letter") .. "."
+        end
+        return #out > 0 and table.concat(out, " ") or nil
+    end
+    if k == "lesson" then
+        local spells, recipes = {}, {}
+        for _, l in ipairs(e.learns) do
+            -- (a spell's link in the chat's line: its name)
+            local name = tostring(l.name):match("%[(.-)%]") or tostring(l.name):gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
+            if l.recipe then recipes[#recipes + 1] = Many(name, 2) else spells[#spells + 1] = name end
+        end
+        local taught = {}
+        if #spells > 0 then taught[#taught + 1] = Names(Shorten(spells, 3)) end
+        if #recipes > 0 then taught[#taught + 1] = "to make " .. Names(Shorten(recipes, 3)) end
+        local what = table.concat(taught, ", and ")
+        local cost = e.cost and (" for " .. Name(Coins(e.cost))) or ""
+        if e.trainer then
+            ctx.npc = e.trainer
+            return Vary(key, "trainer", { "I sought out ", "I went to see ", "I paid a visit to " }) .. Name(e.trainer)
+                .. ", who taught me " .. what .. cost .. "."
+        end
+        return "I learned " .. what .. cost .. "."
+    end
+    if k == "bind" then
+        return (e.inn and "I took a room at the inn and made " or "I made ") .. Name(e.to or "this place") .. " my home."
+    end
+    if k == "flightpath" then
+        local place = e.sub or e.zone
+        return (place and ("At " .. Name(place) .. ", the") or "The") .. " flight master agreed to carry me from then on."
+    end
+    if k == "party" then
+        local m = e.members or {}
+        if #m == 0 then return nil end
+        if #m > 3 then return "I fell in with a band of " .. (NUMBER_WORDS[#m] or #m) .. ", " .. Name(m[1]) .. " among them." end
+        local named = {}
+        for n, name in ipairs(m) do named[n] = Name(name) end
+        return Vary(key, "party", { "I fell in with ", "I joined up with " }) .. Names(named) .. "."
+    end
+    if k == "alone" then return Vary(key, "alone", { "We went our separate ways.", "After that, I went on alone." }) end
+    if k == "duel" then
+        local foe = Name(e.opponent or "someone")
+        if e.fled then return e.won and (foe .. " fled from our duel.") or ("I yielded our duel to " .. foe .. ".") end
+        return e.won and ("I bested " .. foe .. " in a duel.") or (foe .. " bested me in a duel.")
+    end
+    if k == "standing" then
+        local said = STANDINGS[e.standing]
+        return said and (Name(e.faction or "They") .. " " .. said .. ".") or nil
+    end
+    if k == "abandon" then
+        return Vary(key, "abandon", { "I gave up on ", "I put aside " }) .. Quest(e.name) .. "."
     end
     if k == "instance" then return "I ventured into " .. Name(e.name) .. "." end
     if k == "hearth" then
@@ -634,10 +885,20 @@ end
 -- the next); the day's summary; when I lay down
 ---------------------------------------------------------------------------
 local BREAK = 900              -- nothing for this long: a break, a new paragraph
+local AWAY = 0.1               -- this far from the last thing done (map width): another paragraph
+local LONG = 5                 -- sentences: past this, a new paragraph where I move on
 -- What joins a sentence to the one before (not every one: "" none)
 local CONNECTORS = { "Then ", "After that, ", "", "Next, ", "" }
+-- What takes me away from the one I was talking to
+local LEAVES = { effort = true, fights = true, deaths = true, dive = true, flight = true, hearth = true, zone = true,
+    instance = true, discover = true, duel = true }
+-- Money the mail brought (told with the visit to the mailbox)
+-- (plain "mail": money while the mailbox seemed open, no letter matched to
+-- it; a guess, not told as the mail's)
+local MAIL_MONEY = { sale = true, refund = true, letter = true }
 local CONNECTS = { accept = true, quest = true, effort = true, dive = true, fights = true, flight = true, hearth = true,
-    zone = true, discover = true, instance = true, ready = true, money = true }
+    zone = true, discover = true, instance = true, ready = true, money = true, lesson = true, bind = true, party = true,
+    duel = true, flightpath = true, post = true }
 
 local function Sessions(day)
     local list = {}
@@ -662,13 +923,17 @@ local function Episodes(day, sessions)
         while events[e] and events[e].t < upto do
             local ev = events[e]
             local place = ev.zone or ev.name
-            if not cur or ev.t - cur.last > BREAK or (ev.k == "zone" and ev.name ~= cur.zone) then
+            -- (a long way from the last thing done: somewhere else, another paragraph)
+            local far = cur and cur.pos and ev.x and (cur.pos.map ~= ev.map
+                or math.sqrt((cur.pos.x - ev.x) ^ 2 + (cur.pos.y - ev.y) ^ 2) > AWAY)
+            if not cur or ev.t - cur.last > BREAK or (ev.k == "zone" and ev.name ~= cur.zone) or far then
                 cur = { session = n, rest = not cur and n > 1 and s.from - sessions[n - 1].to > REST,
                     events = {}, zone = place }
                 out[#out + 1] = cur
             end
             cur.events[#cur.events + 1] = ev
             cur.last = ev.t
+            if ev.x then cur.pos = ev end
             if ev.k == "zone" or ev.k == "flight" then cur.zone = ev.to or ev.name or cur.zone end
             e = e + 1
         end
@@ -710,22 +975,90 @@ local function Told(ep, ctx)
             if ev == hunts[1] then told[#told + 1] = { k = "fights", hunts = hunts, t = ev.t, rm = Rm(ev) } end
         elseif ev.k == "death" then
             if ev == deaths[1] then told[#told + 1] = { k = "deaths", deaths = deaths, t = ev.t, rm = Rm(ev) } end
+        elseif J.QUIET[ev.k] then
+            -- (kept, not told)
+        elseif ev.k == "mail" or ev.k == "sent" or ev.k == "money" and MAIL_MONEY[ev.src] then
+            -- (one visit to the mailbox: one telling)
+            local last = told[#told]
+            -- (gear put on between letters: still the same visit)
+            if last and last.k == "equip" and told[#told - 1] and told[#told - 1].k == "post" then last = told[#told - 1] end
+            if last and last.k == "post" and ev.t - last.last < 600 then
+                last.parts[#last.parts + 1] = ev
+                last.last = ev.t
+            else
+                told[#told + 1] = { k = "post", parts = { ev }, t = ev.t, last = ev.t, rm = Rm(ev), x = ev.x, y = ev.y,
+                    map = ev.map }
+            end
+        elseif ev.k == "learn" then
+            -- (learned one after another, from one trainer or none: one lesson)
+            local last = told[#told]
+            if last and last.k == "lesson" and last.trainer == ev.trainer then
+                last.learns[#last.learns + 1] = ev
+            else
+                local lesson = { k = "lesson", learns = { ev }, trainer = ev.trainer, t = ev.t, rm = Rm(ev), x = ev.x,
+                    y = ev.y, map = ev.map }
+                -- (its fee, paid just before)
+                local fee = told[#told]
+                if fee and fee.k == "money" and fee.src == "training" and fee.amount < 0 then
+                    lesson.cost = -fee.amount
+                    told[#told] = nil
+                end
+                told[#told + 1] = lesson
+            end
+        elseif ev.k == "money" and ev.src == "training" and told[#told] and told[#told].k == "lesson" then
+            told[#told].cost = (told[#told].cost or 0) - ev.amount
         elseif not Routine(ev) and not (ev.k == "money" and ev.src == "flight") then
             told[#told + 1] = ev
         end
     end
     -- Fights (and the falls in them), a dive, then a task's objective done:
     -- one effort, what it was for
+    -- (growing stronger as a task is handed in: the game says so first; told
+    -- after it)
+    for k = #told - 1, 2, -1 do
+        -- (reported after the hand-in, before the next task the same one gave:
+        -- after that task)
+        local q = told[k - 1]
+        if told[k].k == "level" and q.k == "quest" and q.ender then
+            local last = k
+            while told[last + 1] and told[last + 1].k == "accept" and told[last + 1].giver == q.ender do last = last + 1 end
+            if last > k then table.insert(told, last, table.remove(told, k)) end
+        end
+    end
+    for k = #told - 1, 1, -1 do
+        if told[k].k == "level" then
+            -- (the hand-in a moment after it, a task's end between perhaps)
+            for m = k + 1, math.min(k + 2, #told) do
+                local b = told[m]
+                if b.k == "quest" and (b.t or 0) - (told[k].t or 0) <= 5 then
+                    -- (after the tasks the same one gave next, too: one moment)
+                    local last = m
+                    while told[last + 1] and told[last + 1].k == "accept" and b.ender and told[last + 1].giver == b.ender do
+                        last = last + 1
+                    end
+                    table.insert(told, last, table.remove(told, k))
+                    break
+                end
+            end
+        end
+    end
     local merged, i = {}, 1
     while told[i] do
         local a, j = told[i], i + 1
-        local deaths
+        local deaths, grew
         if a.k == "fights" and told[j] and told[j].k == "deaths" then deaths, j = told[j], j + 1 end
+        -- (stronger in the middle of it: told after the effort)
+        if a.k == "fights" and told[j] and told[j].k == "level" then grew, j = told[j], j + 1 end
         local g = told[j]
         if (a.k == "fights" or a.k == "dive") and g and (g.k == "ready" or g.k == "objective") and g.what
             and (g.how == "item" or g.how == "monster" and a.k == "fights") then
             merged[#merged + 1] = { k = "effort", by = a, deaths = deaths, goal = g, t = a.t, rm = a.rm or Rm(a) }
+            if grew then merged[#merged + 1] = grew end
             i = j + 1
+        elseif grew then
+            -- (no goal after it: as it was)
+            merged[#merged + 1] = a
+            i = i + 1
         else
             merged[#merged + 1] = a
             i = i + 1
@@ -781,6 +1114,14 @@ local function Summary(key, day, ctx, going)
         out[#out + 1] = "I grew " .. Skills(skills) .. "."
     end
     if ctx.stray > 0 then out[#out + 1] = "Here and there I fought off a few more foes." end
+    -- (what I gathered: herbs picked, ore mined, hides skinned, fish caught)
+    local gathered = {}
+    local GATHERED = { herb = "picked herbs", ore = "worked ore veins", hide = "skinned beasts", fish = "cast my line" }
+    for spell, n in pairs(day.stats.gather or {}) do
+        if GATHERED[spell] and n > 0 then gathered[#gathered + 1] = GATHERED[spell] .. " " .. Times(n) end
+    end
+    table.sort(gathered)
+    if #gathered > 0 then out[#out + 1] = "Along the way I " .. Names(gathered) .. "." end
     local m = day.stats.money
     local net = m.earned - m.spent
     if m.earned + m.spent > 0 and net ~= 0 then
@@ -798,12 +1139,23 @@ local function Fill(day)
             if e.giver == nil then e.giver = J.Giver(e.id) end
             if e.k == "quest" and e.ender == nil then e.ender = J.Ender(e.id) end
             if e.k == "accept" and e.goal == nil then e.goal = J.Goal(e.id) end
+            if (e.k == "ready" or e.k == "objective") and e.need == nil then
+                -- (the count it asked: its accept's goal, the same objective)
+                for _, a in ipairs(day.events) do
+                    if a.k == "accept" and a.id == e.id and a.goal then
+                        for _, g in ipairs(a.goal) do
+                            if g[1] == e.what then e.need = g[3] end
+                        end
+                    end
+                end
+            end
         end
     end
 end
 
 function J.Write(key, day)
     Fill(day)
+    wipe(turns)
     local sessions = Sessions(day)
     if #sessions == 0 then return { "Little happened worth writing down." } end
     local ctx = { fare = {}, first = true, stray = 0, met = {} }
@@ -816,7 +1168,7 @@ function J.Write(key, day)
             local out = {}
             local place = MainPlace(ep)
             local lead
-            if #paragraphs == 0 then
+            if #paragraphs == 0 and not ctx.wake then
                 -- The first: when I woke, where
                 ctx.zone = ep.zone
                 -- (where I woke: the stretch's first place)
@@ -827,7 +1179,13 @@ function J.Write(key, day)
                 elseif ep.zone then
                     where = Pick(key, 42, { ", in ", ", still in " }) .. Name(ep.zone)
                 end
-                out[1] = Woke(key, wake) .. where .. "."
+                out[1] = Woke(key, wake) .. (sessions[1].rested and ", well rested" or "") .. where .. "."
+            elseif ctx.wake then
+                -- (the waking, with nothing told yet: this paragraph opens with it)
+                out[1], ctx.wake = ctx.wake, nil
+                if place ~= ctx.place and told[1].k ~= "zone" and told[1].k ~= "flight" then
+                    lead = (place == ep.zone and "in " or "at ") .. Name(place) .. ", "
+                end
             else
                 if ep.rest then out[1] = Again(Rm(ep.events[1])) end
                 lead = (not ep.rest and When(key, 46 + #paragraphs, Rm(ep.events[1]), before) or "")
@@ -842,19 +1200,26 @@ function J.Write(key, day)
             while told[i] do
                 ctx.skip = 0
                 local ev = told[i]
+                -- (a long paragraph: a new one where I move on)
+                local here = ev.x and ev or ev.by and ev.by.x and ev.by
+                if said >= LONG and not ctx.errand and CONNECTS[ev.k]
+                    and (here and Moved(ctx, here) ~= "here" or said >= LONG + 2) then
+                    paragraphs[#paragraphs + 1] = table.concat(out, " ")
+                    out, said, lead = {}, 0, Pick(key, 90 + i, { "From there, ", "Then " })
+                end
                 local npc = ctx.npc
-                ctx.posFrom = nil
+                ctx.posFrom, ctx.noJoin = nil, nil
                 local sentence = Sentence(key, told, i, ctx)
                 -- (where I am now: the last thing told's place)
                 local at = ctx.posFrom or told[i + ctx.skip]
                 at = at and (at.x and at or at.by and at.by.x and at.by) or nil
                 if at then ctx.pos = at end
-                if ctx.npc == npc and ev.k ~= "accept" and ev.k ~= "quest" then ctx.npc = nil end
+                if ctx.npc == npc and LEAVES[ev.k] then ctx.npc = nil end
                 if sentence then
                     -- (what joins it to the one before: the day's first thing, a
                     -- task put aside for another, then, after that)
                     local join
-                    if not lead and CONNECTS[ev.k] and not sentence:match("^When ") then
+                    if not lead and CONNECTS[ev.k] and not ctx.noJoin then
                         local goalID = ev.k == "effort" and ev.goal.id or (ev.k == "ready" or ev.k == "objective") and ev.id
                         if #paragraphs == 0 and said == 0 then
                             join = ev.k ~= "money" and "First, " or nil
@@ -873,10 +1238,16 @@ function J.Write(key, day)
                 end
                 i = i + 1 + ctx.skip
             end
-            paragraphs[#paragraphs + 1] = table.concat(out, " ")
+            if #paragraphs == 0 and said == 0 then
+                -- (only the waking: it opens the next paragraph instead)
+                ctx.wake = out[1]
+            else
+                paragraphs[#paragraphs + 1] = table.concat(out, " ")
+            end
             before = Rm(ep.events[#ep.events])
         end
     end
+    if #paragraphs == 0 and ctx.wake then paragraphs[1], ctx.wake = ctx.wake, nil end
     if #paragraphs == 0 then
         local zone = J.Zones(day)[1]
         paragraphs[1] = Woke(key, wake) .. (zone and (", in " .. Name(zone)) or "") .. "."

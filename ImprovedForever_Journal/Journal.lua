@@ -23,6 +23,19 @@
 -- task's several; giver), "dive" (under water: the breath running), "money" (amount: + earned, - spent; src: "sale" (an
 -- auction sold, by mail; what = { items }), "refund", "letter" (from), "mail",
 -- "sell", "buy", "repair", "auction", "flight", "training", "other").
+-- Kept for later, not told yet (quiet: they never break a hunt or a story):
+-- "bank", "meal" (kind), "close" (by: a fight nearly lost), "achievement"
+-- (id, name), "abandon" (id, name: a task given up) is told; and in stats:
+-- rep = { [faction] = gained }, honor, gather = { herb, ore, hide, fish = casts }, combat
+-- (seconds), fights, talents (points spent), talked = { [name] = true },
+-- walked (map widths), mounted, swum (seconds). Told too: "lesson" parts
+-- ("learn": name, spell, recipe, trainer), "equip" (item, slot), "bind"
+-- (to), "flightpath", "party" (members) / "alone", "duel" (opponent, won),
+-- "standing" (faction, standing), "mail" (from, subject, kind: "won", "expired",
+-- "removed", "sold", "outbid", "letter"; items = { { id, count } }: what I
+-- took from a letter), "sent" (to, subject, money, items). A death also keeps how I came back
+-- (revived: "spirit", "corpse", "player"; reviver). A session keeps how it
+-- began: level, money, rested, inn, zone, sub.
 -- No combat log in Forever, nor nameplates: kills come from the experience
 -- they give, a foe's rank from the target it was.
 local IF = ImprovedForever
@@ -44,6 +57,12 @@ local HINT_FOR = 5             -- what a change in money is for, this long after
 local HEARTHSTONE = 8690       -- the hearthstone's spell (Forever's)
 local NOTABLE = { elite = "Elite", rareelite = "Rare Elite", rare = "Rare", worldboss = "Boss" }
 J.NOTABLE = NOTABLE
+-- Kinds kept but not told: a hunt goes on over them, the story skips them
+J.QUIET = { bank = true, meal = true, close = true, achievement = true, mailbox = true }
+-- The gathering spells, by name (each rank its own id): herbs, ore, hides, fish
+local GATHER_SPELLS = { 1235236, 2575, 8613, 7620 }
+local GATHER_KINDS = { "herb", "ore", "hide", "fish" }   -- (theirs, in that order)
+local MEAL_SPELLS = { 433, 430 }          -- Food, Drink
 
 ---------------------------------------------------------------------------
 -- Settings: IF.db.journal = { enabled, levels, places, fights, loot,
@@ -183,7 +202,12 @@ local function Session()
     local s = day.sessions[#day.sessions]
     local now, rm = time(), RealmMinutes()
     if not s or now - s.to > SESSION_GAP then
-        s = { from = now, rfrom = rm }
+        -- (how I set out: rested, at an inn, where, how strong, how rich)
+        local rested = GetXPExhaustion and GetXPExhaustion()
+        local money = GetMoney()
+        s = { from = now, rfrom = rm, level = UnitLevel("player"), zone = Zone(), sub = Sub(),
+            rested = rested and not Secret(rested) and rested > 0 or nil,
+            inn = IsResting and IsResting() or nil, money = not Secret(money) and money or nil }
         day.sessions[#day.sessions + 1] = s
     end
     s.to, s.rto = now, rm
@@ -253,8 +277,20 @@ local function BuildPatterns()
     P.create = Patterns(true, _G.LOOT_ITEM_CREATED_SELF)
     P.skill = Patterns(false, _G.SKILL_RANK_UP)
     P.discover = Patterns(false, _G.ERR_ZONE_EXPLORED_XP, _G.ERR_ZONE_EXPLORED)
-    P.learn = Patterns(false, _G.ERR_LEARN_RECIPE_S, _G.ERR_LEARN_SPELL_S, _G.ERR_LEARN_ABILITY_S)
+    P.learnRecipe = Patterns(false, _G.ERR_LEARN_RECIPE_S)
+    P.learn = Patterns(false, _G.ERR_LEARN_SPELL_S, _G.ERR_LEARN_ABILITY_S, _G.ERR_LEARN_PASSIVE_S)
+    P.bind = Patterns(false, _G.ERR_DEATHBIND_SUCCESS_S)
+    P.flightpath = _G.ERR_NEWTAXIPATH
+    P.duelWon = Patterns(false, _G.DUEL_WINNER_KNOCKOUT)
+    P.duelFled = Patterns(false, _G.DUEL_WINNER_RETREAT)
+    P.repUp = Patterns(false, _G.FACTION_STANDING_INCREASED)
+    P.repDown = Patterns(false, _G.FACTION_STANDING_DECREASED)
+    P.standing = Patterns(false, _G.FACTION_STANDING_CHANGED)
     P.sold = Patterns(false, _G.AUCTION_SOLD_MAIL_SUBJECT)
+    P.won = Patterns(false, _G.AUCTION_WON_MAIL_SUBJECT)
+    P.coin = Patterns(true, _G.YOU_LOOT_MONEY, _G.LOOT_MONEY_SPLIT)
+    P.expired = Patterns(false, _G.AUCTION_EXPIRED_MAIL_SUBJECT)
+    P.removed = Patterns(false, _G.AUCTION_REMOVED_MAIL_SUBJECT)
     P.outbid = Patterns(false, _G.AUCTION_OUTBID_MAIL_SUBJECT)
 end
 
@@ -275,6 +311,7 @@ end
 -- Levels and quests
 ---------------------------------------------------------------------------
 local questNames = {}           -- [id] = name: as the quest log said it (a task handed in is gone from it)
+local turnedIn                  -- (below: tasks given up)
 local givers = {}               -- [id] = the one who gave the task (its accept's, else QuestieDB's)
 local talking                   -- { name, at }: the one whose quest window was open last
 local lastPushed                -- { id, at }: the item last given ("You receive item: ...")
@@ -322,7 +359,7 @@ local function LevelUp(level)
     if not On("levels") or Secret(level) then return end
     local day = J.Day()
     day.stats.levelTo = math.max(day.stats.levelTo or 0, tonumber(level) or UnitLevel("player"))
-    Add("level", { level = level })
+    Add("level", { level = tonumber(level), class = select(2, UnitClass("player")) })
 end
 
 -- (Classic: index, id; later clients: id)
@@ -342,6 +379,7 @@ local function TurnedIn(id, xp, money)
     day.stats.quests = day.stats.quests + 1
     day.stats.xp = day.stats.xp + xp
     if money > 0 then J.Claim("quest", money) end
+    turnedIn[id] = time()
     local npc = Recent(talking, 60)
     local e = Add("quest", { id = id, name = QuestName(id), zone = Zone(), xp = xp > 0 and xp or nil,
         money = money > 0 and money or nil, giver = J.Giver(id),
@@ -350,6 +388,11 @@ local function TurnedIn(id, xp, money)
     local pushed = Recent(lastPushed, 3)
     if e and pushed then
         e.reward, lastPushed = pushed.id, nil
+        -- (kept as loot a moment ago: it's the reward's now)
+        local events = J.Day().events
+        for k = #events, math.max(1, #events - 5), -1 do
+            if events[k] == pushed.event then table.remove(events, k) break end
+        end
     elseif e then
         rewardFor = { event = e, at = GetTime() }
     end
@@ -386,6 +429,7 @@ end
 local function Objective(o)
     local text = tostring(o.text or "")
     text = text:gsub("^%d+%s*/%s*%d+%s*", ""):gsub(":?%s*%d+%s*/%s*%d+$", ""):gsub("%s+slain$", "")
+    text = text:gsub("[%.%s]+$", "")
     return text ~= "" and text or nil, o.type
 end
 
@@ -417,12 +461,15 @@ local function ScanQuests()
             if fin[i] and before and not before.fin[i] then last = o end
         end
         if before and not first and On("levels") then
-            local what, how
-            if last then what, how = Objective(last) end
+            local what, how, need
+            if last then
+                what, how = Objective(last)
+                need = last.numRequired
+            end
             if q.done and not before.done then
-                Add("ready", { id = q.id, name = q.name, what = what, how = how, giver = J.Giver(q.id) })
+                Add("ready", { id = q.id, name = q.name, what = what, how = how, need = need, giver = J.Giver(q.id) })
             elseif last and #q.objs > 1 then
-                Add("objective", { id = q.id, name = q.name, what = what, how = how, giver = J.Giver(q.id) })
+                Add("objective", { id = q.id, name = q.name, what = what, how = how, need = need, giver = J.Giver(q.id) })
             end
         end
         -- (a task just taken: what it asks, on its accept)
@@ -511,9 +558,35 @@ local function ControlChanged(event)
     end
 end
 
+local spellNames                -- [name] = gathering's kind ("herb"...) or "meal" (the known spells' names: any rank)
+local function SpellName(id)
+    local name = C_Spell and C_Spell.GetSpellName and C_Spell.GetSpellName(id)
+    if not name and GetSpellInfo then name = GetSpellInfo(id) end
+    return name
+end
+
+local lastMeal = 0
 local function SpellCast(unit, _, spell)
-    if unit ~= "player" or Secret(spell) or spell ~= HEARTHSTONE or not On("places") then return end
-    Add("hearth", { to = GetBindLocation and GetBindLocation() or nil })
+    if unit ~= "player" or Secret(spell) or not On() then return end
+    if spell == HEARTHSTONE then
+        if On("places") then Add("hearth", { to = GetBindLocation and GetBindLocation() or nil }) end
+        return
+    end
+    if not spellNames then
+        spellNames = {}
+        for i, id in ipairs(GATHER_SPELLS) do local n = SpellName(id) if n then spellNames[n] = GATHER_KINDS[i] end end
+        for _, id in ipairs(MEAL_SPELLS) do local n = SpellName(id) if n then spellNames[n] = "meal" end end
+    end
+    local name = SpellName(spell)
+    local what = name and spellNames[name]
+    if what and what ~= "meal" then
+        local stats = J.Day().stats
+        stats.gather = stats.gather or {}
+        stats.gather[what] = (stats.gather[what] or 0) + 1
+    elseif what == "meal" and GetTime() - lastMeal > 600 then
+        lastMeal = GetTime()
+        Add("meal", { kind = name })
+    end
 end
 
 ---------------------------------------------------------------------------
@@ -577,7 +650,7 @@ function J.Hunt()
     for i = #events, 1, -1 do
         local e = events[i]
         if e.k == "hunt" then return (time() - (e.last or e.t) < HUNT_GAP and e.zone == Zone()) and e or nil end
-        if e.k ~= "loot" and e.k ~= "kill" then return nil end
+        if e.k ~= "loot" and e.k ~= "kill" and not J.QUIET[e.k] then return nil end
     end
 end
 
@@ -591,6 +664,20 @@ function J.FoeNames(day)
         return a < b
     end)
     return names
+end
+
+-- How I came back from a death: a spirit healer, my body, someone's spell
+local reviver                  -- { name, at }: who offered to bring me back
+local spiritHealed             -- accepted the spirit healer's offer
+
+local function Revived()
+    local d = Last("death")
+    if not d or d.revived or time() - d.t > 1800 then return end
+    local by = Recent(reviver, 120)
+    d.revived = by and "player" or spiritHealed and "spirit" or "corpse"
+    d.reviver = by and by.name or nil
+    reviver, spiritHealed = nil, nil
+    Changed()
 end
 
 local function Died()
@@ -612,6 +699,7 @@ end
 -- Loot, gold, crafting
 ---------------------------------------------------------------------------
 local money                    -- the gold carried, last seen
+local open = {}                -- [window] = who it's with (or true): the windows open now
 
 -- (Forever's loot lines: no full stop, the link's colour its quality,
 -- "|cnIQ2:|Hitem:...|h[Name]|h|r", "x3" after it: read from the link)
@@ -621,6 +709,8 @@ local function Looted(msg)
     local kind = Match(msg, P.create) and "create" or (pushed or Match(msg, P.loot)) and "loot"
     local id = kind and ItemID(msg)
     if not id then return end
+    -- (taken from a letter: the mail's, not loot)
+    if pushed and open.mail then return end
     -- (an item given with a task handed in: its reward, told with it)
     if pushed then
         local waiting = Recent(rewardFor, 3)
@@ -639,14 +729,15 @@ local function Looted(msg)
         same.count = (same.count or 1) + count
         return Changed()
     end
-    Add(kind, { item = id, count = count })
+    local e = Add(kind, { item = id, count = count })
+    -- (given, not looted: a task's reward perhaps, told with it if so)
+    if pushed and lastPushed and lastPushed.id == id then lastPushed.event = e end
 end
 
 -- Where money came from or went: the window open when it changed (the
 -- mailbox, a merchant, the auction house, a flight master, a trainer), or
 -- what said so just before (a letter taken, repairs, a quest's reward,
 -- coin looted); what says so just after takes it back (J.Claim)
-local open = {}                -- [window] = true
 local hint                     -- { src, what, from, at }
 
 local function Hint(h)
@@ -655,12 +746,19 @@ local function Hint(h)
 end
 
 local function Source(gain)
-    if hint and GetTime() - hint.at < HINT_FOR then return hint end
-    if open.mail then return { src = "mail" } end
-    if open.merchant then return { src = gain and "sell" or "buy" } end
+    if hint and GetTime() - hint.at < HINT_FOR then
+        if hint.src == "repair" and type(open.merchant) == "string" then hint.from = hint.from or open.merchant end
+        if hint.src == "buy" and type(open.merchant) == "string" then hint.from = hint.from or open.merchant end
+        return hint
+    end
+    local function who(w) return type(w) == "string" and w or nil end
+    -- (a merchant, a trainer, a flight master first: the mailbox may not say
+    -- it has closed)
+    if open.merchant then return { src = gain and "sell" or "buy", from = who(open.merchant) } end
+    if open.trainer then return { src = "training", from = who(open.trainer) } end
+    if open.taxi then return { src = "flight", from = who(open.taxi) } end
     if open.auction then return { src = "auction" } end
-    if open.taxi then return { src = "flight" } end
-    if open.trainer then return { src = "training" } end
+    if open.mail then return { src = "mail" } end
     return { src = "other" }
 end
 
@@ -700,7 +798,7 @@ local function MoneyChanged()
     if h == hint then
         -- (a hint says what one change was for: each letter taken says so again)
         hint = nil
-        if h.src == "quest" or h.src == "coin" then
+        if h.src == "quest" or h.src == "coin" or h.src == "postage" then
             Absorb(h.src, delta)
             return Changed()
         end
@@ -732,6 +830,128 @@ local function MailTaken(index)
         from = not (sold or refund) and sender or nil })
 end
 
+-- The mailbox read as it changes: what's gone from a letter was taken (its
+-- items, its money), whatever took it (the game's mail window, the pad's)
+local MAX_ATTACH = 16
+local inbox                     -- { { from, subject, money, items = { [id] = count } } } as last read
+
+local function MailKind(subject)
+    if Match(subject, P.sold) then return "sold", Match(subject, P.sold) end
+    if Match(subject, P.won) then return "won", Match(subject, P.won) end
+    if Match(subject, P.expired) then return "expired", Match(subject, P.expired) end
+    if Match(subject, P.removed) then return "removed", Match(subject, P.removed) end
+    if Match(subject, P.outbid) then return "outbid", Match(subject, P.outbid) end
+    return "letter"
+end
+
+local function ReadInbox()
+    if not (GetInboxNumItems and GetInboxHeaderInfo) then return nil end
+    local list = {}
+    local ok = pcall(function()
+        for i = 1, GetInboxNumItems() do
+            local _, _, sender, subject, money, _, _, hasItem = GetInboxHeaderInfo(i)
+            if Secret(sender) then sender = nil end
+            if Secret(subject) then subject = nil end
+            local items = {}
+            if hasItem and GetInboxItem then
+                for a = 1, MAX_ATTACH do
+                    local name, id, _, count = GetInboxItem(i, a)
+                    if name and not Secret(id) then
+                        id = id or (GetInboxItemLink and ItemID(GetInboxItemLink(i, a)))
+                        if id then items[id] = (items[id] or 0) + (count or 1) end
+                    end
+                end
+            end
+            list[#list + 1] = { from = sender, subject = subject,
+                money = not Secret(money) and money or 0, items = items }
+        end
+    end)
+    return ok and list or nil
+end
+
+-- A letter's money, said by the mail (its money line, if just written, given
+-- the letter's sender and kind; else the next change's)
+local function MailMoney(m, amount)
+    local kind, what = MailKind(m.subject)
+    local src = kind == "sold" and "sale" or kind == "outbid" and "refund" or m.from and "letter" or "mail"
+    local events = J.Day().events
+    for k = #events, math.max(1, #events - 3), -1 do
+        local e = events[k]
+        if e.k == "money" and time() - e.t <= 5 and e.amount == amount then
+            -- (said already, by the money's own hook: as it is)
+            if e.src ~= "mail" then return end
+            e.src, e.from, e.what = src, kind == "letter" and m.from or nil, what and { what } or e.what
+            return Changed()
+        end
+    end
+    Hint({ src = src, from = kind == "letter" and m.from or nil, what = what })
+end
+
+local function InboxChanged()
+    local now = ReadInbox()
+    if not now then return end
+    local was = inbox
+    inbox = now
+    if not was or not On("loot") then return end
+    -- (each letter as it was, against the same letter now: by sender and subject)
+    local used = {}
+    for _, m in ipairs(was) do
+        local same
+        for j, n in ipairs(now) do
+            if not used[j] and n.from == m.from and n.subject == m.subject then
+                same, used[j] = n, true
+                break
+            end
+        end
+        local taken = {}
+        for id, count in pairs(m.items) do
+            local left = same and same.items[id] or 0
+            if count > left then taken[#taken + 1] = { id, count - left } end
+        end
+        local money = m.money - (same and same.money or 0)
+        if money > 0 then MailMoney(m, money) end
+        if #taken > 0 then
+            local kind, what = MailKind(m.subject)
+            -- (more from the same letter, a moment later: on its line)
+            local last = J.Day().events[#J.Day().events]
+            if last and last.k == "mail" and last.from == m.from and last.subject == m.subject and time() - last.t < 60 then
+                for _, it in ipairs(taken) do last.items[#last.items + 1] = it end
+                Changed()
+            else
+                Add("mail", { from = m.from, subject = m.subject, kind = kind, what = what, items = taken })
+            end
+            -- (kept as loot a moment ago: it was the letter's)
+            local events = J.Day().events
+            for k = #events, math.max(1, #events - 12), -1 do
+                local e = events[k]
+                if e.k == "loot" and time() - e.t <= 10 then
+                    for _, it in ipairs(taken) do
+                        if e.item == it[1] then table.remove(events, k) break end
+                    end
+                end
+            end
+        end
+    end
+end
+
+-- A letter sent: to whom, with what (read as it goes; kept once it's gone)
+local sending
+local function Sending(to, subject)
+    if not On("loot") or Secret(to) then return end
+    local items = {}
+    pcall(function()
+        for a = 1, MAX_ATTACH do
+            local name, id, _, count = GetSendMailItem(a)
+            if name and not Secret(id) then items[#items + 1] = { id, count or 1 } end
+        end
+    end)
+    local money = GetSendMailMoney and GetSendMailMoney() or 0
+    sending = { to = to, subject = not Secret(subject) and subject or nil,
+        money = not Secret(money) and money > 0 and money or nil, items = items, at = GetTime() }
+    -- (the money that leaves with it: the letter's, not a line of its own)
+    Hint({ src = "postage" })
+end
+
 local WINDOWS = {
     MAIL_SHOW = { "mail", true }, MAIL_CLOSED = { "mail", false },
     MERCHANT_SHOW = { "merchant", true }, MERCHANT_CLOSED = { "merchant", false },
@@ -757,13 +977,167 @@ local function System(msg)
         end
         return
     end
-    local learned = Match(msg, P.learn)
-    if learned and On("loot") then Add("learn", { name = learned }) end
+    local recipe = Match(msg, P.learnRecipe)
+    local learned = recipe or Match(msg, P.learn)
+    if learned and On("loot") then return J.Learned(learned, nil, recipe ~= nil) end
+    local home = Match(msg, P.bind)
+    if home and On("places") then return Add("bind", { to = home, inn = IsResting and IsResting() or nil }) end
+    if type(msg) == "string" and not Secret(msg) and P.flightpath and msg == P.flightpath and On("places") then
+        return Add("flightpath", {})
+    end
+    local a, b = Match(msg, P.duelWon)
+    if a and On("fights") then
+        local me = UnitName("player")
+        return Add("duel", { won = a == me, opponent = a == me and b or a })
+    end
+    a, b = Match(msg, P.duelFled)
+    if a and On("fights") then
+        local me = UnitName("player")
+        return Add("duel", { won = b ~= me, opponent = b == me and a or b, fled = true })
+    end
+end
+
+-- A spell, an ability or a recipe learned: the chat's line, the game's
+-- event (once: the same name a moment apart is the same lesson); at a
+-- trainer, who taught it
+function J.Learned(name, spell, recipe)
+    if not name or Secret(name) or not On("loot") then return end
+    -- (the chat's line names it with a link: "|cff71d5ff|Hspell:...|h[Parry]|h|r")
+    name = name:match("%[(.-)%]") or name
+    local same = Last("learn", function(e) return e.name == name and time() - e.t < 5 end)
+    if same then
+        same.spell, same.recipe = same.spell or spell, same.recipe or recipe or nil
+        return
+    end
+    local trainer = open.trainer
+    Add("learn", { name = name, spell = spell, recipe = recipe or nil,
+        trainer = type(trainer) == "string" and trainer or nil })
+end
+
+-- Reputation: a little at a time, counted; a new standing, kept
+local function Faction(msg)
+    if not On("levels") then return end
+    local faction, amount = Match(msg, P.repUp)
+    local sign = 1
+    if not faction then
+        faction, amount = Match(msg, P.repDown)
+        sign = -1
+    end
+    if faction then
+        local rep = J.Day().stats
+        rep.rep = rep.rep or {}
+        rep.rep[faction] = (rep.rep[faction] or 0) + sign * (tonumber(amount) or 0)
+        return
+    end
+    local standing, name = Match(msg, P.standing)
+    if standing then Add("standing", { faction = name, standing = standing }) end
 end
 
 ---------------------------------------------------------------------------
--- Played time: a step at a time, in the day and the zone
+-- More of the day: gear put on, company kept, fights' length, close calls,
+-- the bank, tasks given up, talents, who I talked to
 ---------------------------------------------------------------------------
+local worn = {}                -- [slot] = item id, as last seen
+local settled = false          -- (the first moments after login: gear as it was)
+
+local function Equipped(slot)
+    if not On("loot") or not slot or Secret(slot) then return end
+    local id = GetInventoryItemID("player", slot)
+    if Secret(id) then return end
+    local was = worn[slot]
+    worn[slot] = id
+    if not settled or not id or id == was then return end
+    local _, _, quality = (C_Item and C_Item.GetItemInfo or GetItemInfo)(id)
+    if (quality or 2) < 2 then return end
+    Add("equip", { item = id, slot = slot })
+end
+
+local party = {}               -- [name] = true: the group as last seen
+local function Roster()
+    if not On() then return end
+    local now, list = {}, {}
+    local n = GetNumGroupMembers and GetNumGroupMembers() or 0
+    for i = 1, n do
+        local unit = (IsInRaid and IsInRaid()) and ("raid" .. i) or ("party" .. i)
+        local name = UnitName(unit)
+        if name and not Secret(name) and name ~= UnitName("player") then now[name] = true end
+    end
+    for name in pairs(now) do if not party[name] then list[#list + 1] = name end end
+    local had = next(party) ~= nil
+    party = now
+    if #list > 0 then
+        table.sort(list)
+        Add("party", { members = list })
+    elseif had and next(now) == nil then
+        Add("alone", {})
+    end
+end
+
+-- A fight: how long; how close it came (the least health in it)
+local fightStart, lowest
+local function Combat(on)
+    if not On("fights") then return end
+    if on then
+        fightStart, lowest = GetTime(), 1
+        return
+    end
+    if not fightStart then return end
+    local s = J.Day().stats
+    s.combat = (s.combat or 0) + math.floor(GetTime() - fightStart)
+    s.fights = (s.fights or 0) + 1
+    fightStart = nil
+    if lowest and lowest < 0.15 and not UnitIsDeadOrGhost("player")
+        and not Last("close", function(e) return time() - e.t < 300 end) then
+        Add("close", { by = lastFoe and GetTime() - lastFoe.at < 120 and lastFoe.name or nil,
+            health = math.floor(lowest * 100) })
+    end
+end
+
+local function Health(unit)
+    if unit ~= "player" or not fightStart then return end
+    local hp, max = UnitHealth("player"), UnitHealthMax("player")
+    if Secret(hp) or Secret(max) or not max or max <= 0 then return end
+    lowest = math.min(lowest or 1, hp / max)
+end
+
+-- A task given up: gone from the log, not handed in
+turnedIn = {}                  -- [id] = time handed in (QUEST_TURNED_IN)
+local function Removed(id)
+    if Secret(id) or type(id) ~= "number" or not On("levels") then return end
+    C_Timer.After(1, function()
+        if turnedIn[id] and time() - turnedIn[id] < 5 then return end
+        Add("abandon", { id = id, name = QuestName(id) })
+    end)
+end
+
+local function Achieved(id)
+    if Secret(id) or not On() then return end
+    local _, name = GetAchievementInfo and GetAchievementInfo(id)
+    Add("achievement", { id = id, name = name })
+end
+
+local function Points(change)
+    if Secret(change) or (tonumber(change) or 0) >= 0 or not On() then return end
+    local s = J.Day().stats
+    s.talents = (s.talents or 0) - change
+end
+
+local function Spoke()
+    Talking()
+    local name = talking and talking.name
+    if not name or not On() then return end
+    local s = J.Day().stats
+    s.talked = s.talked or {}
+    local n = 0
+    for _ in pairs(s.talked) do n = n + 1 end
+    if n < 60 then s.talked[name] = true end
+end
+
+---------------------------------------------------------------------------
+-- Played time: a step at a time, in the day and the zone (and how I got
+-- about: on foot, mounted, swimming)
+---------------------------------------------------------------------------
+local lastPos
 local function Tick()
     if not On() then return end
     Session()
@@ -771,6 +1145,21 @@ local function Tick()
     s.played = (s.played or 0) + TICK
     if here then s.zones[here] = (s.zones[here] or 0) + TICK end
     s.levelTo = math.max(s.levelTo or 0, UnitLevel("player") or 0)
+    if IsMounted and IsMounted() then s.mounted = (s.mounted or 0) + TICK end
+    if IsSwimming and IsSwimming() then s.swum = (s.swum or 0) + TICK end
+    local map = C_Map and C_Map.GetBestMapForUnit and C_Map.GetBestMapForUnit("player")
+    local pos = map and C_Map.GetPlayerMapPosition and C_Map.GetPlayerMapPosition(map, "player")
+    local x, y
+    if pos then x, y = pos:GetXY() end
+    if x and not Secret(x) and not (UnitOnTaxi and UnitOnTaxi("player")) then
+        if lastPos and lastPos.map == map then
+            local d = math.sqrt((x - lastPos.x) ^ 2 + (y - lastPos.y) ^ 2)
+            if d < 0.2 then s.walked = (s.walked or 0) + d end
+        end
+        lastPos = { map = map, x = x, y = y }
+    else
+        lastPos = nil
+    end
 end
 
 ---------------------------------------------------------------------------
@@ -793,15 +1182,80 @@ local HANDLERS = {
     CHAT_MSG_SKILL = System,
     CHAT_MSG_SYSTEM = System,
     UI_INFO_MESSAGE = function(_, msg) System(msg) end,
-    CHAT_MSG_MONEY = function() J.Claim("coin") end,
+    -- (coin looted, "You loot 47 Copper"; not Forever's "You gained: 47", any money)
+    CHAT_MSG_MONEY = function(msg)
+        if Match(msg, P.coin) then J.Claim("coin") end
+    end,
     QUEST_LOG_UPDATE = QuestLogChanged,
     QUEST_DETAIL = Talking, QUEST_PROGRESS = Talking, QUEST_COMPLETE = Talking, QUEST_GREETING = Talking,
-    GOSSIP_SHOW = Talking,
+    GOSSIP_SHOW = Spoke,
     MIRROR_TIMER_START = Breath,
+    LEARNED_SPELL_IN_TAB = function(spell)
+        if not Secret(spell) then J.Learned(SpellName(spell), spell) end
+    end,
+    NEW_RECIPE_LEARNED = function(recipe)
+        if Secret(recipe) then return end
+        local info = C_TradeSkillUI and C_TradeSkillUI.GetRecipeInfo and C_TradeSkillUI.GetRecipeInfo(recipe)
+        J.Learned(info and info.name or SpellName(recipe), recipe, true)
+    end,
+    CHAT_MSG_COMBAT_FACTION_CHANGE = Faction,
+    CHAT_MSG_COMBAT_HONOR_GAIN = function()
+        if not On("fights") then return end
+        local s = J.Day().stats
+        s.honor = (s.honor or 0) + 1
+    end,
+    PLAYER_EQUIPMENT_CHANGED = Equipped,
+    MAIL_INBOX_UPDATE = InboxChanged,
+    MAIL_SEND_SUCCESS = function()
+        local sent = Recent(sending, 30)
+        sending = nil
+        if sent then
+            sent.at = nil
+            Add("sent", sent)
+        end
+    end,
+    GROUP_ROSTER_UPDATE = Roster,
+    PLAYER_REGEN_DISABLED = function() Combat(true) end,
+    PLAYER_REGEN_ENABLED = function() Combat(false) end,
+    UNIT_HEALTH = Health,
+    QUEST_REMOVED = Removed,
+    ACHIEVEMENT_EARNED = Achieved,
+    CHARACTER_POINTS_CHANGED = Points,
+    BANKFRAME_OPENED = function() if On() then Add("bank", {}) end end,
+    RESURRECT_REQUEST = function(name)
+        if name and not Secret(name) then reviver = { name = name, at = GetTime() } end
+    end,
+    CONFIRM_XP_LOSS = function() spiritHealed = true end,
+    PLAYER_ALIVE = function() if not UnitIsDeadOrGhost("player") then Revived() end end,
+    PLAYER_UNGHOST = Revived,
+    HEARTHSTONE_BOUND = function()
+        if On("places") and not Last("bind", function(e) return time() - e.t < 5 end) then
+            Add("bind", { to = GetBindLocation and GetBindLocation() or nil })
+        end
+    end,
     PLAYER_LOGOUT = function() if On() then Session() end end,
 }
+-- (a window opened: who it's with, the merchant, the trainer, the flight master)
 for event, w in pairs(WINDOWS) do
-    HANDLERS[event] = function() open[w[1]] = w[2] or nil end
+    HANDLERS[event] = function()
+        if w[1] == "mail" then
+            -- (the inbox as it was when opened; what's gone by the time it closes)
+            if w[2] then
+                inbox = ReadInbox()
+                if On() then Add("mailbox", { letters = inbox and #inbox or nil }) end
+            else
+                InboxChanged()
+                inbox = nil
+            end
+        end
+        if not w[2] then open[w[1]] = nil return end
+        if w[1] ~= "mail" and open.mail then
+            InboxChanged()
+            open.mail, inbox = nil, nil
+        end
+        local name = UnitName("npc")
+        open[w[1]] = name and not Secret(name) and name or true
+    end
 end
 
 local events = CreateFrame("Frame")
@@ -828,8 +1282,23 @@ IF.OnLogin(function()
         if type(_G[name]) == "function" then hooksecurefunc(name, MailTaken) end
     end
     if type(RepairAllItems) == "function" then hooksecurefunc("RepairAllItems", function() Hint({ src = "repair" }) end) end
+    if type(SendMail) == "function" then hooksecurefunc("SendMail", Sending) end
+    -- (bought from a merchant: what)
+    if type(BuyMerchantItem) == "function" then
+        hooksecurefunc("BuyMerchantItem", function(index)
+            local link = GetMerchantItemLink and GetMerchantItemLink(index)
+            local name = link and not Secret(link) and link:match("%[(.-)%]")
+            Hint({ src = "buy", what = name })
+        end)
+    end
+    for slot = 1, 19 do
+        local id = GetInventoryItemID("player", slot)
+        if not Secret(id) then worn[slot] = id end
+    end
+    C_Timer.After(10, function() settled = true end)
+    Roster()
     for event in pairs(HANDLERS) do
-        if event == "UNIT_SPELLCAST_SUCCEEDED" then
+        if event == "UNIT_SPELLCAST_SUCCEEDED" or event == "UNIT_HEALTH" then
             events:RegisterUnitEvent(event, "player")
         else
             pcall(events.RegisterEvent, events, event)

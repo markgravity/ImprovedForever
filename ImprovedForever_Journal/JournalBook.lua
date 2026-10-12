@@ -26,7 +26,7 @@ local ICONS = {
     flight = ICON .. "Ability_Mount_Wyvern_01", hearth = ICON .. "INV_Misc_Rune_01",
     foe = ICON .. "INV_Misc_Bone_HumanSkull_01", death = ICON .. "Ability_Rogue_FeignDeath",
     skill = ICON .. "INV_Misc_Book_11", learn = ICON .. "INV_Scroll_05",
-    dive = ICON .. "Spell_Shadow_DemonBreath", gain = ICON .. "INV_Misc_Coin_02", spend = ICON .. "INV_Misc_Coin_04",
+    dive = ICON .. "Spell_Shadow_DemonBreath", letter = ICON .. "INV_Letter_15", gain = ICON .. "INV_Misc_Coin_02", spend = ICON .. "INV_Misc_Coin_04",
 }
 -- A money line's source, in a few words
 local MONEY_SRC = {
@@ -176,8 +176,28 @@ local function Lists(day)
     for _, e in ipairs(J.Events(day, "create")) do
         made[#made + 1] = { kind = "item", item = e.item, tip = e.item, line = "Made × " .. (e.count or 1) }
     end
+    -- (from the mail, sent by mail)
+    local mailed, sent = {}, {}
+    local MAILED = { won = "Won at auction", expired = "Back unsold", removed = "Back unsold" }
+    for _, e in ipairs(J.Events(day, "mail")) do
+        for _, it in ipairs(e.items or {}) do
+            mailed[#mailed + 1] = { kind = "item", item = it[1], tip = it[1],
+                line = Join({ MAILED[e.kind] or (e.from and ("From " .. e.from)), (it[2] or 1) > 1 and ("× " .. it[2]) or nil }) }
+        end
+    end
+    for _, e in ipairs(J.Events(day, "sent")) do
+        for _, it in ipairs(e.items or {}) do
+            sent[#sent + 1] = { kind = "item", item = it[1], tip = it[1], line = "Sent to " .. (e.to or "a friend") }
+        end
+        if #(e.items or {}) == 0 then
+            sent[#sent + 1] = { kind = "letter", round = true, icon = ICONS.letter, name = e.to or "A friend",
+                line = Join({ "A letter", e.money and BK.Coins(e.money) }) }
+        end
+    end
     L.spoils = {}
     Section(L.spoils, "Loot", loot)
+    Section(L.spoils, "From the Mail", mailed)
+    Section(L.spoils, "Sent", sent)
     Section(L.spoils, "Made", made)
     Section(L.spoils, "Coin", coin)
 
@@ -210,8 +230,9 @@ local function Subjects(day, L)
     local zones = J.Zones(day)
     add("places", zones[1] and (zones[1] .. (#zones > 1 and (" and " .. (#zones - 1) .. " more") or "")) or "On the road")
     add("foes", Join({ s.kills > 0 and (s.kills .. " slain"), s.deaths > 0 and Plural(s.deaths, "death", "deaths") }, ", "))
-    local loot = J.Events(day, "loot", "create")
-    local first = loot[1] and (C_Item and C_Item.GetItemInfo or GetItemInfo)(loot[1].item)
+    local loot = J.Events(day, "loot", "create", "mail")
+    local firstID = loot[1] and (loot[1].item or loot[1].items and loot[1].items[1] and loot[1].items[1][1])
+    local first = firstID and (C_Item and C_Item.GetItemInfo or GetItemInfo)(firstID)
     local m = s.money
     local net = m.earned - m.spent
     add("spoils", first and (first .. (#loot > 1 and (" and " .. (#loot - 1) .. " more") or ""))
@@ -259,7 +280,7 @@ function Day:heading()
     local s, zones = day.stats, J.Zones(day)
     return {
         icon = DAY_ICON, title = J.DayTitle(self.key),
-        kind = s.played > 0 and (J.Played(s.played) .. " on the road") or "",
+        kind = Join({ s.played > 0 and (J.Played(s.played) .. " on the road"), J.Grew(day) }),
         owned = BK.Names({ unpack(zones, 1, math.min(3, #zones)) }) .. (#zones > 3 and (" and " .. (#zones - 3) .. " more") or ""),
         chapter = LISTS[self.tab] or "Diary",
     }
