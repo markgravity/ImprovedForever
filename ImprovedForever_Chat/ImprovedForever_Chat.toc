@@ -1,0 +1,15 @@
+## Interface: 16001, 16002, 16003, 16100, 16101, 16200
+## Title: Improved Forever: Chat
+## Notes: Write in any text box by drawing letters on the touchpad.
+## Author: markg
+## Version: 0.6.0
+## X-Website: https://github.com/markgravity/ImprovedForever
+## X-License: MIT
+## IconTexture: Interface\AddOns\ImprovedForever\textures\ic_mod_chat
+## Group: ImprovedForever
+## Dependencies: ImprovedForever
+
+Module.lua
+Letters.lua
+Handwriting.lua
+ChatEditor.lua

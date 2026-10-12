@@ -12,6 +12,7 @@ shapes, green accents, holes cut; shapes drawn with radial_icon's helpers):
   ic_mod_library      an open book, a green bookmark
   ic_mod_journal      a closed diary (its lines cut), a green quill
   ic_mod_quests       a quest list (its "!" and lines cut), green sort arrows
+  ic_mod_chat         a speech bubble (a scribble cut in it), a green stylus
 
 Run: python3 tools/make_module_icons.py   (needs Pillow)
      python3 tools/make_module_icons.py --logos   also each module's
@@ -231,6 +232,19 @@ def make():
     icon.polygon(da, [(90, 40), (104, 20), (118, 40)])
     icon.polygon(da, [(90, 88), (104, 108), (118, 88)])
     save("ic_mod_quests", [(page, GOLD), (arrows, GREEN)])
+
+    # Chat: a speech bubble, a handwritten scribble cut in it, a stylus
+    # (green) writing across its corner
+    bubble, db = new()
+    rounded(db, 8, 16, 100, 84, 18)
+    icon.polygon(db, [(26, 80), (20, 108), (52, 80)])
+    scribble, dw = new()
+    icon.stroke(dw, [(26, 56), (36, 40), (46, 60), (56, 40), (66, 60), (76, 44)], 7)
+    bubble = icon.cut(bubble, scribble)
+    stylus, dp = new()
+    icon.stroke(dp, [(120, 44), (88, 86)], 13)
+    icon.polygon(dp, [(80, 82), (94, 93), (76, 106)])
+    save("ic_mod_chat", [(bubble, GOLD), (stylus, GREEN)])
 
 if __name__ == "__main__":
     make()
