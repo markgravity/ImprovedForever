@@ -78,18 +78,23 @@ Library shows from it into `ImprovedForever_Library/LibraryData.lua`, which ship
 
 - `tools/make_*.py` regenerate the TGA textures.
 - `python tools/make_library.py` regenerates `ImprovedForever_Library/LibraryRecipes.lua` from the game's recipe tables (wago.tools).
-- `python tools/package.py` builds a zip per addon in `dist/` and `ImprovedForever-All-<version>.zip` with every addon.
+- `python tools/package.py` builds a zip per addon in `dist/` and `ImprovedForever-All.zip` with every addon; `python tools/package.py Wheel` builds only that one.
 - `python tools/make_module_icons.py --logos` also writes each module's CurseForge logo to `dist/logos/`.
 
 ### Releasing
 
-1. Bump `## Version:` in every addon's TOC (`ImprovedForever*/ImprovedForever*.toc`).
-2. Add a `## <version>` section on top of `CHANGELOG.md`.
-3. Commit, then `git tag v<version> && git push origin main v<version>`.
+Each addon is versioned and released on its own: tag only the ones you changed.
 
-The [release workflow](.github/workflows/release.yml) checks the tag matches the TOC, builds the
-zips, creates the GitHub release with the changelog section, and uploads each addon's zip to its
-own CurseForge project (`## X-Curse-Project-ID` in its TOC) when `CF_API_KEY` is set. A tag with a suffix (`v0.3.0-beta1`) makes a pre-release / beta.
+1. `python tools/release.py changed` lists the addons touched since their last tag.
+2. Bump `## Version:` in those addons' TOCs only.
+3. Add a `## <Name> <version>` section (e.g. `## Wheel 0.6.1`) on top of `CHANGELOG.md` for each.
+4. Commit, then tag each: `git tag Wheel-v0.6.1 && git push origin main Wheel-v0.6.1`.
+   `<Name>` is the folder without `ImprovedForever_` (`Core` for `ImprovedForever`).
+
+The [release workflow](.github/workflows/release.yml) runs per tag: it checks the tag matches that
+addon's TOC, builds its zip, creates the GitHub release with its changelog section, and uploads the
+zip to its CurseForge project (`## X-Curse-Project-ID` in its TOC) when `CF_API_KEY` is set. A tag
+with a suffix (`Wheel-v0.7.0-beta1`) makes a pre-release / beta.
 
 ## Support
 

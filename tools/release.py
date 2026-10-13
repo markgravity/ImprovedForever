@@ -1,19 +1,21 @@
 """Release helpers, run by the GitHub workflow (.github/workflows/release.yml)
-on every version tag (v0.2.0, v0.3.0-beta1...). Python standard library only.
+on every addon tag (Wheel-v0.6.1, Core-v0.7.0, Junk-v0.7.0-beta1...). Python
+standard library only.
 
-    python tools/release.py check v1.0.0   the tag matches the TOC's version
-    python tools/release.py notes          this version's CHANGELOG section
-    python tools/release.py curseforge     upload each addon's zip to CurseForge
+    python tools/release.py check Wheel-v0.6.1   the tag matches that addon's TOC version
+    python tools/release.py notes Wheel-v0.6.1   its CHANGELOG section ('## Wheel 0.6.1')
+    python tools/release.py curseforge Wheel-v0.6.1   upload that addon's zip to CurseForge
+    python tools/release.py changed              the addons touched since their last tag
 
-The version is the core's TOC's (ImprovedForever/ImprovedForever.toc); every
-module's TOC must say the same. CurseForge needs CF_API_KEY: a GitHub secret
-in CI, or a line in the local .env (git-ignored) when run by hand. Each addon
-is its own CurseForge project: its ID from its TOC (## X-Curse-Project-ID; an
-addon without one isn't uploaded), its slug from its folder (slug() below),
-its TOC's Dependencies / OptionalDeps on our addons sent as the file's
-relations, its changelog without the entries about an addon that isn't on
-CurseForge. The game version comes from CF_GAME_VERSION (default 1.60.1, WoW
-Forever) or CF_GAME_VERSION_ID.
+Each addon is versioned and released on its own: the tag is <Name>-v<version>,
+<Name> being its folder without the 'ImprovedForever_' prefix (Core for the
+ImprovedForever folder: Core, Controller, Wheel, QuestTracker...). CurseForge
+needs CF_API_KEY: a GitHub secret in CI, or a line in the local .env
+(git-ignored) when run by hand. Each addon is its own CurseForge project: its
+ID from its TOC (## X-Curse-Project-ID; an addon without one isn't uploaded),
+its slug from its folder (slug() below), its TOC's Dependencies / OptionalDeps
+on our addons sent as the file's relations. The game version comes from
+CF_GAME_VERSION (default 1.60.1, WoW Forever) or CF_GAME_VERSION_ID.
 """
 import json
 import os
@@ -49,8 +51,8 @@ def toc_field(name, folder=ADDON):
     return match and match.group(1)
 
 
-def version():
-    return toc_field("Version")
+def version(folder=ADDON):
+    return toc_field("Version", folder)
 
 
 def module_versions():
@@ -62,30 +64,31 @@ def module_versions():
     return found
 
 
-def notes(ver=None):
-    """The CHANGELOG section of a version, without its title."""
-    ver = ver or version()
-    text = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
-    match = re.search(rf"^## {re.escape(ver)}(?=\s|$).*?$\n(.*?)(?=^## |\Z)", text, re.M | re.S)
+def short(folder):
+    """The addon's name in tags and the changelog: Core, Wheel, QuestTracker..."""
+    return "Core" if folder == ADDON else folder[len(ADDON):].lstrip("_")
+
+
+def parse_tag(tag):
+    """(folder, version) of an addon tag like Wheel-v0.6.1"""
+    match = re.fullmatch(r"([A-Za-z]+)-v(\d.*)", tag or "")
     if not match:
-        sys.exit(f"CHANGELOG.md has no '## {ver}' section")
+        sys.exit(f"'{tag}' isn't an addon tag (<Name>-v<version>, e.g. Wheel-v0.6.1)")
+    name, ver = match.groups()
+    for folder in module_versions():
+        if short(folder).lower() == name.lower():
+            return folder, ver
+    sys.exit(f"No addon named {name}: " + ", ".join(short(f) for f in module_versions()))
+
+
+def notes(folder, ver):
+    """The CHANGELOG section '## <Name> <version>' of an addon, without its title."""
+    text = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    title = f"{short(folder)} {ver}"
+    match = re.search(rf"^## {re.escape(title)}(?=\s|$).*?$\n(.*?)(?=^## |\Z)", text, re.M | re.S)
+    if not match:
+        sys.exit(f"CHANGELOG.md has no '## {title}' section")
     return match.group(1).strip() + "\n"
-
-
-def curseforge_notes(ver):
-    """The notes without the entries about an addon of ours that isn't on CurseForge
-    (no '## X-Curse-Project-ID'): its '- **Module** ...' bullets, continuation lines included."""
-    off = [f[len(ADDON):].lstrip("_") for f in module_versions()
-           if f != ADDON and not toc_field("X-Curse-Project-ID", f)]
-    kept, skip = [], False
-    for line in notes(ver).splitlines():
-        if line.startswith("- "):
-            skip = any(line.startswith(f"- **{name}**") for name in off)
-        elif not line.startswith("  "):
-            skip = False
-        if not skip:
-            kept.append(line)
-    return "\n".join(kept).strip() + "\n"
 
 
 def release_type(ver):
@@ -148,17 +151,17 @@ def relations(folder):
 
 
 def upload(folder, token, game_version):
-    ver = version()
+    ver = version(folder)
     project = toc_field("X-Curse-Project-ID", folder)
     if not project:
         print(f"CurseForge: {folder} has no '## X-Curse-Project-ID', not uploaded")
         return
     zip_path = ROOT / "dist" / f"{folder}-{ver}.zip"
     if not zip_path.is_file():
-        sys.exit(f"{zip_path} is missing: run tools/package.py first")
+        sys.exit(f"{zip_path} is missing: run tools/package.py {short(folder)} first")
 
     metadata = {
-        "changelog": curseforge_notes(ver),
+        "changelog": notes(folder, ver),
         "changelogType": "markdown",
         "displayName": f"{toc_field('Title', folder)} {ver}",
         "releaseType": release_type(ver),
@@ -198,31 +201,48 @@ def upload(folder, token, game_version):
     print(f"CurseForge: {zip_path.name} uploaded ({metadata['releaseType']}), file id {result and result.get('id')}")
 
 
-def curseforge():
+def curseforge(folder):
     token = os.environ.get("CF_API_KEY")
     if not token:
         sys.exit("CF_API_KEY is not set (GitHub: Settings > Secrets and variables > Actions)")
-    game_version = game_version_id(token)
-    # (the core first: the modules' files name it as a relation)
-    for folder in sorted(module_versions(), key=lambda f: f != ADDON):
-        upload(folder, token, game_version)
+    upload(folder, token, game_version_id(token))
+
+
+def changed():
+    """Print each addon with commits since its last tag (or never tagged)"""
+    import subprocess
+
+    def git(*args):
+        return subprocess.run(["git", *args], cwd=ROOT, capture_output=True, text=True).stdout.strip()
+
+    for folder, ver in module_versions().items():
+        tag = f"{short(folder)}-v{ver}"
+        if not git("tag", "-l", tag) and git("tag", "-l", f"v{ver}"):
+            tag = f"v{ver}"                  # before the per-addon tags: one tag for all
+        if git("tag", "-l", tag):
+            files = git("diff", "--name-only", tag, "HEAD", "--", folder)
+            state = f"{len(files.splitlines())} files changed since {tag}" if files else "unchanged"
+        else:
+            state = f"no tag {tag} yet"
+        print(f"{short(folder):<13} {ver:<10} {state}")
 
 
 def main():
     command = sys.argv[1] if len(sys.argv) > 1 else ""
+    arg = sys.argv[2] if len(sys.argv) > 2 else ""
     if command == "check":
-        tag = sys.argv[2] if len(sys.argv) > 2 else ""
-        if tag != f"v{version()}":
-            sys.exit(f"The tag {tag} doesn't match the TOC's version {version()} (expected v{version()})")
-        off = {folder: v for folder, v in module_versions().items() if v != version()}
-        if off:
-            sys.exit("Modules on another version: " + ", ".join(f"{f} {v}" for f, v in off.items()))
-        notes()
-        print(f"Version {version()}: ok")
+        folder, ver = parse_tag(arg)
+        if version(folder) != ver:
+            sys.exit(f"The tag {arg} doesn't match {folder}'s TOC version {version(folder)} (expected {short(folder)}-v{version(folder)})")
+        notes(folder, ver)
+        print(f"{folder} {ver}: ok")
     elif command == "notes":
-        sys.stdout.write(notes(sys.argv[2] if len(sys.argv) > 2 else None))
+        folder, ver = parse_tag(arg)
+        sys.stdout.write(notes(folder, ver))
     elif command == "curseforge":
-        curseforge()
+        curseforge(parse_tag(arg)[0])
+    elif command == "changed":
+        changed()
     else:
         sys.exit(__doc__)
 

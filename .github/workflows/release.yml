@@ -1,7 +1,8 @@
-# Release: on every version tag (v0.2.0, v0.3.0-beta1...), build the zips
-# (one per addon, and one with all of them), create the GitHub release with
-# this version's notes from CHANGELOG.md and, when the CF_API_KEY secret is
-# set, upload each addon's zip to its CurseForge project.
+# Release: on every addon tag (Wheel-v0.6.1, Core-v0.7.0, Junk-v0.7.0-beta1...),
+# build that addon's zip, create the GitHub release with its notes from
+# CHANGELOG.md ('## Wheel 0.6.1') and, when the CF_API_KEY secret is set, upload
+# the zip to the addon's CurseForge project. Each addon is released on its own:
+# only the tagged one.
 #
 # An addon is uploaded when its TOC has '## X-Curse-Project-ID'. Optional repository
 # variables: CF_GAME_VERSION (default 1.60.1) or CF_GAME_VERSION_ID.
@@ -10,7 +11,7 @@ name: Release
 on:
   push:
     tags:
-      - "v*"
+      - "*-v*"
 
 permissions:
   contents: write
@@ -34,19 +35,20 @@ jobs:
 
       - name: Build the zip
         run: |
-          python tools/package.py
-          python tools/release.py notes > dist/notes.md
+          python tools/package.py "${GITHUB_REF_NAME%%-v*}"
+          python tools/release.py notes "$GITHUB_REF_NAME" > dist/notes.md
 
       - name: GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          version="${GITHUB_REF_NAME#v}"
+          name="${GITHUB_REF_NAME%%-v*}"
+          version="${GITHUB_REF_NAME#*-v}"
           prerelease=""
           case "$version" in *-*) prerelease="--prerelease" ;; esac
-          gh release create "$GITHUB_REF_NAME" dist/ImprovedForever*.zip \
-            --title "Improved Forever $version" --notes-file dist/notes.md $prerelease
+          gh release create "$GITHUB_REF_NAME" dist/ImprovedForever*-"$version".zip \
+            --title "Improved Forever $name $version" --notes-file dist/notes.md $prerelease
 
       - name: CurseForge
         if: env.CF_API_KEY != ''
-        run: python tools/release.py curseforge
+        run: python tools/release.py curseforge "$GITHUB_REF_NAME"
