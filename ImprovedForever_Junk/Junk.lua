@@ -299,7 +299,8 @@ end)
 local B = IF.Binds
 B.Add({
     id = "junkmark", label = "Mark Junk", group = "Bags", tab = "controller",
-    icon = IF.TEX .. "ic_mod_junk", context = "bags", order = 22,
+    icon = IF.TEX .. "ic_fn_junkmark", context = "bags", order = 22,
+    desc = "Marks the bag item under the cursor as junk, or not",
     tip = "Marks the bag item the cursor is on as junk, or no longer junk: sold with the vendor's Sell All"
         .. " Junk, offered first by the Destroy panel. Remembered for this character. Only while a bag is open;"
         .. " watched, not taken: the button keeps its own action.",

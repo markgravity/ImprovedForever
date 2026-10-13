@@ -118,16 +118,23 @@ local WINDOWS = {
         icon = "Interface\\Icons\\INV_Misc_PocketWatch_01", buttons = { "TimeManagerClockButton" } },
     { key = "pvp", label = "PvP", radial = { R .. "pvp" },
         icon = "Interface\\Icons\\Ability_DualWield", buttons = { "PVPMicroButton", "HonorMicroButton" } },
-    -- (ours)
-    { key = "nodes", label = "Minimap labels", ours = true, icon = IF.TEX .. "ic_mod_gather", buttons = { "ImprovedForeverNodeScan" } },
+    -- (ours; macroIcon: the game's icon nearest ours, for a crossbar slot's
+    -- macro, which can't show a texture of an addon: Native.lua)
+    { key = "nodes", label = "Minimap labels", ours = true, desc = "Shows / hides names beside the minimap's dots", icon = IF.TEX .. "ic_fn_labels",
+        macroIcon = "Interface\\Icons\\INV_Misc_Flower_02", buttons = { "ImprovedForeverNodeScan" } },
     -- (the map's own button: opened with the pad's press, closed with its
     -- release, shown as the peek map, PeekMap.lua; the touchpad's map
     -- corner opens it the same way)
-    { key = "peekmap", label = "Peek map", ours = true, icon = IF.TEX .. "ic_mod_map",
-        buttons = { "WorldMapMicroButton", "MiniMapWorldMapButton", "QuestLogMicroButton" } },
-    { key = "journal", label = "Journal", ours = true, icon = IF.TEX .. "ic_mod_journal",
-        buttons = { "ImprovedForeverJournalToggle" } },
-    { key = "icmenu", label = "Improved Forever panel", ours = true, icon = IF.TEX .. "ic_addon", buttons = { "ImprovedForeverMenuToggle" } },
+    { key = "peekmap", label = "Peek map", ours = true, desc = "Opens the map, see-through", icon = IF.TEX .. "ic_fn_peekmap",
+        macroIcon = "Interface\\Icons\\INV_Misc_Map_01", buttons = { "WorldMapMicroButton", "MiniMapWorldMapButton", "QuestLogMicroButton" } },
+    { key = "journal", label = "Journal", ours = true, desc = "Opens the Journal", icon = IF.TEX .. "ic_mod_journal",
+        macroIcon = "Interface\\Icons\\INV_Misc_Book_09", buttons = { "ImprovedForeverJournalToggle" } },
+    { key = "icmenu", label = "Improved Forever panel", ours = true, desc = "Opens this settings panel", icon = IF.TEX .. "ic_addon",
+        macroIcon = "Interface\\Icons\\INV_Misc_Gear_01", buttons = { "ImprovedForeverMenuToggle" } },
+    -- (its press runs /reload itself: a /click to a button of ours is
+    -- lost on key-down presses, the button answering only its release)
+    { key = "reload", label = "Reload", ours = true, desc = "Reloads the interface (/reload)", macro = "/reload",
+        icon = IF.TEX .. "ic_fn_reload", macroIcon = "Interface\\Icons\\Spell_Nature_Reincarnation", buttons = { "ImprovedForeverReload" } },
     -- (no longer offered; kept for what holds it already)
     { key = "map", label = "World Map", hidden = true, icon = "Interface\\Icons\\INV_Misc_Map_01",
         buttons = { "WorldMapMicroButton", "MiniMapWorldMapButton", "QuestLogMicroButton" } },
@@ -142,6 +149,28 @@ local function WindowIcon(action)
     end
     return action.icon
 end
+
+-- The Reload action's button: a press (or a corner) clicks it
+-- A button a window of ours opens from (a key binding, a /click of a
+-- press, a wheel or a corner): fn once a press. Registered for both edges,
+-- a /click sending one of them; a key binding's sends both: acted on the
+-- press, its release let go.
+function AC.PressButton(name, fn)
+    local b = CreateFrame("Button", name, UIParent)
+    b:RegisterForClicks("AnyDown", "AnyUp")
+    b:SetScript("OnClick", function(self, _, down)
+        if down then
+            self.pressed = true
+        elseif self.pressed then
+            self.pressed = false
+            return
+        end
+        fn()
+    end)
+    return b
+end
+
+AC.PressButton("ImprovedForeverReload", function() ReloadUI() end)
 
 local ACTION_BY_KEY = {}
 for _, action in ipairs(WINDOWS) do
@@ -203,6 +232,8 @@ function AC.Macro(key)
         end
         return nil
     end
+    local action = ACTION_BY_KEY[key]
+    if action and action.macro then return action.macro end
     local name = ActionButton(key)
     return name and ("/click " .. name)
 end
@@ -214,7 +245,7 @@ function AC.InterfaceEntries(ours)
     local entries = {}
     for _, key in ipairs(AC.Windows()) do
         if key ~= "none" and (ACTION_BY_KEY[key].ours or false) == (ours or false) then
-            entries[#entries + 1] = { action = key, name = AC.Label(key), icon = AC.Icon(key) }
+            entries[#entries + 1] = { action = key, name = AC.Label(key), icon = AC.Icon(key), sub = ACTION_BY_KEY[key].desc }
         end
     end
     return entries
@@ -224,6 +255,14 @@ end
 function AC.IsOurs(key)
     local action = ACTION_BY_KEY[key]
     return action ~= nil and action.ours == true
+end
+
+-- The icon for a macro of an action: its game icon where its own is an
+-- addon's texture (macroIcon), else its own
+function AC.MacroIcon(key)
+    local action = ACTION_BY_KEY[key]
+    if action then return action.macroIcon or action.icon end
+    return AC.Icon(key)
 end
 
 function AC.Label(key)

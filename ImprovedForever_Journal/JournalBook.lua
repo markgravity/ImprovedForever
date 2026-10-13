@@ -466,6 +466,5 @@ events:SetScript("OnEvent", Redraw)
 
 -- The press that opens it: a key binding, a wheel's or the touchpad's
 -- (the core's windows of ours, Actions.lua)
-local toggle = CreateFrame("Button", "ImprovedForeverJournalToggle", UIParent)
-toggle:SetScript("OnClick", function() JB.Toggle() end)
+IF.Actions.PressButton("ImprovedForeverJournalToggle", function() JB.Toggle() end)
 _G["BINDING_NAME_CLICK ImprovedForeverJournalToggle:LeftButton"] = "Toggle Journal"

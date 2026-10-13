@@ -1038,9 +1038,10 @@ end)
 local B = IF.Binds
 B.Add({
     id = "destroy", label = "Destroy", group = "Bags", tab = "controller",
-    icon = IF.TEX .. "ic_emote_no", context = "bags", order = 21,
+    icon = IF.TEX .. "ic_mod_destroy", context = "bags", order = 21,
     -- Watched, not taken; on an R3 combo the wheels leave it to the panel
     -- while the bags are open (Destroy.lua)
+    desc = "Opens the Destroy panel while your bags are open",
     tip = "Opens the Destroy panel: the junk, safe to throw away. Only while a bag is open. With the bags full,"
         .. " the top face button (Triangle / Y) opens it from the loot window too: there each destroy"
         .. " loots the item that didn't fit in the junk's place.",

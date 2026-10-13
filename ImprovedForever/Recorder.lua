@@ -1,7 +1,7 @@
 -- Recording a press to bind (Square, on every tab that binds): a box asks
 -- for it, and the first button let go ends it: the press is what was
--- pressed last (a button pressed while another is held: the two, "L1 +
--- R3"; asked for, pressed again quickly: twice). Circle alone (or Escape,
+-- pressed last (a button pressed while others are held: all of them, "L1 +
+-- R3", "L1 + R1 + R3"; asked for, pressed again quickly: twice). Circle alone (or Escape,
 -- or 10 s without a press) cancels. The pad
 -- is the box's alone while it is up, and until every button is let go
 -- after, so no release leaks to the panel or the game.
@@ -26,23 +26,13 @@ local box, opts, state, spec, down, deadline, info, again
 
 local function Build()
     if box then return end
-    local d = K.NewFrame("Frame", "ImprovedForeverRecorder", UIParent, "BackdropTemplate")
-    d:SetSize(460, 220)
-    d:SetPoint("CENTER", UIParent, "CENTER", 0, 20)
-    d:SetFrameStrata("FULLSCREEN_DIALOG")
-    d:SetFrameLevel(500)
-    d:EnableMouse(true)
-    d:SetBackdrop({
-        bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background-Dark",
-        edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
-        tile = true, tileSize = 32, edgeSize = 32,
-        insets = { left = 11, right = 12, top = 12, bottom = 11 },
-    })
-    d.title = K.Text(d, 17, KC.title)
-    d.title:SetPoint("TOP", 0, -26)
-    d.title:SetJustifyH("CENTER")
+    -- (the panel's own window look, its title in its bar, its focus glow:
+    -- it has the pad; above the panel, FULLSCREEN_DIALOG, and its tabs)
+    local d = IF.UI.Window("ImprovedForeverRecorder", 460, 210, true)
+    d:SetFrameStrata("TOOLTIP")
+    IF.Focus.Glow(d, true)
     d.hint = K.ChatText(d, 13, KC.cream2)
-    d.hint:SetPoint("TOP", d.title, "BOTTOM", 0, -10)
+    d.hint:SetPoint("TOP", 0, -40)
     d.hint:SetWidth(400)
     d.hint:SetJustifyH("CENTER")
     d.hint:SetSpacing(4)
@@ -99,7 +89,8 @@ end
 
 -- opts = { title, hint (what may be pressed), chord (false: one button
 -- only), double (a quick second press makes it ":double"), accept =
--- function(spec) (false: not allowed), reject (its message), onDone =
+-- function(spec) (false: not allowed), reject (its message, or
+-- function(spec) -> it), onDone =
 -- function(spec, info), onCancel = function() }
 function R.Start(o)
     if IF.InCombat() then return false end
@@ -107,7 +98,11 @@ function R.Start(o)
     R.Stop()
     opts, state, spec, down, info, again = o, "wait", nil, {}, {}, false
     deadline = GetTime() + WAIT
-    box.title:SetText(o.title or "Bind")
+    box:SetTitle(o.title or "Bind")
+    -- (over the panel when it is open, else the screen's middle)
+    box:ClearAllPoints()
+    local panel = menu.IsOpen() and _G.ImprovedForeverConfigFrame
+    box:SetPoint("CENTER", panel or UIParent, "CENTER", 0, panel and 0 or 20)
     box.hint:SetText(IF.PadText((o.hint or ("Press the button for it"
         .. (o.chord ~= false and ", or hold one and press another" or "") .. "."))
         .. "\nLetting go of a button binds it."))
@@ -153,10 +148,10 @@ function R.OnDown(button)
     end
     Remove(button)
     Prune()
-    -- Under the last button still held, if a second one may be
-    local held = opts.chord ~= false and down[#down] or nil
+    -- Under every button still held, if more than one may be
+    local held = opts.chord ~= false and { unpack(down) } or nil
     down[#down + 1] = button
-    spec = held and (held .. "+" .. button) or button
+    spec = IF.Binds.SpecOf(held, button)
     state = "press"
     R.Render()
 end
@@ -209,7 +204,8 @@ function R.Finish(cancel)
         if cancel or not s or s == "PAD2" then
             if o.onCancel then o.onCancel() end
         elseif o.accept and not o.accept(s) then
-            menu.Toast(o.reject or (IF.Binds.Text(s) .. " can't be used for this"), true, 3)
+            local reject = type(o.reject) == "function" and o.reject(s) or o.reject
+            menu.Toast(reject or (IF.Binds.Text(s) .. " can't be used for this"), true, 3)
             if o.onCancel then o.onCancel() end
         else
             o.onDone(s, i)

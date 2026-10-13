@@ -413,7 +413,8 @@ end
 local B = IF.Binds
 B.Add({
     id = "gather", label = "Minimap labels", group = "Other", tab = "gather",
-    icon = "Interface\\Icons\\" .. "INV_Misc_Flower_02", context = "world", order = 30,
+    icon = IF.TEX .. "ic_fn_labels", context = "world", order = 30,
+    desc = "Shows / hides names beside the minimap's dots",
     tip = "Shows / hides the names beside the minimap's dots. Watched only: the buttons keep their own"
         .. " actions too.",
     accepts = B.NotDouble,

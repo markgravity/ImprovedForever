@@ -1,22 +1,19 @@
--- The Controller tab: down the left every binding of ours (the wheels, the
--- bags', the others, the actions put on presses, the touchpad's corners)
--- with its press; beside it a drawing of the controller (each button marked
--- when something of ours is on it, red when two things clash there), the
--- picked binding's press lit, and under it what the press can do, on what
--- it does now: Cross binds. A choice taking a press from
--- something else asks first (Cross again). The left stick: up / down the
--- bindings, left / right the choices' lists (L2 / R2 too); the D-pad the
--- choices. A press can be picked by making it too:
--- Square ("Find press", Recorder.lua) and press the button (or hold one and
--- press another, or press one twice); a binding on no press: Square records
--- one for it.
+-- The Controller tab: down the left what can be bound, in lists (L1 / R1,
+-- L2 / R2 too): the wheels, the addon's other things (Misc), spells,
+-- items, macros, emotes and the game's windows, a card each with its press;
+-- beside it a drawing of the controller (each button marked when something
+-- of ours is on it, red when two things clash there), the press of the
+-- card picked lit. A card on no press: the drawing dimmed, Square over it.
+-- Square (Cross too) binds the card picked: a box asks for the press
+-- (Recorder.lua: a button, one held and another pressed, or one pressed
+-- twice) and it goes there, moved from its press before; taking a press
+-- from something else asks first (Cross again). Triangle unbinds it.
+-- On a PlayStation controller the touchpad shows its four corners: an
+-- action bound by clicking the pad goes on the corner under the finger
+-- (Touchpad.lua). Triangle on an action on a corner clears it, held turns
+-- the corner off.
 -- The other tabs still bind their own things, through Binds.lua, so they
 -- warn the same way.
--- On a PlayStation controller the touchpad shows its four corners: each
--- runs what it holds when the pad is clicked there (Touchpad.lua), picked
--- from Spells / Items / Macros / Interface (L2 / R2). Find press and click
--- the pad: the corner under the finger. Triangle clears one, held turns it
--- off.
 local IF = ImprovedForever
 
 local K = IF.ConfigKit
@@ -28,10 +25,16 @@ local touch = IF.Touch
 local UI = IF.UI
 
 local TEX = "Interface\\AddOns\\ImprovedForever\\textures\\"
-local SIDE_W, PICKER_ROWS = 230, 4
+local LIST_W = 310
 
--- The drawing (tools/make_controller.py) at SCALE, over the choices
-local ART_W, ART_H, SCALE = 512, 256, 1.1
+-- The drawing (tools/make_controller.py), the press picked over it
+-- (PRESS_H), what runs on that press under it: the three one block in the
+-- middle of the column, the drawing as big as the column lets it (its
+-- controller DRAWN_W of its width, the rest see-through; ART_PAD clear on
+-- each side; up to MAX_SCALE)
+local ART_W, ART_H, DRAWN_W, MAX_SCALE = 512, 256, 400, 1.8
+local PRESS_H, RUNS_H, MSG_H, ART_PAD = 20, 22, 20, 48
+local ART_TOP = PRESS_H + 6
 
 -- Its buttons: where they sit on the drawing (its pixels, y down), their
 -- glyph's size; the touchpad's corners (region) in its recess
@@ -53,10 +56,14 @@ local SPOTS = {
 local SPOT = {}
 for _, s in ipairs(SPOTS) do SPOT[s.key] = s end
 
--- key: the button picked (or a touchpad corner), nil until one is found;
--- spec: the press on it; sel: the binding picked in the list
-local P = { variant = {}, sel = 1 }
+-- key: the button of the card picked's press (or a touchpad corner), nil
+-- when it is on none; spec: that press; selAction: the card picked (its
+-- action, a binding's id); list: its list; popup: a confirmation up
+-- ({ onAccept })
+local P = { list = 1 }
 B.Editor = P
+-- (its messages under the drawing, not over the legend: Menu.lua)
+P.ShowsToast = true
 
 -- A touchpad (its corners) only on a PlayStation controller; elsewhere the
 -- same button is View / Minus
@@ -97,248 +104,125 @@ local function Clashes(defs, spec)
     return false
 end
 
-local function NoneName(spec)
-    local held, _, double = B.Parse(spec)
-    if not held and not double then
-        -- (no name for it: what it does depends on what has the focus)
-        return "The game's own"
-    end
-    return "Nothing"
-end
-
 
 ---------------------------------------------------------------------------
--- The list down the left: every binding by group, each with its press (its
--- glyphs), then the touchpad's corners
+-- Presses: a spec, or a touchpad corner ("TOUCH:upleft")
 ---------------------------------------------------------------------------
-local function Glyphs(spec)
-    local keys = spec and B.Glyphs(spec)
-    if not keys then return "|cff6f6452none|r" end
-    local parts = {}
-    for _, key in ipairs(keys) do
-        parts[#parts + 1] = key == "+" and "+" or IF.GlyphText(key, 16)
-    end
-    local _, _, double = B.Parse(spec)
-    return table.concat(parts, "") .. (double and " ×2" or "")
+local function CornerOf(press)
+    return press and press:match("^TOUCH:(%a+)$")
 end
 
--- { label, def, spec } or { label, region } or { header }
-local function Lines()
-    local lines, group = {}, nil
+-- "L1 + R3" (with glyphs at size), a corner: the touchpad's, and which
+local function PressText(press, size)
+    local region = CornerOf(press)
+    if region then
+        return B.Text("PADBACK", size) .. "  |cff9d917a·|r  " .. touch.REGION_LABELS[region]
+    end
+    return B.Text(press, size)
+end
+
+-- Every action on a press: action -> { press... } (a crossbar slot or an
+-- override binding, Binds.lua; a touchpad corner)
+local function ActionPresses()
+    local map = {}
+    local function add(action, press)
+        map[action] = map[action] or {}
+        table.insert(map[action], press)
+    end
     for _, def in ipairs(B.All()) do
-        if def.id ~= "touch" then
-            local name = def.kind == "action" and "Actions" or def.group
-            if name ~= group then
-                group = name
-                lines[#lines + 1] = { header = name }
-            end
+        if def.kind == "action" then
             local spec = def.specs()[1]
-            lines[#lines + 1] = { label = def.label .. "  " .. Glyphs(spec), def = def, spec = spec }
+            local action = spec and B.ActionOn(spec)
+            if action then add(action, spec) end
         end
     end
     if HasTouchpad() then
-        lines[#lines + 1] = { header = "Touchpad" }
         for _, region in ipairs(touch.REGIONS) do
             local action = touch.GetSettings().regions[region]
-            lines[#lines + 1] = { label = touch.REGION_LABELS[region] .. "  |cff9d917a"
-                .. (touch.IsBound(action) and touch.ActionLabel(action) or "Empty") .. "|r", region = region }
+            if touch.IsBound(action) then add(action, "TOUCH:" .. region) end
         end
     end
-    return lines
+    return map
 end
 
--- The line picked: its press on the drawing, its choices on the right
-function P:Pick(i)
-    local lines = Lines()
-    local step = i < (self.sel or 1) and -1 or 1
-    while lines[i] and lines[i].header do i = i + step end
-    if not lines[i] then
-        i = self.sel or 1
-        while lines[i] and lines[i].header do i = i + 1 end
-    end
-    local line = lines[i]
-    if not line then return end
-    self.sel = i
-    self.pickerFor = nil
-    menu.Disarm()
-    if line.region then
-        self.key, self.spec = "TOUCH:" .. line.region, nil
-    elseif line.spec then
-        local _, pressed = B.Parse(line.spec)
-        self.key, self.spec = pressed, line.spec
-    else
-        self.key, self.spec = nil, nil
-    end
-end
-
--- The list back on the binding a found press runs (if any)
-function P:SyncList()
-    local lines = Lines()
-    local region = self.key and SPOT[self.key] and SPOT[self.key].region
-    for i, line in ipairs(lines) do
-        if (region and line.region == region) or (not region and line.spec and line.spec == self:Spec()) then
-            self.sel = i
-            return
-        end
-    end
-end
-
-function P:Line()
-    return Lines()[self.sel or 1]
+-- A card's presses: a binding's own, an action's where it is
+local function PressesOf(e, map)
+    if not e then return {} end
+    if e.def then return e.def.specs() end
+    return (map or ActionPresses())[e.action] or {}
 end
 
 ---------------------------------------------------------------------------
--- The picker: what the press picked can do
+-- The lists: what can be bound, a card each: what it does under its name,
+-- its press on its right (bound: the card washed)
 ---------------------------------------------------------------------------
-function P:Spec()
-    return self.spec or self.key
-end
-
--- Ours that can go on the press: the wheels (wheels = true), or the rest
--- (an action has its own lists: Spells, Items...)
-local function Ours(spec, wheels)
-    local defs = {}
+-- Ours: the wheels (wheels = true), or the rest (not the actions on
+-- presses: they are in the lists they come from; not the touchpad click)
+local function Ours(wheels)
+    local entries = {}
     for _, def in ipairs(B.All()) do
-        if def.kind ~= "action" and (def.group == "Wheels") == wheels and def.accepts(spec) then
-            defs[#defs + 1] = def
+        if def.kind ~= "action" and def.id ~= "touch" and (def.group == "Wheels") == wheels then
+            -- (a wheel: its name, the list says it's one)
+            local name = wheels and def.label:gsub(" wheel$", "") or def.label
+            entries[#entries + 1] = { action = def.id, name = name, icon = def.icon, sub = def.desc, def = def }
         end
-    end
-    return defs
-end
-
-local function Entries(spec, wheels)
-    local entries = { { action = "none", name = NoneName(spec), icon = TEX .. "ic_emote_no" } }
-    local group, groups = nil, {}
-    local defs = Ours(spec, wheels)
-    for _, def in ipairs(defs) do groups[def.group] = true end
-    local many = next(groups) and next(groups, next(groups)) ~= nil
-    for _, def in ipairs(defs) do
-        if many and def.group ~= group then
-            group = def.group
-            entries[#entries + 1] = { header = group }
-        end
-        local sub
-        local here = B.Has(def, spec)
-        if def.context == "bags" then sub = "bags open" end
-        entries[#entries + 1] = { action = def.id, name = def.label, icon = def.icon, sub = sub, here = here,
-            def = def }
     end
     return entries
 end
 
--- What a press or a corner can run: as the wheels' picker (Spells, Items,
--- Macros, Emotes; a corner: no emotes), Interface (the game's windows), and
--- (with ours = true) Misc: our own windows (the minimap labels, the peek
--- map, this panel)
-local function ActionLists(emotes, ours)
+-- Each card's press
+local function WithPresses(entries)
+    local map = ActionPresses()
+    for _, e in ipairs(entries) do
+        local press = not e.header and PressesOf(e, map)[1]
+        if press then e.press = PressText(press, 14) end
+    end
+    return entries
+end
+
+local function Lists()
     local lists = {}
-    for _, list in ipairs(IF.Actions.CATALOG) do
-        if emotes or list.key ~= "emotes" then lists[#lists + 1] = list end
+    local function add(key, label, fn)
+        lists[#lists + 1] = { key = key, label = label, entries = function() return WithPresses(fn()) end }
     end
-    lists[#lists + 1] = { key = "interface", label = "Interface", entries = function() return touch.InterfaceEntries() end }
-    if ours then
-        lists[#lists + 1] = { key = "misc", label = "Misc", entries = function() return touch.InterfaceEntries(true) end }
-    end
+    if #Ours(true) > 0 then add("wheels", "Wheels", function() return Ours(true) end) end
+    for _, list in ipairs(IF.Actions.CATALOG) do add(list.key, list.label, list.entries) end
+    add("interface", "Interface", function() return touch.InterfaceEntries() end)
+    -- Last, Misc: our other bindings, then our windows (Reload too) not
+    -- already among them
+    add("misc", "Misc", function()
+        local entries, named = Ours(false), {}
+        for _, e in ipairs(entries) do named[e.name] = true end
+        for _, e in ipairs(touch.InterfaceEntries(true)) do
+            if not named[e.name] then entries[#entries + 1] = e end
+        end
+        return entries
+    end)
     return lists
 end
 
--- The list an action is in (or fallback)
-local function ListOf(lists, action, fallback)
-    local kind = touch.IsBound(action) and (action:match("^(%a+):")
-        or (IF.Actions.IsOurs(action) and "misc" or "interface"))
-    for i, list in ipairs(lists) do
-        if kind and (list.key == kind or list.key == kind .. "s") then return i end
-    end
-    return fallback or 1
+-- The card picked
+function P:Entry()
+    local p = self.picker
+    return p and p.def and p.entries and p.index and p.entries[p.index]
 end
 
-function P:SyncPicker(force)
-    -- Nothing picked: no list
-    if not self.key then
-        self.pickerFor = nil
-        return self.picker:Close()
-    end
-    local want = Region() or self:Spec()
-    if self.pickerFor == want and not force then return end
-    self.pickerFor = want
-    local region = Region()
-    if region then
-        local lists = ActionLists(false, true)
-        self.picker:Open({
-            lists = lists, list = self.variant[self.key] or ListOf(lists, touch.GetSettings().regions[region]),
-            rows = PICKER_ROWS, chooseVerb = "Bind",
-            current = function() return touch.GetSettings().regions[region] end,
-            -- (only what this corner holds)
-            marked = function(e) return e.action == touch.GetSettings().regions[region] end,
-            status = function()
-                local action = touch.GetSettings().regions[region]
-                return touch.REGION_LABELS[region] .. ":  "
-                    .. (touch.IsBound(action) and ("|cffffffff" .. touch.ActionLabel(action) .. "|r") or "Empty")
-            end,
-            onChoose = function(e) P:BindCorner(region, e) end,
-        })
-        return
-    end
-    -- A press: the wheels (where one can go on it), the addon's other
-    -- things (Misc), then what it can run (where an action can go on it),
-    -- on the list of what it does now
-    local spec = self:Spec()
-    local lists = {}
-    if #Ours(spec, true) > 0 then
-        lists[#lists + 1] = { key = "wheels", label = "Wheels", entries = function() return Entries(spec, true) end }
-    end
-    local fits = B.ActionFits(spec)
-    if fits then
-        for _, list in ipairs(ActionLists(true)) do lists[#lists + 1] = list end
-    end
-    -- Last, Misc: our other bindings that can go on it, and (where an action
-    -- can) our windows not already among them
-    lists[#lists + 1] = { key = "misc", label = "Misc", entries = function()
-        local entries = Entries(spec, false)
-        if fits then
-            local named = {}
-            for _, e in ipairs(entries) do if e.name then named[e.name] = true end end
-            for _, e in ipairs(touch.InterfaceEntries(true)) do
-                if not named[e.name] then entries[#entries + 1] = e end
-            end
-        end
-        return entries
-    end }
-    local misc = #lists
-    local start = misc
-    local bound = B.Bound(spec)[1]
-    if B.ActionOn(spec) then
-        start = ListOf(lists, B.ActionOn(spec), misc)
-    elseif bound and bound.group == "Wheels" then
-        start = 1
-    end
+function P:OpenPicker()
+    local lists = Lists()
     self.picker:Open({
-        lists = lists, list = start,
-        rows = PICKER_ROWS, chooseVerb = "Bind",
-        current = function(list)
-            if list.key ~= "wheels" and list.key ~= "misc" then return B.ActionOn(spec) end
-            if list.key == "misc" and B.ActionOn(spec) and IF.Actions.IsOurs(B.ActionOn(spec)) then
-                return B.ActionOn(spec)
-            end
-            for _, def in ipairs(B.Bound(spec)) do
-                if def.kind ~= "action" and (def.group == "Wheels") == (list.key == "wheels") then return def.id end
-            end
-            return "none"
-        end,
-        marked = function(e)
-            if e.def or e.action == "none" then return e.here end
-            return e.action == B.ActionOn(spec)
-        end,
-        -- The press, what it runs now
+        lists = lists, list = math.min(self.list, #lists),
+        chooseVerb = "Bind",
+        -- (the card picked kept through a change)
+        current = function() return P.selAction end,
+        right = function(e) return e.press end,
+        bound = function(e) return e.press ~= nil end,
         status = function()
-            local names = {}
-            for _, def in ipairs(B.Bound(spec)) do names[#names + 1] = def.label end
-            return B.Text(spec, 14) .. ":  " .. (#names > 0 and ("|cffffffff" .. table.concat(names, ", ") .. "|r")
-                or NoneName(spec))
+            local e = P:Entry()
+            if not e then return "" end
+            local press = PressesOf(e)[1]
+            return "|cffffffff" .. (e.name or "") .. "|r:  " .. (press and PressText(press, 14) or "not bound")
         end,
-        onChoose = function(e)
-            if e.def or e.action == "none" then P:Choose(e) else P:ChooseAction(spec, e) end
-        end,
+        onChoose = function() P:Bind() end,
     })
 end
 
@@ -347,10 +231,9 @@ end
 ---------------------------------------------------------------------------
 local function NewSpot(parent, s)
     local size = s.size or 30
-    local b = K.NewFrame("Button", nil, parent)
+    local b = K.NewFrame("Frame", nil, parent)
     b:SetSize(size + 8, size + 8)
     b:SetPoint("CENTER", parent, "TOPLEFT", s.x, -s.y)
-    b:RegisterForClicks("LeftButtonUp")
     b.glow = b:CreateTexture(nil, "BACKGROUND")
     b.glow:SetTexture(TEX .. "ic_slot_glow")
     b.glow:SetBlendMode("ADD")
@@ -375,11 +258,6 @@ local function NewSpot(parent, s)
     b.dot:SetTexture(TEX .. "ic_dot")
     b.dot:SetSize(10, 10)
     b.dot:SetPoint("CENTER", b, "TOPRIGHT", -4, -4)
-    -- (the mouse may pick one; the pad finds it by pressing it)
-    b:SetScript("OnClick", function()
-        P.key, P.spec = s.key, not s.region and s.key or nil
-        menu.Render()
-    end)
     return b
 end
 
@@ -390,181 +268,278 @@ function P:Build(parent)
     f:Hide()
     self.frame = f
 
-    -- Left: the bindings
-    f.side = UI.SideList(f, SIDE_W, 17, function(i)
-        P:Pick(i)
-        menu.Render()
-    end)
-    f.side:SetPoint("TOPLEFT", 8, -8)
-    f.side:SetPoint("BOTTOMLEFT", 8, 8)
+    -- Left: what can be bound (its lists in a bar along its top, as the
+    -- auction window's categories; a card each, one a row)
+    self.picker = UI.CardPicker(f, 1, 46, menu.Render, "LB", "RB")
+    self.picker:SetPoint("TOPLEFT", 8, -8)
+    self.picker:SetPoint("BOTTOMLEFT", 8, 8)
+    self.picker:SetWidth(LIST_W)
 
-    -- Beside it: the controller and its buttons, what the press can do
-    -- under them
+    -- Beside it: the press of the card picked, the controller and its
+    -- buttons, what runs on that press
     f.mid = K.NewFrame("Frame", nil, f)
-    f.mid:SetPoint("TOPLEFT", f.side, "TOPRIGHT", 10, 0)
+    f.mid:SetPoint("TOPLEFT", self.picker, "TOPRIGHT", 10, 0)
     f.mid:SetPoint("BOTTOMRIGHT", -8, 8)
-    local art = K.NewFrame("Frame", nil, f.mid)
+    local group = K.NewFrame("Frame", nil, f.mid)
+    group:SetPoint("LEFT")
+    group:SetPoint("RIGHT")
+    f.group = group
+    f.press = K.Text(group, 14, KC.cream)
+    f.press:SetPoint("TOP", group, "TOP", 0, -4)
+    f.press:SetHeight(PRESS_H)
+    f.press:SetJustifyH("CENTER")
+    local art = K.NewFrame("Frame", nil, group)
     art:SetSize(ART_W, ART_H)
-    art:SetScale(SCALE)
-    -- (a scaled frame's offsets are in its own units)
-    art:SetPoint("TOP", f.mid, "TOP", 0, -6 / SCALE)
     art.tex = art:CreateTexture(nil, "BACKGROUND")
     art.tex:SetTexture(TEX .. "ic_controller")
     art.tex:SetAllPoints()
     f.art = art
     f.spots = {}
     for _, s in ipairs(SPOTS) do f.spots[s.key] = NewSpot(art, s) end
+    f.runs = K.ChatText(group, 12, KC.help)
+    f.runs:SetJustifyH("CENTER")
+    -- Under it, the panel's messages (ShowsToast: not over the legend)
+    f.msg = K.ChatText(group, 13, KC.grey)
+    f.msg:SetPoint("TOP", f.runs, "BOTTOM", 0, -6)
+    f.msg:SetJustifyH("CENTER")
 
-    -- (its lists in a bar along its top, as the auction window's
-    -- categories; their choices as its item cards, two a row)
-    self.picker = UI.CardPicker(f.mid, 2, 46, menu.Render, "LS")
-    self.picker:SetPoint("TOPLEFT", f.mid, "TOPLEFT", 0, -(ART_H * SCALE + 14))
-    self.picker:SetPoint("BOTTOMRIGHT", f.mid, "BOTTOMRIGHT", 0, 0)
+    -- Over the drawing, a card on no press: Square to start binding it
+    local over = K.NewFrame("Frame", nil, group)
+    over:SetSize(400, 66)
+    over:SetFrameLevel(art:GetFrameLevel() + 20)
+    over.box = K.Box(over, 4, 1, "BACKGROUND")
+    over.box:SetColors(KC.boxBg, 0.92, KC.info, 0.6)
+    over.title = K.Text(over, 16, KC.cream)
+    over.title:SetPoint("CENTER", 0, 10)
+    over.title:SetJustifyH("CENTER")
+    over.sub = K.ChatText(over, 12, KC.help)
+    over.sub:SetPoint("CENTER", 0, -14)
+    over.sub:SetJustifyH("CENTER")
+    over:Hide()
+    f.over = over
+
+    -- The confirmation box (P:Confirm), over the page: the panel's own
+    -- window look (its title in its bar, its focus glow: it has the pad),
+    -- above the panel (FULLSCREEN_DIALOG) and its tabs
+    local d = UI.Window(nil, 440, 150, true)
+    d:SetFrameStrata("TOOLTIP")
+    d:SetPoint("CENTER", f, "CENTER", 0, 0)
+    d:SetTitle("Replace binding?")
+    IF.Focus.Glow(d, true)
+    d.text = K.Text(d, 15, KC.cream)
+    d.text:SetJustifyH("CENTER")
+    d.text:SetWordWrap(true)
+    d.text:SetPoint("TOP", d, "TOP", 0, -40)
+    d.text:SetWidth(390)
+    d.text:SetSpacing(4)
+    d.hintRow = K.NewFrame("Frame", nil, d)
+    d.hintRow:SetSize(1, 30)
+    d.hintRow:SetPoint("BOTTOM", d, "BOTTOM", 0, 22)
+    d.hints = {}
+    for i = 1, 2 do
+        d.hints[i] = K.Hint(d.hintRow, function(press) P:Press(press) end)
+    end
+    d:Hide()
+    self.dialog = d
+    f.mid:SetScript("OnSizeChanged", function() P:Layout() end)
+    self:Layout()
+end
+
+-- The drawing as big as the column lets it, the block placed for it
+function P:Layout()
+    local f = self.frame
+    local w, h = f.mid:GetSize()
+    if not w or w <= 0 then return end
+    local scale = math.min(MAX_SCALE, (w - 2 * ART_PAD) / DRAWN_W, (h - ART_TOP - 8 - RUNS_H - MSG_H) / ART_H)
+    local artH = ART_H * scale
+    f.group:SetHeight(ART_TOP + artH + 8 + RUNS_H + MSG_H)
+    f.art:SetScale(scale)
+    -- (a scaled frame's offsets are in its own units)
+    f.art:ClearAllPoints()
+    f.art:SetPoint("TOP", f.group, "TOP", 0, -ART_TOP / scale)
+    f.runs:ClearAllPoints()
+    f.runs:SetPoint("TOP", f.group, "TOP", 0, -(ART_TOP + artH + 8))
+    f.over:ClearAllPoints()
+    f.over:SetPoint("CENTER", f.group, "TOP", 0, -(ART_TOP + artH / 2))
 end
 
 function P:Show()
-    self.pickerFor = nil
-    if not self.key then self:Pick(self.sel or 1) end
+    self:OpenPicker()
+    self:Layout()
     self.frame:Show()
 end
 
--- The left stick (Menu.lua): up / down the bindings, left / right the
--- choices' lists
+-- The left stick (Menu.lua): up / down the cards
 function P:StickStep(dir)
-    self:Pick((self.sel or 1) + dir)
-end
-
-function P:StickSide(dir)
-    if self.key and self.picker.def then self.picker:Press(dir < 0 and "LT" or "RT") end
+    self.picker:Press(dir < 0 and "UP" or "DOWN")
 end
 
 function P:Hide()
+    -- (an open confirmation is a no)
+    if self.popup then self:AnswerPopup(false) end
     self.frame:Hide()
 end
 
 ---------------------------------------------------------------------------
 -- Binding
 ---------------------------------------------------------------------------
--- After a change: the list back on what the press does now
+-- After a change: the cards' presses again
 local function Done(text, warn)
-    P:SyncList()
     menu.Toast(text, warn)
     P.picker:LoadList()
     menu.Render()
 end
 
-function P:Choose(e)
-    if IF.InCombat() then return menu.Toast("Not in combat", true) end
-    local spec = self:Spec()
-    local text = B.Text(spec)
-    if e.action == "none" then
-        local bound = B.Bound(spec)
-        if #bound == 0 then return menu.Toast(text .. ": nothing of ours on it") end
-        local armId = "clear:" .. spec
-        if not menu.IsArmed(armId) then
-            menu.Arm(armId)
-            return menu.Toast(IF.PadText("Unbind " .. B.Names(bound) .. " from " .. text .. "? {A} again"), true, 4)
+-- Taking a press from something else asks first: a box over the page (the
+-- game's dialog look), Cross replaces, Circle backs out
+function P:Confirm(text, onAccept)
+    if IF.InCombat() then return end
+    self.popup = { onAccept = onAccept }
+    local d = self.dialog
+    d.text:SetText(text)
+    local x = 0
+    for i, hint in ipairs({ K.H({ "A" }, "Replace", "A"), K.H({ "B" }, "Cancel", "B") }) do
+        local h = d.hints[i]
+        h:Set(hint)
+        h:ClearAllPoints()
+        h:SetPoint("LEFT", d.hintRow, "LEFT", x, 0)
+        x = x + h:GetWidth() + 28
+    end
+    d.hintRow:SetWidth(math.max(1, x - 28))
+    d:SetHeight(math.max(150, d.text:GetStringHeight() + 112))
+    d:Show()
+    menu.Render()
+end
+
+function P:AnswerPopup(accepted)
+    local popup = self.popup
+    self.popup = nil
+    self.dialog:Hide()
+    if popup and accepted then popup.onAccept() end
+    menu.Render()
+end
+
+-- "L2 + Cross runs Journal.\nReplace it with Reload?"
+local function ReplaceText(spec, names, name)
+    return B.Text(spec, 16) .. " runs |cffffffff" .. names .. "|r.\nReplace it with |cffffffff" .. (name or "") .. "|r?"
+end
+
+-- Takes an action off every press it is on but keep (a spec or a corner)
+local function TakeOff(action, keep)
+    for _, press in ipairs(ActionPresses()[action] or {}) do
+        if press ~= keep then
+            local region = CornerOf(press)
+            if region then touch.SetAction(region, "none") else B.SetAction(press, nil) end
         end
-        menu.Disarm()
-        B.Clear(spec)
-        return Done(text .. ": " .. NoneName(spec):lower())
     end
-    local def = B.Get(e.action)
-    if not def then return end
+end
+
+-- One of ours onto a press (moved from where it was)
+function P:BindDef(def, spec, confirmed)
+    if IF.InCombat() then return menu.Toast("Not in combat", true) end
+    local text = B.Text(spec)
     if B.Has(def, spec) then return menu.Toast(def.label .. " is on " .. text .. " already") end
-    -- Taking it from something else asks first: Cross again
     local gone = B.Conflicts(def.id, spec)
-    local armId = "bind:" .. def.id .. "@" .. spec
-    if #gone > 0 and not menu.IsArmed(armId) then
-        menu.Arm(armId)
-        return menu.Toast(IF.PadText(text .. " runs " .. B.Names(gone) .. ": {A} again replaces it"), true, 4)
+    if #gone > 0 and not confirmed then
+        return self:Confirm(ReplaceText(spec, B.Names(gone), def.label), function() P:BindDef(def, spec, true) end)
     end
-    menu.Disarm()
     local from = def.specs()[1]
     B.Assign(def.id, spec)
     Done(def.label .. ": " .. text .. (from and (" (was " .. B.Text(from) .. ")") or "")
         .. (#gone > 0 and (", " .. B.Names(gone) .. " unbound") or ""), #gone > 0)
 end
 
--- A spell, item, macro, emote or window onto the press (a crossbar
--- press: in its slot, Native.lua; else Override.lua); taking it from
--- something else asks first: Cross again
-function P:ChooseAction(spec, e)
+-- A spell, item, macro, emote or window onto a press (a crossbar press: in
+-- its slot, Native.lua; else Override.lua), moved from where it was
+function P:BindAction(e, spec, confirmed)
     if IF.InCombat() then return menu.Toast("Not in combat", true) end
     local O = IF.Override
     local text = B.Text(spec)
-    if B.ActionOn(spec) == e.action then return menu.Toast((e.name or "") .. " is on " .. text .. " already") end
+    local there = B.ActionOn(spec)
+    if there == e.action then return menu.Toast((e.name or "") .. " is on " .. text .. " already") end
     local id = "action:" .. spec
     local gone = B.Conflicts(id, spec)
-    local armId = "act:" .. spec .. "@" .. e.action
-    if #gone > 0 and not menu.IsArmed(armId) then
-        menu.Arm(armId)
-        return menu.Toast(IF.PadText(text .. " runs " .. B.Names(gone) .. ": {A} again replaces it"), true, 4)
+    -- (what is there: ours that clash, and the action on it, the game's
+    -- crossbar slot's too)
+    local names = {}
+    for _, def in ipairs(gone) do names[#names + 1] = def.label end
+    if there then names[#names + 1] = O.ActionLabel(there) or there end
+    if #names > 0 and not confirmed then
+        return self:Confirm(ReplaceText(spec, table.concat(names, ", "), e.name), function() P:BindAction(e, spec, true) end)
     end
-    menu.Disarm()
+    local from = ActionPresses()[e.action]
     B.Take(id, spec)
-    if B.SetAction(spec, e.action, e.name, type(e.icon) == "number" and e.icon or nil) == false then
+    if B.SetAction(spec, e.action, e.name, e.icon) == false then
         return Done(text .. ": couldn't put " .. (e.name or "it") .. " there", true)
     end
+    TakeOff(e.action, spec)
     local held, pressed = B.Parse(spec)
-    Done(text .. ": " .. (e.name or "") .. (#gone > 0 and (", " .. B.Names(gone) .. " unbound") or "")
+    Done((e.name or "") .. ": " .. text .. (from and (" (was " .. PressText(from[1]) .. ")") or "")
+        .. (#gone > 0 and (", " .. B.Names(gone) .. " unbound") or "")
         .. (O.OutOfCombatOnly(spec) and " (out of combat only: " .. B.Text(B.Spec(held, pressed)) .. " stays the game's)" or ""),
         #gone > 0 or O.OutOfCombatOnly(spec))
 end
 
--- Square: find a press by making it (Recorder.lua). The touchpad: the
--- corner under the finger.
-function P:Find()
-    if IF.InCombat() then return end
+-- An action onto a touchpad corner (the corner turned on), moved from
+-- where it was
+function P:BindCorner(region, e, confirmed)
+    local from = touch.GetSettings().regions[region]
+    if from == e.action then return menu.Toast((e.name or "") .. " is on " .. PressText("TOUCH:" .. region) .. " already") end
+    if touch.IsBound(from) and not confirmed then
+        return self:Confirm(PressText("TOUCH:" .. region, 16) .. " runs |cffffffff" .. touch.ActionLabel(from)
+            .. "|r.\nReplace it with |cffffffff" .. (e.name or "") .. "|r?", function() P:BindCorner(region, e, true) end)
+    end
+    touch.GetSettings().enabled = true
+    touch.SetAction(region, e.action)
+    TakeOff(e.action, "TOUCH:" .. region)
+    Done((e.name or "") .. ": " .. PressText("TOUCH:" .. region)
+        .. (touch.IsBound(from) and from ~= e.action and (", " .. touch.ActionLabel(from) .. " off it") or ""))
+end
+
+-- Square (Cross too): the card picked onto a press made now (Recorder.lua).
+-- An action clicked on the touchpad: the corner under the finger.
+function P:Bind()
+    local e = self:Entry()
+    if not e or IF.InCombat() then return end
+    local def = e.def
     IF.Recorder.Start({
-        title = "Find a press", chord = true, double = true,
-        hint = "Press the button, hold one and press another, or press one twice.",
+        title = "Bind " .. (e.name or ""), chord = true, double = true,
+        accept = function(spec)
+            if def then return def.accepts(spec) end
+            local _, pressed = B.Parse(spec)
+            return (pressed == "PADBACK" and HasTouchpad()) or B.ActionFits(spec)
+        end,
+        reject = function(spec) return B.GameOwns(spec) or ((e.name or "It") .. " can't go on that press") end,
         onDone = function(spec, info)
+            if def then return P:BindDef(def, spec) end
             local _, pressed = B.Parse(spec)
             if pressed == "PADBACK" and HasTouchpad() then
                 local region = info and info.touch and touch.RegionAt(info.touch[1], info.touch[2])
-                if not (region and SPOT["TOUCH:" .. region]) then
-                    return menu.Toast("Click the touchpad in the corner you want", true)
-                end
-                P.key, P.spec = "TOUCH:" .. region, nil
-                P:SyncList()
-                return
+                if not region then return menu.Toast("Click the touchpad in the corner you want", true) end
+                return P:BindCorner(region, e)
             end
-            if not (SPOT[pressed] and Visible(SPOT[pressed])) then
-                return menu.Toast(B.Text(spec) .. " isn't on the drawing", true)
-            end
-            P.key, P.spec = pressed, spec
-            P:SyncList()
+            P:BindAction(e, spec)
         end,
     })
 end
 
--- Square on a binding on no press: a press recorded for it
-function P:Record(def)
-    if IF.InCombat() then return end
-    IF.Recorder.Start({
-        title = "Bind " .. def.label, chord = true, double = true,
-        accept = def.accepts, reject = def.label .. " can't go on that press",
-        onDone = function(spec)
-            local _, pressed = B.Parse(spec)
-            P.key, P.spec = pressed, spec
-            P.pickerFor = nil
-            P:Choose({ action = def.id })
-            P:SyncList()
-        end,
-    })
+-- Triangle: the card picked off its presses
+function P:Unbind()
+    if IF.InCombat() then return menu.Toast("Not in combat", true) end
+    local e = self:Entry()
+    local presses = PressesOf(e)
+    if not presses[1] then return menu.Toast((e and e.name or "It") .. " isn't bound") end
+    if e.def then
+        B.Assign(e.def.id, nil)
+    else
+        TakeOff(e.action)
+    end
+    Done((e.name or "") .. ": unbound")
 end
 
-function P:BindCorner(region, e)
-    -- (the touchpad click turned off: binding a corner turns it on)
-    touch.GetSettings().enabled = true
-    touch.SetAction(region, e.action)
-    Done(touch.REGION_LABELS[region] .. ": " .. (e.name or ""))
-end
-
--- Triangle on a corner: a press clears it, held (0.6 s) turns it off / on;
--- a rumble rises once it is clearly a hold, a thump when it acts
--- (Vibration.lua, when loaded)
+-- Triangle on an action on a corner: a press clears it, held (0.6 s) turns
+-- the corner off / on; a rumble rises once it is clearly a hold, a thump
+-- when it acts (Vibration.lua, when loaded)
 local HOLD, FEEL_AFTER = 0.6, 0.15
 
 function P:CornerTriangle(region)
@@ -596,26 +571,26 @@ function P:CornerTriangle(region)
 end
 
 ---------------------------------------------------------------------------
--- The pad: the picker; Square finds another press
+-- The pad: the cards; Square binds the one picked
 ---------------------------------------------------------------------------
 function P:Press(name)
-    -- (L1 / R1 the tabs, Circle closes: the panel's)
-    if name == "LB" or name == "RB" or name == "B" then return false end
-    local line = self:Line()
-    if name == "X" then
-        -- (a binding on no press: record one for it; else find a press)
-        if line and line.def and not line.spec and not self.key then self:Record(line.def) else self:Find() end
+    -- A confirmation up: Cross replaces, Circle backs out, the rest wait
+    if self.popup then
+        if name == "A" or name == "B" then self:AnswerPopup(name == "A") end
         return true
     end
-    if not self.key then return true end
+    -- (Circle closes: the panel's)
+    if name == "B" then return false end
+    if name == "X" or name == "A" then
+        self:Bind()
+        return true
+    end
     if name == "Y" then
-        if Region() then
-            self:CornerTriangle(Region())
-        else
-            self:Choose({ action = "none" })
-        end
+        if Region() then self:CornerTriangle(Region()) else self:Unbind() end
         return true
     end
+    -- L1 / R1: the lists (as L2 / R2)
+    if name == "LB" or name == "RB" then name = name == "LB" and "LT" or "RT" end
     self.picker:Press(name)
     menu.Render()
     return true
@@ -623,17 +598,10 @@ end
 
 function P:Help()
     local H = K.H
-    local hints = { H({ "LS" }, "Binding / List") }
-    local line = self:Line()
+    if self.popup then return { H({ "A" }, "Replace", "A"), H({ "B" }, "Cancel", "B") } end
+    local hints = { H({ "DPAD" }, "Move"), H({ "LB", "RB" }, "List"), H({ "X" }, "Bind", "X") }
     if self.key then
-        hints[#hints + 1] = H({ "DPAD" }, "Move")
-        hints[#hints + 1] = H({ "A" }, "Bind", "A")
         hints[#hints + 1] = H({ "Y" }, Region() and ("Clear / Hold to " .. (touch.IsOff(Region()) and "Turn On" or "Turn Off")) or "Unbind", "Y")
-    end
-    if line and line.def and not line.spec and not self.key then
-        hints[#hints + 1] = H({ "X" }, "Record press", "X")
-    else
-        hints[#hints + 1] = H({ "X" }, "Find press", "X")
     end
     hints[#hints + 1] = H({ "RS" }, "Tab")
     hints[#hints + 1] = H({ "B" }, "Close", "B")
@@ -675,28 +643,30 @@ end
 function P:Render()
     local f = self.frame
     if not f then return end
-    -- Another controller in hand: the touchpad's corners / its View button
-    if self.key and not Visible(SPOT[self.key]) then
-        if Region() then
-            self.key, self.spec = "PADBACK", "PADBACK"
-        else
-            self.key, self.spec = "TOUCH:upleft", nil
-        end
+    if not self.picker.def then self:OpenPicker() end
+    self.picker:Render()
+    self.list = self.picker.list
+    -- The card picked: its press lit
+    local e = self:Entry()
+    self.selAction = e and e.action
+    local press = PressesOf(e)[1]
+    -- (on another controller a corner, or the View button, isn't drawn)
+    local spot = press and SPOT[CornerOf(press) and press or select(2, B.Parse(press))]
+    if not (spot and Visible(spot)) then press = nil end
+    local region = CornerOf(press)
+    if region then
+        self.key, self.spec = press, nil
+    elseif press then
+        local _, pressed = B.Parse(press)
+        self.key, self.spec = pressed, press
+    else
+        self.key, self.spec = nil, nil
     end
-    self:SyncPicker()
-    if Region() then self.variant[self.key] = self.picker.list end
-    -- The bindings down the left
-    local lines = Lines()
-    if (self.sel or 1) > #lines then self.sel = 1 end
-    local entries = {}
-    for i, line in ipairs(lines) do
-        entries[i] = line.header and { header = line.header } or { label = line.label }
-    end
-    f.side:Render(IF.GlyphText("LS", 18) .. " Bindings", entries, self.sel or 1, true)
-    local spec = self:Spec()
+    local spec = self.spec
+    -- (the buttons held of the press: each ringed)
+    local held = {}
+    for _, key in ipairs(B.HeldList(spec and B.Parse(spec))) do held[key] = true end
     local bySpec = Snapshot()
-    local held = B.Parse(spec)
-    local region = Region()
 
     -- The buttons: the one picked lit, marks for what is on each
     for _, s in ipairs(SPOTS) do
@@ -705,11 +675,9 @@ function P:Render()
         if not s.region and b:IsShown() then
             b.glyph:Set(IF.PAD_KEY[key] or key)
             local any, clash = false, false
-            local list = { key, key .. ":double" }
-            for _, h in ipairs(B.HOLDS) do list[#list + 1] = h .. "+" .. key end
-            for _, sp in ipairs(list) do
-                local defs = bySpec[sp]
-                if defs then
+            for sp, defs in pairs(bySpec) do
+                local _, pressed = B.Parse(sp)
+                if pressed == key then
                     any = true
                     clash = clash or Clashes(defs, sp)
                 end
@@ -717,11 +685,11 @@ function P:Render()
             local picked = key == self.key
             b.glow:SetShown(picked)
             Tint(b.glow, KC.focus, 0.9)
-            local ring = picked or (not region and key == held)
+            local ring = picked or held[key]
             b.ring:SetShown(ring and true or false)
             if picked then
                 Tint(b.ring, KC.focus)
-            elseif key == held then
+            elseif held[key] then
                 Tint(b.ring, KC.dimGold, 0.8)
             else
                 Tint(b.ring, KC.info)
@@ -733,9 +701,29 @@ function P:Render()
     end
     if HasTouchpad() then RenderCorners(f) end
 
-    if self.key then
-        self.picker:Show()
-        self.picker:Render()
+    -- Over the drawing: the press; under it, what runs on it (red: two
+    -- things clash there)
+    f.press:SetText(press and ("|cff9d917aPress|r   " .. PressText(press, 18))
+        or ("|cff6f6452" .. (e and ((e.name or "") .. ": not bound") or "Nothing picked") .. "|r"))
+    local runs = ""
+    if spec then
+        local names = {}
+        for _, def in ipairs(B.Bound(spec)) do names[#names + 1] = def.label end
+        local color = B.Clashing(spec) and "|cffff7a5c" or "|cffd8ccb0"
+        runs = "Runs:  " .. color .. table.concat(names, ", ") .. "|r"
+    end
+    f.runs:SetText(runs)
+    local toast = menu.toast
+    f.msg:SetText(toast and toast.text or "")
+    if toast then f.msg:SetTextColor(unpack(toast.color)) end
+
+    -- A card on no press: the drawing dimmed, Square over it
+    local unbound = e and not press
+    f.art:SetAlpha(unbound and 0.3 or 1)
+    f.over:SetShown(unbound and true or false)
+    if unbound then
+        f.over.title:SetText("Press " .. IF.GlyphText("X", 22) .. " " .. IF.ButtonName("X") .. " to start binding")
+        f.over.sub:SetText((e.name or "") .. " isn't on a press yet: make the one you want")
     end
 end
 
@@ -746,7 +734,6 @@ menu.AddTab({ key = "controller", label = "Controller", module = "controller", o
 
 -- The panel kept the touchpad click while it was open; give it back
 hooksecurefunc(menu, "Close", function()
-    -- Next time: the list's binding again
-    P.key, P.spec = nil, nil
+    if P.popup then P:AnswerPopup(false) end
     if not IF.InCombat() then touch.Apply() end
 end)

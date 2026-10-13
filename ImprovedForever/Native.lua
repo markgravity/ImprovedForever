@@ -2,14 +2,15 @@
 -- buttons run the slots of its bars, the top one alone (the face buttons'
 -- slots there are the game's own: jump...), the left / right one while
 -- its modifier (GAMEPADLEFTMOD / GAMEPADRIGHTMOD, L2 / R2 by default) is
--- held. Those presses are the crossbar's: what they run is read from and
+-- held, the bottom one while both are. Those presses are the crossbar's: what they run is read from and
 -- written to its slots (on the page shown), so the Controller tab and the
 -- game's own gamepad action bar editor always show the same thing, both
 -- ways. A spell, an item or a macro goes in as itself; what a slot can't
 -- hold (an emote, a window, a wheel) as a macro of ours ("IF:..."), made
 -- for it. Out of combat only.
 --
---  Page unit slots (ActionBindingUtil.lua):  top 1-8, left 9-16, right 17-24
+--  Page unit slots (ActionBindingUtil.lua):  top 1-8, left 9-16, right 17-24,
+--  bottom 25-32
 --  (1-4 the D-pad: left, up, right, down; 5-8 the face buttons: left, top,
 --  right, bottom), GAMEPADACTIONBUTTON1-8 the buttons that press them.
 local _, IF = ...
@@ -56,10 +57,18 @@ local function ButtonIndex(key)
     return Keys().index[key]
 end
 
--- The bar a held button picks: 0 (none held), 1 (left), 2 (right), or nil
+-- The bar the buttons held pick: 0 (none held), 1 (left), 2 (right), 3
+-- (both: the bottom one), or nil
 local function BarOffset(held)
     if not held then return 0 end
-    return Keys().bar[held]
+    local bars = {}
+    for _, key in ipairs(IF.Binds.HeldList(held)) do
+        local bar = Keys().bar[key]
+        if not bar then return nil end
+        bars[#bars + 1] = bar
+    end
+    if #bars == 1 then return bars[1] end
+    if #bars == 2 and bars[1] ~= bars[2] then return 3 end
 end
 
 -- A button the crossbar holds for a modifier (its left / right bar)
@@ -104,12 +113,30 @@ function N.WheelBody(key)
 end
 
 -- Our macro for an action (made, or remade, as needed); its name or nil
+-- A macro's icon as a file ID (a macro takes nothing else, no texture of
+-- an addon): the one given, else the action's (Actions.MacroIcon), else
+-- the question mark
+local function FileID(icon)
+    if type(icon) == "number" then return icon end
+    if type(icon) ~= "string" or not GetFileIDFromPath then return nil end
+    for _, ext in ipairs({ "", ".blp", ".tga" }) do
+        local id = GetFileIDFromPath(icon .. ext)
+        if type(id) == "number" and id > 0 then return id end
+    end
+end
+
+local function MacroIcon(action, icon)
+    local kind = (action or ""):match("^(%a+):")
+    return FileID(icon) or (not kind and FileID(IF.Actions.MacroIcon(action))) or 134400
+end
+
 local function OurMacro(action, label, body, icon)
+    icon = MacroIcon(action, icon)
     if not body then return nil end
     local map = Macros()
     for name, a in pairs(map) do
         if a == action and GetMacroIndexByName(name) > 0 then
-            EditMacro(name, name, icon or select(2, GetMacroInfo(name)), body)
+            EditMacro(name, name, icon, body)
             return name
         end
     end
@@ -120,9 +147,9 @@ local function OurMacro(action, label, body, icon)
             UIErrorsFrame:AddMessage("Improved Forever: no room for another character macro", 1, 0.3, 0.3)
             return nil
         end
-        if not CreateMacro(name, icon or 134400, body, true) then return nil end
+        if not CreateMacro(name, icon, body, true) then return nil end
     else
-        EditMacro(name, name, icon or select(2, GetMacroInfo(name)), body)
+        EditMacro(name, name, icon, body)
     end
     map[name] = action
     return name
@@ -193,15 +220,18 @@ function N.Bound()
     local list = {}
     bound, boundAt = list, GetTime()
     if not N.Available() then return list end
-    for _, held in ipairs({ false, "GAMEPADLEFTMOD", "GAMEPADRIGHTMOD" }) do
-        local heldKey = held and GetBindingKey(held)
-        if held == false or heldKey then
-            for n = 1, PER_BAR do
-                local pressed = GetBindingKey("GAMEPADACTIONBUTTON" .. n)
-                local spec = pressed and IF.Binds.Spec(heldKey or nil, pressed)
-                local action = spec and N.Get(spec)
-                if action then list[#list + 1] = { spec = spec, action = action } end
-            end
+    -- (the bars: none held, each modifier, both)
+    local left, right = GetBindingKey("GAMEPADLEFTMOD"), GetBindingKey("GAMEPADRIGHTMOD")
+    local helds = { {} }
+    if left then helds[#helds + 1] = { left } end
+    if right then helds[#helds + 1] = { right } end
+    if left and right then helds[#helds + 1] = { left, right } end
+    for _, held in ipairs(helds) do
+        for n = 1, PER_BAR do
+            local pressed = GetBindingKey("GAMEPADACTIONBUTTON" .. n)
+            local spec = pressed and IF.Binds.SpecOf(held, pressed)
+            local action = spec and N.Get(spec)
+            if action then list[#list + 1] = { spec = spec, action = action } end
         end
     end
     return list
@@ -219,3 +249,16 @@ events:SetScript("OnEvent", function(_, event)
 end)
 -- (the page shown is read as the panel draws: no callback of ours in the
 -- crossbar's lists, which would taint its secure work)
+
+-- Our windows' macros made before their icons were right (the question
+-- mark): each given its window's icon, once a session
+IF.OnLogin(function()
+    if IF.InCombat() then return end
+    for name, action in pairs(Macros()) do
+        local _, current, body = GetMacroInfo(name)
+        if body and not action:find(":", 1, true) then
+            local icon = MacroIcon(action)
+            if icon ~= current then EditMacro(name, name, icon, body) end
+        end
+    end
+end)

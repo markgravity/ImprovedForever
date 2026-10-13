@@ -350,7 +350,8 @@ end
 ---------------------------------------------------------------------------
 -- A card, as the Buy page's items: the card's art, its icon in a border,
 -- its name, a line under it, the focus stroke; a tick on the right when it
--- is what's chosen. card:Fill{ icon, name, line, ticked }
+-- is what's chosen, or a text there (right); bound: washed in the colour of
+-- what's set. card:Fill{ icon, name, line, ticked, right, bound }
 ---------------------------------------------------------------------------
 function UI.CardRow(parent, width, height)
     local r = K.NewFrame("Button", nil, parent)
@@ -362,6 +363,10 @@ function UI.CardRow(parent, width, height)
     else
         r.bg:SetColorTexture(0.1, 0.1, 0.1, 0.8)
     end
+    -- (the wash: a rounded box over the art, its corners as the card's)
+    r.wash = K.Box(r, 4, nil, "BACKGROUND", 1)
+    r.wash:SetPoints(r, 1)
+    r.wash:SetColors(KC.yours, 0.18)
     r.focus = UI.FocusStroke(r)
     r.icon = r:CreateTexture(nil, "ARTWORK")
     r.icon:SetSize(height - 16, height - 16)
@@ -394,6 +399,10 @@ function UI.CardRow(parent, width, height)
     else
         r.tick:SetTexture(IF.TEX .. "ic_emote_yes")
     end
+    r.right = K.ChatText(r, 12, KC.cream)
+    r.right:SetPoint("RIGHT", -10, 0)
+    r.right:SetJustifyH("RIGHT")
+    r.right:SetWordWrap(false)
     local box = height - 16
     function r:Fill(o)
         K.SetIcon(self.icon, o.icon or 134400)
@@ -411,14 +420,18 @@ function UI.CardRow(parent, width, height)
         end
         self.name:SetText(o.name or "")
         self.line:SetText(o.line or "")
-        -- (no line: the name in the middle)
+        self.right:SetText(o.right or "")
+        self.wash:SetShown(o.bound and true or false)
+        -- (no line: the name in the middle; a text on the right: up to it)
+        local inset = o.right and o.right ~= "" and -(self.right:GetStringWidth() + 18) or -28
         self.name:ClearAllPoints()
         if o.line and o.line ~= "" then
             self.name:SetPoint("TOPLEFT", self, "TOPLEFT", textX, -9)
         else
             self.name:SetPoint("LEFT", self, "LEFT", textX, 0)
         end
-        self.name:SetPoint("RIGHT", self, "RIGHT", -28, 0)
+        self.name:SetPoint("RIGHT", self, "RIGHT", inset, 0)
+        self.line:SetPoint("RIGHT", self, "RIGHT", inset, 0)
         self.tick:SetShown(o.ticked and true or false)
     end
     return r
@@ -430,7 +443,8 @@ end
 -- cards in columns under it; the D-pad moves, Cross picks. The shape of ConfigKit's K.Picker: picker:Open{ lists = { { key,
 -- label, entries() -> { { action, name, icon, sub } or { header } } } },
 -- list, rows (rows of cards), current(list) -> action, marked(entry) -> the
--- one it holds, status() -> a line on what it is for, onChoose(entry),
+-- one it holds, right(entry) -> a text on its right, bound(entry) -> washed
+-- (CardRow), status() -> a line on what it is for, onChoose(entry),
 -- onBack() }; picker.entries / .index / .list
 ---------------------------------------------------------------------------
 function UI.CardPicker(parent, cols, cardH, onRender, leftKey, rightKey)
@@ -563,7 +577,8 @@ function UI.CardPicker(parent, cols, cardH, onRender, leftKey, rightKey)
                     local col, row = (slot - 1) % self.cols, math.floor((slot - 1) / self.cols)
                     c:SetPoint("TOPLEFT", self.grid, "TOPLEFT", col * (cardW + 8), -row * (cardH + 6))
                     c:Fill({ icon = e.icon, name = e.name, line = e.sub,
-                        ticked = def.marked and def.marked(e) })
+                        ticked = def.marked and def.marked(e),
+                        right = def.right and def.right(e), bound = def.bound and def.bound(e) })
                     c.focus:Light(first + slot == self.index)
                     c:SetScript("OnClick", function()
                         p.index = first + slot

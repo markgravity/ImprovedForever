@@ -135,7 +135,8 @@ end)
 local B = IF.Binds
 B.Add({
     id = "bagsort", label = "Bag clean-up", group = "Bags", tab = "controller",
-    icon = 133633, context = "bags", order = 20,
+    icon = IF.TEX .. "ic_fn_bagsort", context = "bags", order = 20,
+    desc = "Sorts the items in your bags while they're open",
     tip = "Sorts your bags. Only while a bag is open: the button does its own job again once they close.",
     accepts = B.Single,
     specs = function() return IF.db.bagSort ~= false and B.One(IF.BagSortKey()) or {} end,

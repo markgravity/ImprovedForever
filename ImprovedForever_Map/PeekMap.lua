@@ -317,7 +317,8 @@ end)
 local B = IF.Binds
 B.Add({
     id = "peekmap", label = "Peek map", group = "Other", tab = "controller",
-    icon = IF.TEX .. "ic_map_peek", context = "world", order = 31,
+    icon = IF.TEX .. "ic_fn_peekmap", context = "world", order = 31,
+    desc = "Held: a see-through map; let go and it closes",
     tip = "Held: the game's Map & Quest Log shows with only its map, see-through (placed and sized in"
         .. " the Map tab); let go and it closes. Works in combat. Takes the press over while bound, and"
         .. " while held the map has the controller, as it always does. A touchpad corner can open it too"

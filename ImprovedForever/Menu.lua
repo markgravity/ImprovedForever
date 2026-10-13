@@ -233,8 +233,10 @@ function menu.Render()
     f.hintRow:SetWidth(rowW)
     f.legend:SetWidth(math.max(500, rowW + 40))
 
+    -- (a page showing the message itself, ShowsToast: none over the legend)
     local text, color = "", KC.grey
-    if menu.toast then text, color = menu.toast.text, menu.toast.color end
+    local page = CurrentPage()
+    if menu.toast and not (page and page.ShowsToast) then text, color = menu.toast.text, menu.toast.color end
     f.toast:SetText(text)
     f.toast:SetTextColor(unpack(color))
 end
@@ -435,8 +437,7 @@ end
 
 -- Target of the "Toggle Improved Forever panel" key binding (and the
 -- touchpad's "Improved Forever panel" region)
-local toggle = CreateFrame("Button", "ImprovedForeverMenuToggle", UIParent)
-toggle:SetScript("OnClick", menu.Toggle)
+IF.Actions.PressButton("ImprovedForeverMenuToggle", function() menu.Toggle() end)
 BINDING_HEADER_IMPROVEDFOREVER = IF.TITLE
 _G["BINDING_NAME_CLICK ImprovedForeverMenuToggle:LeftButton"] = "Toggle Improved Forever panel"
 

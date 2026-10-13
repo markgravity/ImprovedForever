@@ -33,18 +33,43 @@ for combo, key in pairs(COMBO_HOLD) do HOLD_COMBO[key] = combo end
 ---------------------------------------------------------------------------
 -- Specs
 ---------------------------------------------------------------------------
--- held (or nil), pressed, double
+-- held (or nil: one button held, or several: "PADLSHOULDER+PADRSHOULDER"),
+-- pressed, double
 function B.Parse(spec)
     if not spec then return nil end
     local base = spec:match("^(.-):double$")
     local pressed, double = base or spec, base ~= nil
-    local held, rest = pressed:match("^(.-)%+(.+)$")
+    local held, rest = pressed:match("^(.+)%+([^%+]+)$")
     if held then return held, rest, double end
     return nil, pressed, double
 end
 
+-- The buttons held of a press, one by one
+function B.HeldList(held)
+    local list = {}
+    for key in (held or ""):gmatch("[^%+]+") do list[#list + 1] = key end
+    return list
+end
+
 function B.Spec(held, pressed, double)
     return (held and (held .. "+") or "") .. pressed .. (double and ":double" or "")
+end
+
+-- A press from its buttons held (a list, in any order: the shoulders and
+-- triggers first, as B.HOLDS, then the rest by name), its button pressed
+function B.SpecOf(heldList, pressed, double)
+    local order = {}
+    for i, key in ipairs(B.HOLDS) do order[key] = i end
+    local list = {}
+    for _, key in ipairs(heldList or {}) do
+        if key ~= pressed then list[#list + 1] = key end
+    end
+    table.sort(list, function(a, b)
+        local oa, ob = order[a] or 99, order[b] or 99
+        if oa ~= ob then return oa < ob end
+        return a < b
+    end)
+    return B.Spec(#list > 0 and table.concat(list, "+") or nil, pressed, double)
 end
 
 -- "L1 + R3", "L3 double-click"; with size, each button's glyph before its name
@@ -54,7 +79,10 @@ function B.Text(spec, size)
     local function one(key)
         return (size and (IF.GlyphText(key, size) .. " ") or "") .. IF.ButtonName(key)
     end
-    return (held and (one(held) .. " + ") or "") .. one(pressed) .. (double and " double-click" or "")
+    local parts = {}
+    for _, key in ipairs(B.HeldList(held)) do parts[#parts + 1] = one(key) end
+    parts[#parts + 1] = one(pressed)
+    return table.concat(parts, " + ") .. (double and " double-click" or "")
 end
 
 -- Glyph keys for a GlyphRow (ConfigKit): { "LB", "+", "RS" }
@@ -62,9 +90,9 @@ function B.Glyphs(spec)
     local held, pressed = B.Parse(spec)
     if not pressed then return nil end
     local keys = {}
-    if held then
-        keys[1] = IF.PAD_KEY[held] or held
-        keys[2] = "+"
+    for _, key in ipairs(B.HeldList(held)) do
+        keys[#keys + 1] = IF.PAD_KEY[key] or key
+        keys[#keys + 1] = "+"
     end
     keys[#keys + 1] = IF.PAD_KEY[pressed] or pressed
     return keys
@@ -94,6 +122,42 @@ local function ModifierOf(button)
 end
 B.ModifierOf = ModifierOf
 
+-- The modifiers the buttons held make, as a key's prefix ("CTRL-SHIFT-"),
+-- or nil when one of them makes none
+function B.ModPrefix(held)
+    local mods = {}
+    for _, key in ipairs(B.HeldList(held)) do
+        local modifier = ModifierOf(key)
+        if not modifier then return nil end
+        mods[modifier] = true
+    end
+    local prefix = ""
+    for _, modifier in ipairs({ "ALT-", "CTRL-", "SHIFT-" }) do
+        if mods[modifier] then prefix = prefix .. modifier end
+    end
+    return prefix
+end
+
+-- Presses the game keeps, whatever is bound there (as Easy Controller
+-- leaves them): Options / Select (its menu wheel, its interface focus: taken
+-- before any binding) and L1 / R1 held with a face button or the D-pad (its
+-- targeting bars: a binding of ours there never runs). Returns why, or nil.
+local SYSTEM = { PADFORWARD = "its menu", PADBACK = "its interface focus" }
+local SHOULDERS = { PADLSHOULDER = true, PADRSHOULDER = true }
+local PAD = { PAD1 = true, PAD2 = true, PAD3 = true, PAD4 = true,
+    PADDUP = true, PADDDOWN = true, PADDLEFT = true, PADDRIGHT = true }
+
+function B.GameOwns(spec)
+    local held, pressed = B.Parse(spec)
+    if not pressed then return nil end
+    if SYSTEM[pressed] then return IF.ButtonName(pressed) .. " is the game's (" .. SYSTEM[pressed] .. ")" end
+    if PAD[pressed] then
+        for _, key in ipairs(B.HeldList(held)) do
+            if SHOULDERS[key] then return B.Text(B.Spec(held, pressed)) .. " is the game's (its targeting)" end
+        end
+    end
+end
+
 -- The key an override binding for a press goes on ("PADLSTICK",
 -- "SHIFT-PAD1"; a press twice: its button's), or nil when it can't have
 -- one: R3 (the wheels' combos, Ring.lua), a PlayStation touchpad (its
@@ -102,6 +166,7 @@ function B.KeyOf(spec)
     -- (a press of Forever's crossbar: its slot holds what it runs, Native.lua)
     if IF.Native and IF.Native.SlotOf(spec) then return nil end
     local held, pressed, double = B.Parse(spec)
+    if B.GameOwns(spec) then return nil end
     -- (twice where once is the crossbar's: its slot can't be shared out)
     if double and IF.Native and IF.Native.SlotOf(B.Spec(held, pressed)) then return nil end
     -- (the crossbar's modifiers, L2 / R2: taking one would stop it paging;
@@ -110,8 +175,8 @@ function B.KeyOf(spec)
     if not pressed or pressed == "PADRSTICK" or ModifierOf(pressed) then return nil end
     if pressed == "PADBACK" and IF.PadStyle() == "Shapes" then return nil end
     if not held then return pressed end
-    local modifier = ModifierOf(held)
-    return modifier and (modifier .. pressed) or nil
+    local prefix = B.ModPrefix(held)
+    return prefix and (prefix .. pressed) or nil
 end
 
 -- The key a double press is watched on (Override.lua), or nil: any button
@@ -122,6 +187,11 @@ function B.DoubleKey(spec)
     local held, pressed, double = B.Parse(spec)
     if not double or not pressed or pressed == "PADRSTICK" then return nil end
     if pressed == "PADBACK" and IF.PadStyle() == "Shapes" then return nil end
+    -- (several held: only as the modifiers they make)
+    if held and held:find("+", 1, true) then
+        local prefix = B.ModPrefix(held)
+        return prefix and (prefix .. pressed) or nil
+    end
     local modifier = held and ModifierOf(held)
     return modifier and (modifier .. pressed) or pressed
 end
@@ -144,8 +214,8 @@ function B.Variants(key)
 end
 
 ---------------------------------------------------------------------------
--- The bindings: { id, label, icon, group, tab (where else it is set),
--- context ("world": while the game has the gamepad's focus, or "bags":
+-- The bindings: { id, label, icon, group, tab (where else it is set), desc
+-- (what it does, a short line under its name), context ("world": while the game has the gamepad's focus, or "bags":
 -- while a bag is open), accepts(spec), specs() (what it is bound to now), set(spec)
 -- (nil: unbound), unbind(spec) (optional: just that one) }
 ---------------------------------------------------------------------------
@@ -156,9 +226,10 @@ function B.Single(spec)
     return spec ~= nil and not held and not double
 end
 
+-- Not twice, and at most one button held (the watched hotkeys read one)
 function B.NotDouble(spec)
-    local _, _, double = B.Parse(spec)
-    return spec ~= nil and not double
+    local held, _, double = B.Parse(spec)
+    return spec ~= nil and not double and not (held and held:find("+", 1, true))
 end
 
 function B.One(spec)
@@ -189,7 +260,8 @@ end
 
 B.Add({
     id = "menu", label = "Improved Forever panel", group = "Other",
-    icon = ICON .. "INV_Misc_Gear_02", context = "world", order = 90,
+    icon = IF.TEX .. "ic_addon", context = "world", order = 90,
+    desc = "Opens this settings panel",
     tip = "Pressed twice quickly, opens this panel. Once still opens the game's own menu.",
     accepts = function(spec) return spec == "PADFORWARD:double" end,
     specs = function() return IF.db.menuDouble ~= false and { "PADFORWARD:double" } or {} end,
@@ -198,8 +270,16 @@ B.Add({
 
 -- A spell, item, macro, emote or window can go on the press: in its
 -- crossbar slot (Native.lua), or as an override binding (Override.lua)
+-- R3 (and R3 with any buttons held): the wheels' trigger reads the pad and
+-- runs it (Ring.lua), when the Wheel module is on
+local function OnTrigger(spec)
+    local _, pressed, double = B.Parse(spec)
+    return pressed == "PADRSTICK" and not double and IF.ApplyRingBindings ~= nil
+end
+B.OnTrigger = OnTrigger
+
 function B.ActionFits(spec)
-    return IF.Native.SlotOf(spec) ~= nil or IF.Override.Supports(spec)
+    return IF.Native.SlotOf(spec) ~= nil or IF.Override.Supports(spec) or OnTrigger(spec)
 end
 
 -- The action on a press (a crossbar slot's, not a wheel's; else the
@@ -219,6 +299,8 @@ function B.SetAction(spec, action, label, icon)
         return IF.Native.Clear(spec)
     end
     IF.Override.Set(spec, action)
+    -- (R3's: kept with the overrides, run by the wheels' trigger)
+    if OnTrigger(spec) then IF.ApplyRingBindings() end
 end
 
 -- An action on a press: a spell, an item, a macro, an emote or a window.

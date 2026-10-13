@@ -13,7 +13,15 @@ local O = {}
 IF.Override = O
 
 function O.Settings()
+    -- (the bind probe's log, the probe gone)
+    IF.db.bindLog = nil
     IF.db.overrides = IF.db.overrides or {}
+    -- A press the game keeps (Binds.GameOwns; set before it was refused):
+    -- never runs, let go
+    for spec in pairs(IF.db.overrides) do
+        local _, _, double = IF.Binds.Parse(spec)
+        if not double and IF.Binds.GameOwns(spec) then IF.db.overrides[spec] = nil end
+    end
     return IF.db.overrides
 end
 
@@ -78,6 +86,10 @@ local function SecureButton(key)
     b:SetSize(1, 1)
     b:SetPoint("TOPLEFT", UIParent, "TOPLEFT", -20, 20)
     b:SetAttribute("type", "macro")
+    -- (both edges, as every press of ours that works: a binding's click
+    -- reaches a button registered for one only not at all; the one it acts
+    -- on is ic-down's)
+    b:RegisterForClicks("AnyDown", "AnyUp")
     local window = CreateFrame("Frame", nil, UIParent)
     window:Hide()
     window:SetScript("OnUpdate", function(self, elapsed)
@@ -88,6 +100,7 @@ local function SecureButton(key)
     -- The second click of a pair runs the double click's action (if it has
     -- one), any other the single click's
     SecureHandlerWrapScript(b, "OnClick", b, [[
+        if not down ~= not self:GetAttribute("ic-down") then return false end
         local window = self:GetFrameRef("window")
         local double = self:GetAttribute("ic-double")
         if double and window and window:IsShown() then
@@ -98,7 +111,8 @@ local function SecureButton(key)
         if not self:GetAttribute("macrotext") then return false end
     ]])
     -- After each click: the window opens, or a pair just ended it
-    b:HookScript("OnClick", function()
+    b:HookScript("OnClick", function(self, _, down)
+        if not down ~= not self:GetAttribute("ic-down") then return end
         if window:IsShown() then
             window:Hide()
         else
@@ -147,10 +161,15 @@ function O.Apply()
         -- L3, can't be run from here), so it is watched instead
         if m.single then
             local b = SecureButton(key)
-            b:RegisterForClicks(onDown and "AnyDown" or "AnyUp")
+            b:SetAttribute("ic-down", onDown)
+            -- (the template acts on the edge this says, as Easy Controller's)
+            b:SetAttribute("useOnKeyDown", onDown)
             b:SetAttribute("ic-single", m.single)
             b:SetAttribute("ic-double", m.double)
-            SetOverrideBindingClick(owner, false, key, b:GetName(), "LeftButton")
+            -- (with priority, as the wheels' and the bags' presses: the
+            -- game's own gamepad bindings, its Main Menu wheel on Options,
+            -- would win over a plain override)
+            SetOverrideBindingClick(owner, true, key, b:GetName(), "LeftButton")
         end
     end
 end
@@ -185,6 +204,7 @@ end
 local function Arm(w)
     if IF.InCombat() then return end
     twice:RegisterForClicks(w.onDown and "AnyDown" or "AnyUp")
+    twice:SetAttribute("useOnKeyDown", w.onDown)
     twice:SetAttribute("macrotext", w.macro)
     SetOverrideBindingClick(watchOwner, true, w.key, twice:GetName(), "LeftButton")
     armed = { w = w, ends = GetTime() + DOUBLE }

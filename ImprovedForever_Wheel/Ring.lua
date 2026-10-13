@@ -45,6 +45,8 @@ local COMBO_BUTTONS = { L1 = "PADLSHOULDER", L2 = "PADLTRIGGER", R1 = "PADRSHOUL
 local AXIS_CVAR = "GamePadStickAxisButtons"
 
 local ringData = {}
+-- The chords an action is on (trigger "ic-act-<chord>"), to clear them
+local actChords = {}
 local rebuildPending, bindingsPending = false, false
 
 ---------------------------------------------------------------------------
@@ -223,18 +225,24 @@ SecureHandlerWrapScript(trigger, "OnClick", trigger, [[
     end
     self:SetAttribute("type", nil)
     self:SetAttribute("ic-recent-pending", nil)
-    local combo = "R3"
+    -- The combo: every shoulder / trigger held ("L1R1"; none: "R3"), and
+    -- the first of them alone (L1, R1, L2, R2), what a combo of several
+    -- with nothing of its own falls back to
+    local chord, single = "", nil
     local state = GetGamePadState()
     local buttons = state and state.buttons
     if buttons then
+        for _, name in ipairs(newtable("L1", "L2", "R1", "R2")) do
+            local index = self:GetAttribute("ic-btn-" .. name)
+            if index and buttons[index] then chord = chord .. name end
+        end
         for _, name in ipairs(newtable("L1", "R1", "L2", "R2")) do
             local index = self:GetAttribute("ic-btn-" .. name)
-            if index and buttons[index] then
-                combo = name
-                break
-            end
+            if not single and index and buttons[index] then single = name end
         end
     end
+    if chord == "" then chord = "R3" end
+    local combo = single or "R3"
     if ring:IsShown() then
         self:SetAttribute("ic-mode", nil)
         local wheel = ring:GetAttribute((ring:GetAttribute("ic-active") or "") .. "-wheel")
@@ -256,6 +264,23 @@ SecureHandlerWrapScript(trigger, "OnClick", trigger, [[
         self:SetAttribute("ic-recent-pending", actionType)
         return false
     end
+    -- An action put on this press (the Controller tab): its macro, on the
+    -- press or the release, as the recent action's
+    local macro = self:GetAttribute("ic-act-" .. chord)
+    if macro then
+        self:SetAttribute("ic-mode", nil)
+        self:SetAttribute("spell", nil)
+        self:SetAttribute("item", nil)
+        self:SetAttribute("macrotext", macro)
+        if (self:GetAttribute("ic-keydown") or 1) == 1 then
+            self:SetAttribute("type", "macro")
+            return
+        end
+        self:SetAttribute("ic-recent-pending", "macro")
+        return false
+    end
+    -- (a combo of one, or of several with a wheel of its own)
+    if self:GetAttribute("ic-combo-" .. chord) then combo = chord end
     -- A combo another feature has for now (the Destroy panel's, while
     -- the bags are open): left to it
     if self:GetAttribute("ic-skip-" .. combo) then
@@ -996,6 +1021,35 @@ function IF.ApplyRingBindings()
         if key ~= "native" then
             local modifier = COMBO_BUTTONS[combo] and IF.Binds.ModifierOf(COMBO_BUTTONS[combo])
             if modifier then modifiers[#modifiers + 1] = modifier else plain = true end
+        end
+    end
+    -- Actions put on R3 presses (the Controller tab, Binds.SetAction: kept
+    -- with the overrides): each on its chord ("ic-act-L1R1"), R3 taken
+    -- under the modifiers its buttons held make
+    for chord in pairs(actChords) do trigger:SetAttribute("ic-act-" .. chord, nil) end
+    wipe(actChords)
+    local O, B = IF.Override, IF.Binds
+    for spec, action in pairs(O and O.Settings() or {}) do
+        local held, pressed, double = B.Parse(spec)
+        local macro = pressed == KEY and not double and O.Macro(action)
+        if macro then
+            local chord = ""
+            for _, name in ipairs({ "L1", "L2", "R1", "R2" }) do
+                for _, key in ipairs(B.HeldList(held)) do
+                    if key == COMBO_BUTTONS[name] then chord = chord .. name end
+                end
+            end
+            chord = chord ~= "" and chord or "R3"
+            actChords[chord] = true
+            trigger:SetAttribute("ic-act-" .. chord, macro)
+            -- (R3 comes with the modifiers of the buttons held that make
+            -- one; none of them: as R3 alone)
+            local any = false
+            for _, key in ipairs(B.HeldList(held)) do
+                local modifier = B.ModifierOf(key)
+                if modifier then modifiers[#modifiers + 1], any = modifier, true end
+            end
+            if not any then plain = true end
         end
     end
     local function Takes(prefix)
