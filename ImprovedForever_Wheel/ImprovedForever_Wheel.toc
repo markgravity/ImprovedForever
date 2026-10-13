@@ -15,5 +15,6 @@ Wheel.lua
 RingContent.lua
 MyWheels.lua
 Ring.lua
+BindPanel.lua
 RecentSlot.lua
 WheelEditor.lua

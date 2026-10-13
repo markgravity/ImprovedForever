@@ -4,7 +4,8 @@
 -- D-pad, then press R2 to use it. Circle closes. L1/R1 switch wheels,
 -- D-pad left / right its pages: every ring is cut into pages of eight, like
 -- Forever's native radial menu (GamepadRadial), whose art and layout the
--- ring copies.
+-- ring copies. Square (out of combat) puts the picked slot on the crossbar
+-- with a bind panel like the game's (BindPanel.lua), when it can go there.
 --
 -- It works in combat: every button is a secure button. R3's snippet reads
 -- the pad (GetGamePadState) to pick the combo; the stick directions arrive
@@ -432,6 +433,15 @@ SecureHandlerWrapScript(page, "OnClick", page, [[
     return false
 ]])
 
+-- Square: put the picked slot on the crossbar with the bind panel
+-- (BindPanel.lua, the game's "Bind to Action Bar" as the bags have it),
+-- when it can go there (IF.RingBindAction). Out of combat only: Square is
+-- the ring's only then.
+local bind = CreateFrame("Button", "ImprovedForeverRingBind", UIParent)
+bind:SetScript("OnClick", function()
+    if IF.RingBindPicked then IF.RingBindPicked() end
+end)
+
 -- Circle: close.
 local close = SecureButton("ImprovedForeverRingClose")
 close:RegisterForClicks("AnyDown")
@@ -442,11 +452,15 @@ SecureHandlerWrapScript(close, "OnClick", close, [[
 
 -- While the ring is up it owns R2, Circle, L1, R1, the D-pad and the right
 -- stick's directions, whatever they do otherwise (R2, L1, R1: once let go,
--- ic-take-pad).
+-- ic-take-pad), and Square out of combat.
 SecureHandlerWrapScript(ring, "OnShow", ring, [[
     self:RunAttribute("ic-take-pad", true)
+    local combat = PlayerInCombat()
     for _, modifier in ipairs(newtable("", "SHIFT-", "CTRL-", "ALT-", "CTRL-SHIFT-", "ALT-SHIFT-", "CTRL-ALT-", "CTRL-ALT-SHIFT-")) do
         self:SetBindingClick(true, modifier .. "PAD2", "ImprovedForeverRingClose", "LeftButton")
+        if not combat then
+            self:SetBindingClick(true, modifier .. "PAD3", "ImprovedForeverRingBind", "LeftButton")
+        end
         for _, key in ipairs(newtable("PADDUP", "PADDDOWN")) do
             self:SetBindingClick(true, modifier .. key, "ImprovedForeverRingStep", key)
         end
@@ -567,12 +581,19 @@ local prompts = ring:CreateFontString(nil, "OVERLAY")
 prompts:SetFont("Fonts\\FRIZQT__.TTF", 12, "")
 prompts:SetShadowOffset(1, -1)
 prompts:SetPoint("TOP", selected, "BOTTOM", 0, -6)
--- (pages: a wheel of more than one, D-pad left / right turns them)
-local function SetPrompts(pages)
-    prompts:SetText(Glyph("RT") .. " Use      " .. Glyph("B") .. " Close"
-        .. (pages and ("      " .. Glyph("DPAD_LR") .. " Page") or ""))
+-- (pages: a wheel of more than one, D-pad left / right turns them; bind:
+-- the picked slot can go on the crossbar, Square)
+local promptPages, promptBind
+local function SetPrompts(pages, canBind)
+    if pages ~= nil then promptPages = pages end
+    if canBind ~= nil then promptBind = canBind end
+    local bindLabel = _G.CONTEXT_ACTION_LABEL_BIND_TO_GAMEPAD_ACTION_BAR or "Bind"
+    prompts:SetText(Glyph("RT") .. " Use      "
+        .. (promptBind and (Glyph("X") .. " " .. bindLabel .. "      ") or "")
+        .. Glyph("B") .. " Close"
+        .. (promptPages and ("      " .. Glyph("DPAD_LR") .. " Page") or ""))
 end
-SetPrompts()
+SetPrompts(false, false)
 IF.OnPadStyleChanged(function() SetPrompts() end)
 
 local slots = {}
@@ -612,6 +633,37 @@ end
 local function ItemCount(value)
     local getCount = (C_Item and C_Item.GetItemCount) or GetItemCount
     return getCount and getCount(value) or 0
+end
+
+-- The action a ring entry goes on the crossbar as ("item:<id>",
+-- "spell:<id>", "macro:<name>"), or nil: it can't go there now (in combat,
+-- an emote, an item not in the bags or that does nothing when used: the
+-- game offers "Bind to Action Bar" for those only, PaperDollFrame's check)
+function IF.RingBindAction(entry)
+    if not (entry and IF.WheelBindPanel and IF.Native and IF.Native.Available())
+        or IF.InCombat() or (CursorHasItem and CursorHasItem()) then
+        return nil
+    end
+    if entry.type == "item" then
+        local itemID = tonumber(tostring(entry.value):match("item:(%d+)"))
+        local getSpell = (C_Item and C_Item.GetItemSpell) or GetItemSpell
+        local equippable = (C_Item and C_Item.IsEquippableItem) or IsEquippableItem
+        if itemID and ItemCount(itemID) > 0
+            and ((getSpell and getSpell(itemID)) or (equippable and equippable(itemID))) then
+            return "item:" .. itemID
+        end
+    elseif entry.type == "spell" and entry.spellID then
+        local known = IsPlayerSpell or IsSpellKnown
+        if not known or known(entry.spellID) then
+            return "spell:" .. entry.spellID
+        end
+    elseif entry.type == "macro" and entry.macroName then
+        local index = GetMacroIndexByName(entry.macroName)
+        if index and index > 0 then
+            return "macro:" .. entry.macroName
+        end
+    end
+    return nil
 end
 
 local pageOrder = {}  -- page keys, every wheel's in turn
@@ -673,7 +725,7 @@ local function RefreshVisuals()
     pageRight:SetPoint("LEFT", dotRow, "CENTER", edge, -2)
     pageRight:SetText(total > 1 and IF.GlyphText("RB", 38) or "")
     selected:SetText(#entries == 0 and "Nothing here" or "")
-    SetPrompts(info and info.of > 1)
+    SetPrompts((info and info.of > 1) or false)
 end
 
 -- Same pick as the secure "ic-pick-body": the stronger of the two sticks.
@@ -761,7 +813,21 @@ ring:SetScript("OnUpdate", function()
     if pick ~= highlighted then
         Highlight(pick)
     end
+    -- Square's prompt, while the picked slot can go on the crossbar
+    local canBind = IF.RingBindAction(pick and entries[pick]) ~= nil
+    if canBind ~= promptBind then SetPrompts(nil, canBind) end
 end)
+
+-- Square: the picked slot (as highlighted) to the bind panel; the ring
+-- closes first (its bindings go), then the panel takes the buttons
+function IF.RingBindPicked()
+    if not ring:IsShown() or IF.InCombat() then return end
+    local entries = ringData[ring:GetAttribute("ic-active")] or {}
+    local action = IF.RingBindAction(highlighted and entries[highlighted])
+    if not action then return end
+    ring:Hide()
+    IF.WheelBindPanel.Open(action)
+end
 ring:HookScript("OnShow", function()
     RefreshVisuals()
     Highlight(nil)
@@ -769,6 +835,7 @@ end)
 ring:HookScript("OnHide", function()
     highlighted = nil
     ShowTooltip(nil)
+    SetPrompts(nil, false)
 end)
 ring:HookScript("OnAttributeChanged", function(_, name)
     if name == "ic-active" and ring:IsShown() then

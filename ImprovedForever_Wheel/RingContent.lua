@@ -1,5 +1,5 @@
 -- What goes on each ring. Every builder returns a list of entries:
---   { label, icon, count?, type = "spell"|"item"|"macro", value }
+--   { label, icon, count?, type = "spell"|"item"|"macro", value, spellID?, macroName? }
 -- A wheel's slots hold actions: "spell:<id>", "item:<id>", "macro:<name>"
 -- or "emote:<token>"; Buffs and Emotes keep theirs here, the player's own
 -- wheels in MyWheels.lua, Consumables fills itself from the bags.
@@ -57,7 +57,7 @@ function IF.ActionEntry(action)
         return { label = name, icon = icon, type = "item", value = "item:" .. value }
     elseif kind == "macro" then
         local _, _, body = GetMacroInfo(value)
-        return body and { label = name, icon = icon, type = "macro", value = body }
+        return body and { label = name, icon = icon, type = "macro", value = body, macroName = value }
     elseif kind == "emote" then
         return { label = name, icon = icon, type = "macro", value = "/" .. value }
     end
