@@ -1,5 +1,65 @@
 # Changelog
 
+## Core 0.7.0
+
+- **Controller bindings**: every action in the crossbar and binding lists now has its own
+  icon and a one-line description, and a new **Reload** action runs `/reload` from a press.
+  An action put in a crossbar slot as a macro shows the game's nearest icon (a macro can't
+  show an addon's texture).
+- **Controller bindings**: a press can hold more than one button (L1 + R1 + a face button),
+  shown in full in the lists.
+
+## Controller 0.7.0
+
+- The Controller tab is redone: down the left, lists of what can be bound (the wheels, Misc,
+  spells, items, macros, emotes, the game's windows; L1 / R1 and L2 / R2 change list), beside
+  it a bigger drawing of the controller with the picked card's press lit. Square or Cross
+  binds, a box asks for the press, Triangle unbinds.
+
+## Wheel 0.7.0
+
+- While a wheel is up (out of combat), **Square** opens a "Bind to Action Bar" panel for the
+  picked slot when it can go on the crossbar (a usable or equippable bag item, a known
+  spell, a player macro). The next D-pad / face press (L2 / R2 held for their bars) puts it
+  in that slot.
+
+## Journal 0.7.0
+
+- **People**: everyone you meet on the road is kept per character (class, race, level, guild)
+  with your dealings: talk, whispers, party chat, emotes, trades, time and deeds in a group,
+  who brought whom back, letters and duels. They show in the day's entries.
+- **Voice**: the diary's writer talks as a race (your own, or another picked in the Journal
+  tab): waking and lying down, a fall, growing stronger, the day's coin, a great moment,
+  the name signed under the page.
+- A session records how it began (level, gold, rested, inn, where), and more is kept:
+  mail, equipment, flight paths, party and duels, reputation, talents, gathering and
+  how you came back from a death.
+
+## Chat 0.7.0
+
+- New module (beta, off by default): while a text box has the focus, letters or whole words
+  written on the DualSense touchpad are read and typed at the cursor. A swipe right types a
+  space, a swipe left deletes. The ink pad over the text box shows the strokes and what was
+  read. Settings in the new Chat tab; `/if ink` prints each read with its runners-up.
+
+## Auction 0.6.1
+
+- Fixed Buy stuck on "Buying..." when buying the same item again: Forever's client dropped
+  the bid when another auction house query went out after the item's search. The list now
+  refreshes first and the item is searched last, and a buy unanswered after 10 s gives up.
+
+## Gather 0.6.1
+
+- The Minimap labels action has its own icon and description.
+
+## Junk 0.6.1
+
+- The Destroy panel and Mark junk actions have their own icons and descriptions.
+
+## Map 0.6.1
+
+- The Peek map action has its own icon and description.
+
 ## 0.6.0
 
 - **Journal** (new module): keeps a diary of each day you play, per character: levels, quests, places

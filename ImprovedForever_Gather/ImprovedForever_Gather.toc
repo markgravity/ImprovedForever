@@ -2,7 +2,7 @@
 ## Title: Improved Forever: Gather
 ## Notes: Names beside the minimap's gathering dots.
 ## Author: markg
-## Version: 0.6.0
+## Version: 0.6.1
 ## X-Website: https://github.com/markgravity/ImprovedForever
 ## X-License: MIT
 ## X-Curse-Project-ID: 1736863
