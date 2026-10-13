@@ -52,6 +52,29 @@ local ITEMS = {
         tip = "Opens the journal.",
     }, { button = "Open", run = function() IF.JournalBook.Open() end }),
     Item({
+        key = "voice", group = "journal", label = "Voice",
+        tip = "How the journal is written: in the voice of your race (a dwarf's hearty words, a night elf's"
+            .. " calm, a Forsaken's dry wit...), or another's. For this character.",
+    }, {
+        value = function() return IF.charDB.journal and IF.charDB.journal.voice or "auto" end,
+        text = function()
+            local picked = IF.charDB.journal and IF.charDB.journal.voice
+            if picked and J.VOICES[picked] then return J.VOICES[picked].name end
+            local _, token = J.Voice()
+            return "Your race" .. (token and J.VOICES[token] and (" (" .. J.VOICES[token].name .. ")") or "")
+        end,
+        options = function()
+            local out = { { action = "auto", name = "Your race" } }
+            for _, token in ipairs(J.VOICE_ORDER) do out[#out + 1] = { action = token, name = J.VOICES[token].name } end
+            return out
+        end,
+        choose = function(action)
+            IF.charDB.journal = IF.charDB.journal or { v = 1, days = {} }
+            IF.charDB.journal.voice = action ~= "auto" and action or nil
+            menu.Toast("Voice: " .. (action == "auto" and "your race" or J.VOICES[action].name))
+        end,
+    }),
+    Item({
         key = "levels", group = "kept", label = "Levels and quests",
         tip = "Each level reached, the quests taken on and finished (their experience and coin).",
     }, OnOff(function() return S().levels end, function(on) S().levels = on end, "Levels and quests")),

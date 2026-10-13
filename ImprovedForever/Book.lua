@@ -80,6 +80,26 @@ local function Ink(fs, font, fallback, color)
     return fs
 end
 
+-- A name in a script the book's fonts lack (Chinese, Korean, Cyrillic: UTF-8
+-- past two bytes, or Cyrillic's): drawn in the chat's font, which has it, at
+-- the same size; else the font it was made with (font, fallback: Ink's)
+local function Script(fs, text, font, fallback)
+    text = text or ""
+    local foreign = text:find("[\224-\244]") or text:find("[\208\209]")
+    local chat = foreign and _G.ChatFontNormal and _G.ChatFontNormal:GetFont()
+    if chat then
+        local _, size = fs:GetFont()
+        pcall(fs.SetFont, fs, chat, size or 14, "")
+        fs:SetTextColor(INK[1], INK[2], INK[3])
+        fs:SetShadowOffset(0, 0)
+    elseif fs.scripted then
+        Ink(fs, font, fallback)
+    end
+    fs.scripted = chat and true or nil
+    fs:SetText(text)
+end
+BK.Script = Script
+
 local function Text(parent, font, fallback, layer)
     return Ink(parent:CreateFontString(nil, layer or "ARTWORK"), font, fallback)
 end
@@ -249,15 +269,23 @@ local function IconFrame(parent, size)
     f.glow:SetAllPoints()
     f.glow:SetBlendMode("ADD")
     f.glow:Hide()
+    -- (icon: a texture, or "atlas:name": an atlas of the game's)
     function f:Set(icon, round)
-        self.icon:SetTexture(icon or NONE_ICON)
+        local atlas = type(icon) == "string" and icon:match("^atlas:(.+)$")
+        if atlas and IF.HasAtlas(atlas) then
+            self.icon:SetAtlas(atlas)
+        else
+            self.icon:SetTexture(not atlas and icon or NONE_ICON)
+        end
         local mask = self.masks[round and "round" or "square"]
         if self.mask ~= mask then
             if self.mask then self.icon:RemoveMaskTexture(self.mask) end
             if mask then self.icon:AddMaskTexture(mask) end
             self.mask = mask
         end
-        self.icon:SetTexCoord(mask and 0 or 0.07, mask and 1 or 0.93, mask and 0 or 0.07, mask and 1 or 0.93)
+        if not (atlas and IF.HasAtlas(atlas)) then
+            self.icon:SetTexCoord(mask and 0 or 0.07, mask and 1 or 0.93, mask and 0 or 0.07, mask and 1 or 0.93)
+        end
         self.border:ClearAllPoints()
         if round then
             if not Atlas(self.border, "spellbook-passive-iconframe") then Atlas(self.border, "talents-node-circle-gray") end
@@ -717,7 +745,7 @@ function BK.New(opts)
         c.icon:Set(line.icon or (line.item and ItemIcon(line.item)), round)
         -- A creature, a person: its own face
         if line.kind == "npc" or line.portrait then BK.Portrait(line.portrait or line.id, c.icon.icon) end
-        c.name:SetText(name or "")
+        Script(c.name, name, "SystemFont_Large", "GameFontNormalLarge")
         c.sub:SetText((sub and sub ~= "") and sub or "")
         c.name:ClearAllPoints()
         if sub and sub ~= "" then
@@ -738,7 +766,7 @@ function BK.New(opts)
         local t = p:heading() or {}
         head:Set(t.icon, t.round)
         if t.portrait then BK.Portrait(t.portrait, head.icon) end
-        title:SetText(t.title or "")
+        Script(title, t.title, "SystemFont_Huge2", "GameFontNormalHuge")
         kind:SetText(t.kind or "")
         owned:SetText(t.owned or "")
         chapter:SetText(t.chapter or "")

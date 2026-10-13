@@ -3,12 +3,14 @@
 -- day's events, Journal.lua): talk in /say, whispers and party chat (short
 -- snippets of both sides), emotes aimed at me or by me, trades, time and
 -- deeds in a group, who brought whom back, letters, duels.
---   person = { class, race, sex, guild, level, realm, first = { day, zone,
+--   person = { class, classToken, race, raceToken, raceID, sex, guild, level, realm, first = { day, zone,
 --     sub, t }, last (time), dayCount, days = { [key] = true } (the last
 --     few), heard (their last line overheard), n = { grouped (seconds),
 --     quests, kills, allyDeaths, revivedMe, talks, lines, mine, whispersIn,
 --     whispersOut, emotesIn, emotesOut, trades, gifts, sent, duels, heard,
---     seen } }
+--     seen }, log = { { k, t, day, dir, text } }: our last dealings, the newest
+--     last: "emote", "talk" (text: its first line), "trade", "group", "revive",
+--     "gift", "sent", "duel" }
 -- Who someone is comes from their chat line (its GUID), the group, the
 -- target; never a nameplate.
 local IF = ImprovedForever
@@ -51,8 +53,30 @@ local function Me()
 end
 
 -- A name from the chat ("Rice-Banshee" on my realm: "Rice")
+-- Whether a name is plain text: valid UTF-8, no control bytes (Forever's
+-- emote events can carry a garbled sender)
+local function Readable(s)
+    local i, n = 1, #s
+    while i <= n do
+        local c = s:byte(i)
+        local len = c < 0x20 and 0 or c < 0x80 and 1 or c >= 0xC2 and c < 0xE0 and 2 or c >= 0xE0 and c < 0xF0 and 3
+            or c >= 0xF0 and c < 0xF5 and 4 or 0
+        if len == 0 then return false end
+        for k = 1, len - 1 do
+            local b = s:byte(i + k)
+            if not b or b < 0x80 or b > 0xBF then return false end
+        end
+        i = i + len
+    end
+    return true
+end
+
 local function Clean(name)
     if not name or I.Secret(name) or name == "" then return nil end
+    if not Readable(name) then return nil end
+    -- (a protected name, "|K...|k" (Battle.net), or one with the game's codes
+    -- in it: not something to keep or show)
+    if name:find("|", 1, true) or name:find("[%z\1-\31]") then return nil end
     if Ambiguate then name = Ambiguate(name, "none") end
     return name
 end
@@ -95,6 +119,17 @@ local function Count(p, what, by)
     p.n[what] = (p.n[what] or 0) + (by or 1)
 end
 
+-- A dealing remembered, for their page (the last few)
+local MAX_LOG = 12
+local function Log(p, kind, fields)
+    fields = fields or {}
+    fields.k, fields.t, fields.day = kind, time(), J.TodayKey()
+    p.log = p.log or {}
+    p.log[#p.log + 1] = fields
+    while #p.log > MAX_LOG do table.remove(p.log, 1) end
+end
+PE.Log = Log
+
 -- Seen today
 local function Seen(p)
     p.last = time()
@@ -113,19 +148,19 @@ end
 -- Who they are: from a chat line's GUID, or a unit (the group, the target)
 local function FromGUID(p, guid)
     if not guid or I.Secret(guid) or not GetPlayerInfoByGUID then return end
-    local ok, class, classToken, race, _, sex, _, realm = pcall(GetPlayerInfoByGUID, guid)
+    local ok, class, classToken, race, raceToken, sex, _, realm = pcall(GetPlayerInfoByGUID, guid)
     if not ok or not class or I.Secret(class) then return end
-    p.class, p.classToken, p.race, p.sex = class, classToken, race, sex
+    p.class, p.classToken, p.race, p.raceToken, p.sex = class, classToken, race, raceToken, sex
     if realm and realm ~= "" then p.realm = realm end
 end
 
 local function FromUnit(p, unit)
     if not UnitExists(unit) then return end
     local class, token = UnitClass(unit)
-    local race = UnitRace(unit)
+    local race, raceToken, raceID = UnitRace(unit)
     local level = UnitLevel(unit)
     if class and not I.Secret(class) then p.class, p.classToken = class, token end
-    if race and not I.Secret(race) then p.race = race end
+    if race and not I.Secret(race) then p.race, p.raceToken, p.raceID = race, raceToken, raceID end
     if level and not I.Secret(level) and level > 0 then p.level = level end
     local sex = UnitSex and UnitSex(unit)
     if sex and not I.Secret(sex) then p.sex = sex end
@@ -168,6 +203,7 @@ function PE.Revived(name)
     if p then
         Count(p, "revivedMe")
         Seen(p)
+        Log(p, "revive")
     end
 end
 
@@ -179,6 +215,7 @@ local function Group(step)
         Seen(p)
         if step then Count(p, "grouped", step) end
         local was = state[u.name]
+        if not was then Log(p, "group") end
         local dead = UnitIsDeadOrGhost(u.unit) and true or false
         local level = p.level
         if was then
@@ -226,6 +263,7 @@ local function Talk(name, channel, mine, text)
             channel = channel }
         talks[name] = open
         Count(p, "talks")
+        Log(p, "talk", { channel = channel, text = line, dir = mine and "out" or "in" })
     end
     open.last = now
     local e = open.event
@@ -281,14 +319,40 @@ end
 -- Rice."); the rest only heard
 ---------------------------------------------------------------------------
 local function Emote(text, sender, guid)
-    local name = Clean(sender)
-    if not name or not text or I.Secret(text) or not I.On() then return end
+    -- (who: by the line's GUID, as the chat itself shows players; the sender
+    -- only if it's readable)
+    local byGUID
+    if guid and not I.Secret(guid) and GetPlayerInfoByGUID then
+        local ok, _, _, _, _, _, gname, realm = pcall(GetPlayerInfoByGUID, guid)
+        if ok and gname and not I.Secret(gname) then byGUID = Clean(gname) end
+    end
+    local name = byGUID or Clean(sender)
+    -- (neither: the name the line begins with, "Samia Arkanistra sighs at you.")
+    if not name and type(text) == "string" and not I.Secret(text) then
+        local lead = text:match("^(.-)%s+%l")
+        if lead and lead ~= "You" and lead:match("^%u") then name = Clean(lead) end
+    end
+    if not text or I.Secret(text) or not I.On() then return end
+    -- (a line that begins "You ...": mine, whatever the sender says)
+    if text:match("^You%s") then name = Me() end
+    if not name then return end
     if name == Me() then
+        -- (at whom: my target, else anyone seen lately whose name it says)
         local target = UnitIsPlayer("target") and Clean(UnitName("target"))
-        if target and text:find(target, 1, true) then
+        if not (target and text:find(target, 1, true)) then
+            target = nil
+            for who, p in pairs(People()) do
+                if (p.last or 0) > time() - 600 and #who > 2 and text:find(who, 1, true)
+                    and (not target or #who > #target) then
+                    target = who
+                end
+            end
+        end
+        if target then
             local p = PE.Get(target, true)
             Seen(p)
             Count(p, "emotesOut")
+            Log(p, "emote", { dir = "out", text = Snip(text) })
             I.Add("emote", { with = target, dir = "out", text = Snip(text) })
         end
         return
@@ -300,6 +364,7 @@ local function Emote(text, sender, guid)
     local lower = text:lower()
     if lower:find("%f[%a]you%f[%A]") or lower:find("%f[%a]your%f[%A]") or (me and lower:find(me:lower(), 1, true)) then
         Count(p, "emotesIn")
+        Log(p, "emote", { dir = "in", text = Snip(text) })
         I.Add("emote", { with = name, dir = "in", text = Snip(text) })
     else
         Count(p, "heard")
@@ -340,6 +405,7 @@ local function TradeDone()
     local p = PE.Get(t.with, true)
     if p then
         Count(p, "trades")
+        Log(p, "trade")
         Seen(p)
     end
     -- (the money that changed hands: the trade's, not a line of its own)
@@ -431,6 +497,7 @@ J.OnAdd(function(e)
     local p = PE.Get(Clean(name), name ~= nil)
     if not p then return end
     Count(p, e.k == "duel" and "duels" or e.k == "sent" and "sent" or "gifts")
+    Log(p, e.k == "duel" and "duel" or e.k == "sent" and "sent" or "gift", { won = e.won })
     Seen(p)
 end)
 

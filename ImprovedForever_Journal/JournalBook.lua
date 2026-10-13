@@ -289,7 +289,7 @@ end
 
 function Day:notes()
     local day = self:day()
-    return J.Write(self.key, day), "— " .. (UnitName("player") or ""), Subjects(day, Lists(day))
+    return J.Write(self.key, day), J.Signature(), Subjects(day, Lists(day))
 end
 
 function Day:list(key) return Lists(self:day())[key] or {} end
@@ -313,6 +313,27 @@ end
 -- Companions: everyone I've had dealings with (talk overheard alone isn't
 -- enough), the best known first
 local COMPANION = ICON .. "INV_Misc_GroupLooking"
+
+-- Someone's face: their race's icon for their gender, else their class's,
+-- else the group's: the game's own atlases (GetRaceAtlas, GetClassAtlas, as
+-- the chat shows players), each only if this client has it
+local function Avatar(p)
+    if not p then return COMPANION end
+    local race = p.raceToken and p.raceToken:lower()
+    if race == "scourge" then race = "undead" end
+    local gender = p.sex == 3 and "female" or p.sex == 2 and "male" or nil
+    if race and gender and GetRaceAtlas then
+        for _, hiRez in ipairs({ true, false }) do
+            local ok, atlas = pcall(GetRaceAtlas, race, gender, hiRez)
+            if ok and atlas and IF.HasAtlas(atlas) then return "atlas:" .. atlas end
+        end
+    end
+    if p.classToken and GetClassAtlas then
+        local ok, atlas = pcall(GetClassAtlas, p.classToken:lower())
+        if ok and atlas and IF.HasAtlas(atlas) then return "atlas:" .. atlas end
+    end
+    return COMPANION
+end
 local function Companions()
     local list = {}
     local PE = J.People
@@ -341,7 +362,7 @@ end
 function Person:heading()
     local p = J.People and J.People.Get(self.name) or {}
     return {
-        icon = COMPANION, round = true, title = self.name,
+        icon = Avatar(p), round = true, title = self.name,
         kind = Join({ p.race, p.class }, " "),
         owned = Join({ p.guild and ("‹" .. p.guild .. "›"), p.dayCount and Plural(p.dayCount, "day", "days") .. " met" }),
         chapter = "Companion",
@@ -374,7 +395,7 @@ function Contents:list(key)
     local lines = {}
     for _, c in ipairs(Companions()) do
         local p = c.p
-        lines[#lines + 1] = { kind = "person", person = c.name, round = true, icon = COMPANION, name = c.name,
+        lines[#lines + 1] = { kind = "person", person = c.name, round = true, icon = Avatar(p), name = c.name,
             line = Join({ Join({ p.race, p.class }, " "), p.last and ("last seen " .. date("%d %b", p.last)) }) }
     end
     return lines

@@ -183,8 +183,14 @@ local function When(key, salt, rm, before)
     return Vary(key, "night", { "Late that night, ", "Deep in the night, " })
 end
 
+local voice = {}               -- (the writer's voice, JournalVoice.lua: J.Write takes it up)
+
 local function Woke(key, rm)
     local h = Hour(rm)
+    -- (the voice's own way of waking, for this time of day)
+    local bin = h >= 4 and h < 7 and "dawn" or h >= 7 and h < 10 and "early" or h >= 10 and h < 12 and "late"
+        or h >= 12 and h < 17 and "midday" or h >= 17 and h < 21 and "evening" or "night"
+    if voice.woke and voice.woke[bin] then return voice.woke[bin] end
     if h >= 4 and h < 7 then return "I was up before dawn" end
     if h >= 7 and h < 10 then return Pick(key, 25, { "I woke early", "I rose early" }) end
     if h >= 10 and h < 12 then return "I slept in; it was mid-morning by the time I stirred" end
@@ -200,7 +206,12 @@ local function Again(rm)
         .. (part == "night" and "late at night" or ("in the " .. part)) .. "."
 end
 
+local LayDownPlain
 local function LayDown(key, rm, short)
+    local said = LayDownPlain(key, rm, short)
+    return (voice.bed and not short) and (said .. " " .. voice.bed) or said
+end
+function LayDownPlain(key, rm, short)
     if short then return "I didn't stay out long; a few minutes, and I put the pen down." end
     local h = Hour(rm)
     if h < 5 then return "It was past midnight when I finally lay down." end
@@ -335,7 +346,7 @@ local function Deaths(key, list, here)
             or d.revived == "spirit" and "I woke at a spirit healer's side."
             or d.revived == "corpse" and Vary(key, "corpse", { "I made the long walk back to my body.",
                 "I found my way back to my body and went on." })
-            or Vary(key, "fell", { "Embarrassing.", "Not my finest hour.", "I'd rather not dwell on it.",
+            or Vary(key, "fell", voice.fell or { "Embarrassing.", "Not my finest hour.", "I'd rather not dwell on it.",
                 "I picked myself up and went on." })
         return "I fell" .. where .. (d.by and (", " .. Pick(key, 39, { "cut down by ", "bested by " }) .. who(d.by, d.named)) or "")
             .. ". " .. after
@@ -368,6 +379,13 @@ local function Lead(lead, sentence)
     return lead .. sentence:sub(1, 1):lower() .. sentence:sub(2)
 end
 
+-- An objective's last word, what's done to it: "Egg destroyed" -> destroy
+local DEEDS = { slain = "put down", killed = "put down", destroyed = "destroy", burned = "burn", burnt = "burn",
+    freed = "free", rescued = "rescue", extinguished = "put out", cleansed = "cleanse", collected = "collect",
+    gathered = "gather", investigated = "investigate", explored = "explore", found = "find", used = "use",
+    placed = "place", planted = "plant", defeated = "defeat", captured = "capture", tamed = "tame", healed = "heal",
+    poisoned = "poison", disrupted = "disrupt", sabotaged = "sabotage", activated = "activate", examined = "examine" }
+
 local NUMBER_WORDS = { "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "a dozen" }
 
 -- What a task asks, as someone would say it: "bring back ten Battleworn
@@ -380,8 +398,12 @@ local function Goal(goal)
             local many = need > 1 and ((NUMBER_WORDS[need] or need) .. " " .. Many(what, need))
             if how == "item" then
                 parts[#parts + 1] = many and ("bring back " .. many) or ("find the " .. Without(what))
-            elseif how == "monster" then
-                parts[#parts + 1] = "put down " .. (many or BK.A_plain(what))
+            elseif how == "monster" or DEEDS[what:match("(%a+)$") or ""] then
+                -- ("Tarantula Egg destroyed" -> destroy six Tarantula Eggs)
+                local deed = DEEDS[what:match("(%a+)$") or ""]
+                local thing = deed and what:gsub("%s+%a+$", "") or what
+                local count = need > 1 and ((NUMBER_WORDS[need] or need) .. " " .. Many(thing, need)) or BK.A_plain(thing)
+                parts[#parts + 1] = (deed or "put down") .. " " .. count
             else
                 parts[#parts + 1] = (what:sub(1, 1):lower() .. what:sub(2)):gsub("[%.%s]+$", "")
             end
@@ -403,10 +425,18 @@ local function QuestOf(e)
 end
 
 -- "a Medium Armor Kit" (in its quality's ink)
+-- (worn in pairs: "a pair of Smith's Trousers")
+local PAIRS = { Trousers = true, Pants = true, Leggings = true, Breeches = true, Boots = true,
+    Shoes = true, Sandals = true, Slippers = true, Treads = true, Greaves = true, Sabatons = true, Gloves = true,
+    Gauntlets = true, Handwraps = true, Mitts = true, Grips = true, Bracers = true, Bracelets = true, Cuffs = true,
+    Wristguards = true, Wraps = true, Spaulders = true, Pauldrons = true, Shoulderpads = true, Shoulders = true,
+    Shorts = true, Britches = true, Legguards = true }
 local function AnItem(id)
     local get = C_Item and C_Item.GetItemInfo or GetItemInfo
     local name = get(id)
     if not name then return ItemName(id) end
+    local base = name:gsub(" of .*$", "")
+    if PAIRS[base:match("(%a+)$") or ""] then return "a pair of " .. ItemName(id) end
     return ((name:match("^[AEIOUaeiou]") and "an ") or "a ") .. ItemName(id)
 end
 
@@ -451,11 +481,16 @@ local MILESTONES = {
 -- People: who they are, how long I've known them, what they did
 ---------------------------------------------------------------------------
 local function Person(name) return J.People and J.People.Get(name) end
+local Cry                       -- (below: the voice's cry on a great moment)
+local WithMe                    -- (below: "Jelly and I")
 
 -- "a dwarf priest of ‹Olympus Ohio›" (what's known of them)
 local function WhoIs(p)
     if not p then return nil end
-    local kind = BK.Join({ p.race and p.race:lower(), p.class and p.class:lower() }, " ")
+    -- (one of my own kind: "a fellow kaldorei")
+    local mine = p.race and p.race == UnitRace("player")
+    local race = mine and ("fellow " .. (voice.kin or p.race:lower())) or (p.race and p.race:lower())
+    local kind = BK.Join({ race, p.class and p.class:lower() }, " ")
     local said = kind ~= "" and BK.A_plain(kind) or nil
     if p.guild then said = (said or "one") .. " of ‹" .. p.guild .. "›" end
     return said
@@ -506,6 +541,15 @@ local function WithNames(list)
     return #named > 0 and Names(Shorten(named, 3)) or nil
 end
 
+-- Those with me, and me: "Jelly and I", "Bob, Jelly and I"
+function WithMe(list)
+    local named = {}
+    for n, name in ipairs(list or {}) do named[n] = Name(name) end
+    named = Shorten(named, 3)
+    named[#named + 1] = "I"
+    return Names(named)
+end
+
 -- An emote's words, in the past and from my side: "Rice waves at you." ->
 -- "Rice waved at me.", "You bow before Rice." -> "I bowed before Rice."
 local PAST = { give = "gave", take = "took", sit = "sat", stand = "stood", kneel = "knelt", eat = "ate", drink = "drank",
@@ -527,23 +571,133 @@ local function Base(verb)
     if verb:match("s$") and not verb:match("ss$") then return verb:sub(1, -2) end
     return verb
 end
+-- (the line read by its words: the actor's name is capitalised, the verb is
+-- the first word in small letters: "Samia Arkanistra sighs at you.")
 local function EmoteWords(e)
     local text = tostring(e.text or ""):gsub("%.$", "")
-    local said
-    if e.dir == "out" then
-        local verb, rest = text:match("^%a+ (%a+)(.*)$")
-        if not verb then return nil end
-        said = "I " .. Past(verb) .. rest
+    local before, verb, rest = text:match("^(.-)%f[%w](%l[%a']*)(.*)$")
+    if not verb then return nil end
+    local said, base
+    -- (mine, though kept as theirs: the line begins "You")
+    local dir = before:match("^%s*You%s*$") and "out" or e.dir
+    if dir == "out" then
+        if not before:match("^%s*%u%a*%s*$") then return nil end      -- ("You ")
+        base = verb:lower()
+        said = "I " .. Past(base) .. rest
+        if e.with then said = said:gsub(e.with:gsub("%p", "%%%0"), Name(e.with), 1) end
     else
-        local who = e.with or ""
-        local rest = text:sub(#who + 2)
-        local verb, tail = rest:match("^(%a+)(.*)$")
-        if not verb or text:sub(1, #who) ~= who then return nil end
-        said = Name(who) .. " " .. Past(Base(verb)) .. tail
+        base = Base(verb)
+        -- (the name the line begins with: what was kept as the sender may be garbled)
+        local who = before:gsub("%s+$", "")
+        said = Name(who ~= "" and who or e.with or "Someone") .. " " .. Past(base) .. rest
     end
     said = said:gsub("%f[%a]your%f[%A]", "my"):gsub("%f[%a]you%f[%A]", "me")
-    if e.with and e.dir == "out" then said = said:gsub(e.with:gsub("%p", "%%%0"), Name(e.with), 1) end
-    return said .. ".", e.dir == "out" and text:match("^%a+ (%a+)") or Base(text:sub(#(e.with or "") + 2):match("^(%a+)") or "")
+    return said .. (said:match("[!%?]$") and "" or "."), base
+end
+
+---------------------------------------------------------------------------
+-- Gestures: an emote read by its kind and its target, then said our own
+-- way ("You greet Morph Protean with a hearty hello!" -> "I greeted Morph
+-- Protean"); one we don't know: its words, as EmoteWords reads them
+---------------------------------------------------------------------------
+-- verb (as the game says it to me: "greet", "sighs" -> "sigh") = { past,
+-- the word before the other, kind }
+local GESTURES = {
+    greet = { "greeted", nil, "greet" }, wave = { "waved", "at", "greet" }, bow = { "bowed", "to", "greet" },
+    salute = { "saluted", nil, "greet" }, nod = { "nodded", "to", "greet" }, curtsey = { "curtsied", "to", "greet" },
+    welcome = { "welcomed", nil, "greet" }, kneel = { "knelt", "before", "greet" }, hail = { "hailed", nil, "greet" },
+    thank = { "thanked", nil, "thanks" },
+    cheer = { "cheered", "for", "cheer" }, applaud = { "applauded", nil, "cheer" }, clap = { "clapped", "for", "cheer" },
+    congratulate = { "congratulated", nil, "cheer" }, praise = { "praised", nil, "cheer" },
+    commend = { "commended", nil, "cheer" }, bravo = { "cheered", "for", "cheer" },
+    dance = { "danced", "with", "dance" },
+    hug = { "hugged", nil, "love" }, cuddle = { "cuddled up to", nil, "love" }, kiss = { "kissed", nil, "love" },
+    flirt = { "flirted", "with", "love" }, wink = { "winked", "at", "love" }, blush = { "blushed", "at", "love" },
+    love = { "showed affection to", nil, "love" },
+    smile = { "smiled", "at", "friendly" }, grin = { "grinned", "at", "friendly" }, pat = { "patted", nil, "friendly" },
+    comfort = { "comforted", nil, "friendly" }, soothe = { "soothed", nil, "friendly" }, laugh = { "laughed", "with", "friendly" },
+    giggle = { "giggled", "at", "friendly" }, chuckle = { "chuckled", "at", "friendly" },
+    poke = { "poked", nil, "tease" }, tickle = { "tickled", nil, "tease" }, tease = { "teased", nil, "tease" },
+    mock = { "mocked", nil, "mock" }, taunt = { "taunted", nil, "mock" }, insult = { "insulted", nil, "mock" },
+    spit = { "spat", "at", "mock" }, slap = { "slapped", nil, "mock" }, glare = { "glared", "at", "mock" },
+    growl = { "growled", "at", "mock" }, roar = { "roared", "at", "mock" }, threaten = { "threatened", nil, "mock" },
+    flex = { "flexed", "at", "mock" }, scoff = { "scoffed", "at", "mock" },
+    sigh = { "sighed", "at", "sad" }, cry = { "wept", "before", "sad" }, sob = { "sobbed", "before", "sad" },
+    mourn = { "mourned", "with", "sad" },
+    shrug = { "shrugged", "at", "puzzled" }, ponder = { "pondered", "over", "puzzled" }, peer = { "peered", "at", "puzzled" },
+    point = { "pointed", "at", "point" }, beckon = { "beckoned", nil, "point" }, follow = { "followed", nil, "point" },
+    apologize = { "apologized", "to", "sorry" }, beg = { "begged", nil, "sorry" }, plead = { "pleaded", "with", "sorry" },
+}
+-- (said by a phrase in the line, whatever its verb)
+local GESTURE_PHRASES = {
+    { "goodbye", "bid", "farewell", "farewell" }, { "farewell", "bid", "farewell", "farewell" },
+    { "toast", "raised a toast", "to", "toast" }, { "rude gesture", "made a rude gesture", "at", "mock" },
+    { "shoulder", "wept on", "'s shoulder", "sad" },
+}
+-- When they did it to me: a word on it, now and then ("" none)
+local GESTURE_AFTER = {
+    mock = { "", " I let it pass.", " I paid it no mind." }, love = { "", " I couldn't help but smile." },
+    cheer = { "", " It warmed my heart." }, sad = { "", " Something seemed to weigh on them." },
+}
+-- When I answered in kind
+local ANSWER = {
+    greet = "and I returned the greeting", thanks = "and I thanked them in turn", cheer = "and I cheered right back",
+    love = "and I returned the gesture", mock = "and I gave as good as I got", friendly = "and I did the same",
+    farewell = "and I bid them farewell in turn", toast = "and I raised mine in turn", tease = "and I did the same",
+}
+
+-- An emote's kind: { past, prep, kind, base } (nil: one we don't know)
+local function Gesture(e)
+    local text = tostring(e.text or "")
+    local before, verb, rest = text:match("^(.-)%f[%w](%l[%a']*)(.*)$")
+    if not verb then return nil end
+    local mine = e.dir == "out" or before:match("^%s*You%s*$")
+    -- (whom I did it to, as the line names them: the capitalised words after
+    -- the verb, "You greet Morph Protean with...")
+    local object
+    if mine then
+        local words, started = {}, false
+        for w in rest:gmatch("%S+") do
+            local word = w:gsub("[%.,!%?;:]+$", "")
+            if word:match("^%u") then
+                started = true
+                words[#words + 1] = word
+                if word ~= w then break end
+            elseif started then
+                break
+            end
+        end
+        object = #words > 0 and table.concat(words, " ") or nil
+    end
+    local who = { mine = mine and true or false, actor = not mine and before:gsub("%s+$", "") or nil, object = object }
+    -- (its kind: a phrase in it, else its verb)
+    local lower = text:lower()
+    for _, ph in ipairs(GESTURE_PHRASES) do
+        if lower:find(ph[1], 1, true) then
+            who.past, who.prep, who.kind, who.base = ph[2], ph[3], ph[4], ph[1]
+            return who
+        end
+    end
+    local base = mine and verb:lower() or Base(verb)
+    local g = GESTURES[base]
+    if not g then return nil end
+    who.past, who.prep, who.kind, who.base = g[1], g[2], g[3], base
+    return who
+end
+
+-- "I greeted Morph Protean" / "Samia Arkanistra sighed at me" (no full stop)
+local function GestureSaid(g, other, mine)
+    local function to(whom)
+        if g.prep and g.prep:sub(1, 1) == "'" then return whom .. g.prep end      -- ("Jelly's shoulder")
+        return (g.prep and (g.prep .. " ") or "") .. whom
+    end
+    if mine then
+        if g.prep == "farewell" then return "I bid " .. other .. " farewell" end
+        return "I " .. g.past .. " " .. to(other)
+    end
+    if g.prep == "farewell" then return other .. " bid me farewell" end
+    if g.prep and g.prep:sub(1, 1) == "'" then return other .. " " .. g.past .. " my shoulder" end
+    return other .. " " .. g.past .. " " .. to("me")
 end
 
 -- A run of the same things (taken on, seen through, new lands...): one sentence
@@ -753,8 +907,8 @@ local function Sentence(key, list, i, ctx)
         return said
     end
     if k == "kill" then
-        return Pick(key, 38, { "I also bested ", "I stood my ground against " }) .. Name(e.name) .. ", "
-            .. (J.FEARSOME[e.class] or "a fearsome brute") .. "."
+        return Cry(ctx, Pick(key, 38, { "I also bested ", "I stood my ground against " }) .. Name(e.name) .. ", "
+            .. (J.FEARSOME[e.class] or "a fearsome brute") .. ".")
     end
     if k == "effort" then
         local g = e.goal
@@ -841,7 +995,8 @@ local function Sentence(key, list, i, ctx)
         elseif lessons then
             said = said .. " My trainer would have new lessons waiting."
         end
-        return said
+        if voice.stronger and ctx.levels == 1 then said = said .. " " .. voice.stronger end
+        return Cry(ctx, said)
     end
     if k == "post" then
         -- A visit to the mailbox: what each letter held, what I sent
@@ -970,9 +1125,9 @@ local function Sentence(key, list, i, ctx)
         return Vary(key, "party", { "I fell in with ", "I joined up with " }) .. Names(list) .. after .. "."
     end
     if k == "alone" then
-        local who = WithNames(ctx.party)
+        local party = ctx.party
         ctx.party = nil
-        return who and (who .. " and I went our separate ways.")
+        return party and (WithMe(party) .. " went our separate ways.")
             or Vary(key, "alone", { "We went our separate ways.", "After that, I went on alone." })
     end
     if k == "talk" then
@@ -996,6 +1151,37 @@ local function Sentence(key, list, i, ctx)
         return said .. ". " .. Quoted(theirs, Name(e.with), "said") .. "; " .. Quoted(mine, "I", "answered") .. "."
     end
     if k == "emote" then
+        -- (by its kind: our words; the other named as the line names them)
+        local g = Gesture(e)
+        if g then
+            local other = Name(g.actor ~= "" and g.actor or e.with or "someone")
+            if g.mine then
+                local whom = e.with and tostring(e.text or ""):find(e.with, 1, true) and e.with or g.object or e.with
+                other = Name(whom or "someone")
+            end
+            ctx.named[e.with] = true
+            local said = GestureSaid(g, other, g.mine)
+            local back = list[i + 1]
+            local bg = back and back.k == "emote" and back.with == e.with and Gesture(back)
+            if bg and not g.mine and bg.mine then
+                -- (theirs, then mine: answered)
+                ctx.skip = 1
+                if bg.kind == "dance" and g.kind == "dance" then return other .. " and I danced together." end
+                if bg.kind == g.kind and ANSWER[g.kind] then
+                    return said .. ", " .. ANSWER[g.kind]:gsub("them", other) .. "."
+                end
+                return said .. "; " .. GestureSaid(bg, other, true) .. "."
+            end
+            if bg and g.mine and not bg.mine then
+                -- (mine, then theirs: "I danced with Samia, who sighed at me.")
+                ctx.skip = 1
+                if bg.kind == "dance" and g.kind == "dance" then return other .. " and I danced together." end
+                local theirs = GestureSaid(bg, other, false):gsub("^" .. other:gsub("%p", "%%%0") .. " ", "", 1)
+                return said .. ", who " .. theirs .. "."
+            end
+            local after = not g.mine and GESTURE_AFTER[g.kind] and Vary(key, "gesture" .. g.kind, GESTURE_AFTER[g.kind]) or ""
+            return said .. "." .. after:gsub("them", other)
+        end
         local said, verb = EmoteWords(e)
         if not said then
             return e.dir == "out" and ("I gestured to " .. Name(e.with) .. ".") or (Name(e.with) .. " gestured to me.")
@@ -1003,6 +1189,15 @@ local function Sentence(key, list, i, ctx)
         ctx.named[e.with] = true
         -- (answered in kind: one sentence)
         local back = list[i + 1]
+        if e.dir == "out" and back and back.k == "emote" and back.dir == "in" and back.with == e.with then
+            -- ("I danced with Samia, who sighed at me.")
+            local theirs = EmoteWords(back)
+            if theirs then
+                ctx.skip = 1
+                local rest = theirs:gsub("^" .. Name(e.with):gsub("%p", "%%%0") .. " ", "", 1)
+                return said:gsub("%.$", "") .. ", who " .. rest
+            end
+        end
         if e.dir == "in" and back and back.k == "emote" and back.dir == "out" and back.with == e.with then
             ctx.skip = 1
             local _, theirs = EmoteWords(back)
@@ -1306,7 +1501,9 @@ local function Summary(key, day, ctx, going)
     local net = m.earned - m.spent
     if m.earned + m.spent > 0 and net ~= 0 then
         local richer = net > 0 and (Name(Coins(net)) .. " richer") or ("poorer by " .. Name(Coins(-net)))
-        out[#out + 1] = (going and ("So far, I'm " .. richer) or ("All told, I ended the day " .. richer)) .. "."
+        local template = not going and (net > 0 and voice.richer or net < 0 and voice.poorer)
+        out[#out + 1] = template and format(template, Name(Coins(math.abs(net))))
+            or ((going and ("So far, I'm " .. richer) or ("All told, I ended the day " .. richer)) .. ".")
     end
     return out
 end
@@ -1333,7 +1530,16 @@ local function Fill(day)
     end
 end
 
+-- The voice's cry on a great moment (growing stronger, an elite bested):
+-- once a day
+function Cry(ctx, said)
+    if not voice.cry or ctx.cried or not said then return said end
+    ctx.cried = true
+    return voice.cry .. " " .. said
+end
+
 function J.Write(key, day)
+    voice = J.Voice and J.Voice() or {}
     Fill(day)
     wipe(turns)
     local sessions = Sessions(day)
@@ -1359,7 +1565,8 @@ function J.Write(key, day)
                 elseif ep.zone then
                     where = Pick(key, 42, { ", in ", ", still in " }) .. Name(ep.zone)
                 end
-                out[1] = Woke(key, wake) .. (sessions[1].rested and ", well rested" or "") .. where .. "."
+                out[1] = Woke(key, wake) .. (sessions[1].rested and ", well rested" or "") .. where
+                    .. (voice.wakeAside and (", " .. voice.wakeAside) or "") .. "."
             elseif ctx.wake then
                 -- (the waking, with nothing told yet: this paragraph opens with it)
                 out[1], ctx.wake = ctx.wake, nil
@@ -1397,7 +1604,7 @@ function J.Write(key, day)
                 if sentence and them and TOGETHER[ev.k] and sentence:match("^I ") and not sentence:match("^I fell")
                     and ctx.together ~= them then
                     ctx.together = them
-                    sentence = them .. " and I " .. sentence:sub(3)
+                    sentence = WithMe(group) .. " " .. sentence:sub(3)
                 end
                 -- (where I am now: the last thing told's place)
                 local at = ctx.posFrom or told[i + ctx.skip]
@@ -1472,7 +1679,57 @@ function J.PersonStory(name)
     if (n.gifts or 0) > 0 then ties[#ties + 1] = "letters from " .. Name(name) .. " have come " .. Times(n.gifts) end
     if (n.duels or 0) > 0 then ties[#ties + 1] = "we have dueled " .. Times(n.duels) end
     if (n.talks or 0) > 0 then ties[#ties + 1] = "we have talked " .. Times(n.talks) end
+    local gestures = (n.emotesIn or 0) + (n.emotesOut or 0)
+    if gestures > 0 then ties[#ties + 1] = "we have traded " .. Plural(gestures, "gesture", "gestures") end
+    -- (one "we have" for them all)
+    local seenWe = false
+    for i, tie in ipairs(ties) do
+        if tie:match("^we have ") then
+            if seenWe then ties[i] = tie:sub(9) end
+            seenWe = true
+        end
+    end
     if #ties > 0 then out[#out + 1] = BK.Capital(Names(ties)) .. "." end
+    -- Lately: our last few dealings, in order, a sentence a day
+    local days, order = {}, {}
+    local today = J.TodayKey()
+    for i = math.max(1, #(p.log or {}) - 4), #(p.log or {}) do
+        local l = p.log[i]
+        local said
+        if l.k == "emote" then
+            local g = Gesture({ with = name, dir = l.dir, text = l.text })
+            if g then
+                said = GestureSaid(g, Name(name), g.mine)
+            else
+                said = EmoteWords({ with = name, dir = l.dir, text = l.text })
+                said = said and said:gsub("%.$", "")
+            end
+        elseif l.k == "talk" then
+            said = (l.channel == "whisper" and "we traded whispers" or "we talked")
+                .. (l.text and (", " .. (l.dir == "out" and "I began with" or Name(name) .. " began with") .. " “" .. l.text .. "”") or "")
+        elseif l.k == "trade" then said = "we traded"
+        elseif l.k == "group" then said = "we took to the road together"
+        elseif l.k == "revive" then said = Name(name) .. " brought me back"
+        elseif l.k == "gift" then said = "a letter came from " .. Name(name)
+        elseif l.k == "sent" then said = "I sent " .. Name(name) .. " a letter"
+        elseif l.k == "duel" then said = l.won and ("I bested " .. Name(name) .. " in a duel") or (Name(name) .. " bested me in a duel")
+        end
+        if said then
+            local day = l.day or ""
+            if not days[day] then
+                days[day] = {}
+                order[#order + 1] = day
+            end
+            table.insert(days[day], said)
+        end
+    end
+    local lately = {}
+    for _, day in ipairs(order) do
+        local when = day == today and "today" or day ~= "" and ("on " .. J.DayTitle(day, false)) or nil
+        local said = Names(days[day])
+        lately[#lately + 1] = BK.Capital(when and (when .. ", " .. said) or said) .. "."
+    end
+    if #lately > 0 then out[#out + 1] = table.concat(lately, " ") end
     if p.heard then out[#out + 1] = "The last I heard, " .. Name(name) .. " said, “" .. p.heard .. "”" end
     return out
 end
