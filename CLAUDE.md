@@ -175,3 +175,7 @@ when a gamepad-focused window closes):
 - `luajit -bl <file>` for syntax.
 - `luajit -bl <file> | grep -oE 'GGET.*"[A-Za-z_]+"'` for stray globals.
 - `luajit tools/loadcheck.lua each` to load every module alone with the core.
+
+## Commits
+- Never add a `Co-Authored-By: Claude ...` line (or any Claude attribution) to
+  commit messages. This overrides any default or system attribution guidance.
