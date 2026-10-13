@@ -48,6 +48,7 @@ local SIDE_ROWS = 16
 local STICK_ON, STICK_OFF = 0.6, 0.3
 local REPEAT_DELAY, REPEAT_EVERY, FAST_AFTER = 0.35, 0.1, 1.5
 local QUERY_DELAY = 0.3               -- categories moved through quickly: one query at the end
+local BUY_TIMEOUT = 10                -- a buy the server hasn't answered by then: given up
 
 local QUALITY_FILTERS = {             -- Enum.AuctionHouseFilter, from poor up
     [0] = 6, [1] = 7, [2] = 8, [3] = 9, [4] = 10, [5] = 11,
@@ -691,6 +692,7 @@ local function SendQuery()
         itemClassFilters = cat and cat.filters or nil,
         minLevel = 0, maxLevel = s.buyMyLevel and UnitLevel("player") or 0,
     })
+    A.lastQuery = "browse"
     BY.searching = true
     BY.Render()
 end
@@ -754,7 +756,9 @@ local function ResultsIn()
     if S().buyUpgrades == "only" and #BY.results < LIST_ROWS and AH.HasFullBrowseResults
         and not AH.HasFullBrowseResults() then
         AH.RequestMoreBrowseResults()
+        A.lastQuery = "browse"
     end
+    BY.AfterBrowse()
     BY.Render()
 end
 
@@ -786,6 +790,9 @@ end
 -- priced, its popup up, "buying"), quote (unit, total), message }
 ---------------------------------------------------------------------------
 local D
+-- Auctions bought this visit (auctionID -> true): never offered again, a
+-- list that comes back still holding one (the server's a moment behind)
+local boughtIDs = {}
 
 -- What qty of a commodity costs from the listings, cheapest first (nil: not that many)
 local function Cost(qty)
@@ -1100,7 +1107,10 @@ function BY.SearchItem()
     A.Search(itemID, D.commodity, nil, function(listings)
         if not D or D.itemID ~= itemID then return end
         D.searching = false
-        D.listings = listings or {}
+        D.listings = {}
+        for _, l in ipairs(listings or {}) do
+            if not boughtIDs[l.auctionID] then D.listings[#D.listings + 1] = l end
+        end
         if not listings then D.message = "No answer from the auction house" end
         if not D.commodity then KeepVersions(D.result.itemKey, D.listings) end
         D.qty = math.max(1, math.min(D.qty or 1, Available()))
@@ -1185,11 +1195,41 @@ function BY.CloseItem()
     BY.Render()
 end
 
+-- The server takes one auction house message at a time: a buy sent while
+-- it's busy (the search or the list asked again after the last buy) is
+-- dropped, never answered
+local BUSY = "The auction house is busy: hold again in a moment"
+local function Busy()
+    return AH.IsThrottledMessageSystemReady and not AH.IsThrottledMessageSystemReady()
+end
+
+-- The client takes a bid only on an auction of its last search: one
+-- sent since (the list, another item) and the bid goes nowhere, unsaid
+local AGAIN = "Looked up again: hold again"
+local function SearchedElsewhere()
+    local q = A.lastQuery
+    return type(q) ~= "table" or q.commodity or not q.itemKey or q.itemID ~= D.itemID
+end
+
+-- After a buy: the list's refresh first, the item looked up again once it
+-- has come (the item's search the last one sent)
+function BY.AfterBrowse()
+    if not (D and D.afterBrowse) then return end
+    D.afterBrowse = nil
+    local message = D.message
+    BY.SearchItem()
+    D.message = message
+end
+
 -- Cross held: the hold starts (a commodity's price asked of the server
 -- now: that wants a hardware event too, the press is one); short of
 -- money or of that many: said, no hold
 local function BuyStart()
     if not D or D.searching or D.state == "buying" or IF.InCombat() then return end
+    if Busy() and D.state ~= "confirm" then
+        D.message = BUSY
+        return BY.Render()
+    end
     if D.commodity then
         local total = Cost(D.qty)
         if not total then
@@ -1207,6 +1247,11 @@ local function BuyStart()
     else
         local auction = Auctions()[D.row]
         if not auction then return end
+        if SearchedElsewhere() then
+            BY.SearchItem()
+            D.message = AGAIN
+            return BY.Render()
+        end
         local price = auction.total or auction.unit * auction.count
         if price > GetMoney() then
             D.message = "Not enough money"
@@ -1235,9 +1280,14 @@ function BY.DetailRelease(name)
         DropQuote()
         return BY.Render()
     end
+    if Busy() then
+        if D.state ~= "confirm" then DropQuote() end
+        D.message = BUSY
+        return BY.Render()
+    end
     if D.commodity then
         if D.state == "confirm" and D.quote then
-            D.state, D.message = "buying", "Buying..."
+            D.state, D.message, D.buyingAt = "buying", "Buying...", GetTime()
             AH.ConfirmCommoditiesPurchase(D.itemID, D.qty)
             BY.HoldDone()
         else
@@ -1246,9 +1296,12 @@ function BY.DetailRelease(name)
         end
     else
         local auction = Auctions()[D.row]
-        if auction then
+        if auction and SearchedElsewhere() then
+            BY.SearchItem()
+            D.message = AGAIN
+        elseif auction then
             local price = auction.total or auction.unit * auction.count
-            D.state, D.message = "buying", "Buying..."
+            D.state, D.message, D.buyingAt = "buying", "Buying...", GetTime()
             D.bought = auction
             AH.PlaceBid(auction.auctionID, price)
             BY.HoldDone()
@@ -1261,8 +1314,8 @@ local function Bought(what)
     PlaySound(SOUNDKIT and SOUNDKIT.LOOT_WINDOW_COIN_SOUND or 120)
     IF.Print("bought " .. what .. ".")
     if D then
-        D.state, D.message = nil, "|cff5fd35fBought|r"
-        BY.SearchItem()
+        -- (looked up again after the list's refresh, BY.AfterBrowse)
+        D.state, D.searching, D.afterBrowse = nil, true, GetTime()
         D.message = "|cff5fd35fBought " .. what .. "|r"
     end
 end
@@ -1961,6 +2014,14 @@ win:SetScript("OnUpdate", function()
         D.state, D.quote, D.message = nil, nil, nil
         BY.Render()
     end
+    -- The list's refresh not come after a buy: the item looked up anyway
+    if D and D.afterBrowse and now - D.afterBrowse > 5 then BY.AfterBrowse() end
+    -- A buy never answered: given up, its auctions looked up again
+    if D and D.state == "buying" and now - (D.buyingAt or now) > BUY_TIMEOUT then
+        D.state = nil
+        BY.SearchItem()
+        D.message = "No answer from the auction house: check your bags and try again"
+    end
     -- A hold under way (the item's screen, or a page's): its bar, its feel
     local progress
     if D and D.holdStart then
@@ -2055,7 +2116,7 @@ for _, event in ipairs({ "AUCTION_HOUSE_SHOW", "AUCTION_HOUSE_CLOSED", "AUCTION_
     "GET_ITEM_INFO_RECEIVED",
     "AUCTION_HOUSE_THROTTLED_SYSTEM_READY", "COMMODITY_PRICE_UPDATED", "COMMODITY_PRICE_UNAVAILABLE",
     "COMMODITY_PURCHASE_SUCCEEDED", "COMMODITY_PURCHASE_FAILED", "AUCTION_HOUSE_PURCHASE_COMPLETED",
-    "AUCTION_HOUSE_SHOW_ERROR", "PLAYER_REGEN_DISABLED" }) do
+    "AUCTION_HOUSE_SHOW_ERROR", "AUCTION_HOUSE_THROTTLED_MESSAGE_DROPPED", "PLAYER_REGEN_DISABLED" }) do
     pcall(events.RegisterEvent, events, event)
 end
 events:SetScript("OnEvent", function(_, event, ...)
@@ -2069,6 +2130,7 @@ events:SetScript("OnEvent", function(_, event, ...)
         -- (listings change: looked up again next visit)
         wipe(prefetched)
         wipe(versionCache)
+        wipe(boughtIDs)
         win:Hide()
         SyncNative()
     elseif not win:IsShown() then
@@ -2077,6 +2139,7 @@ events:SetScript("OnEvent", function(_, event, ...)
         ResultsIn()
     elseif event == "AUCTION_HOUSE_BROWSE_FAILURE" then
         BY.searching = false
+        BY.AfterBrowse()
         BY.Render()
     elseif event == "GET_ITEM_INFO_RECEIVED" then
         -- (many at once: worked out once, a moment later)
@@ -2096,6 +2159,10 @@ events:SetScript("OnEvent", function(_, event, ...)
         BY.Render()
     elseif event == "AUCTION_HOUSE_THROTTLED_SYSTEM_READY" then
         if BY.queryWaiting then SendQuery() end
+        if D and D.message == BUSY then
+            D.message = nil
+            BY.Render()
+        end
     elseif event == "COMMODITY_PRICE_UPDATED" then
         if D and D.state == "quote" then
             local unit, total = ...
@@ -2117,8 +2184,16 @@ events:SetScript("OnEvent", function(_, event, ...)
         if D then Bought(D.qty .. " × " .. (D.info.itemName or "item")) end
         BY.Query(true)
     elseif event == "AUCTION_HOUSE_PURCHASE_COMPLETED" then
+        local auctionID = ...
+        if auctionID then boughtIDs[auctionID] = true end
         if D and D.state == "buying" then Bought(D.info.itemName or "item") end
         BY.Query(true)
+    elseif event == "AUCTION_HOUSE_THROTTLED_MESSAGE_DROPPED" then
+        -- (the server's queue full: what was sent never goes; said, hold again)
+        if D and D.state == "buying" then
+            D.state, D.message = nil, BUSY
+            BY.Render()
+        end
     elseif event == "AUCTION_HOUSE_SHOW_ERROR" then
         if D and D.state == "buying" then
             D.state, D.message = nil, "Couldn't buy it"

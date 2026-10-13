@@ -39,6 +39,7 @@ local DEFAULTS = {
 
 function A.Settings()
     local db = IF.db
+    db.buyLog = nil   -- (a buying probe's, since removed)
     db.auction = db.auction or {}
     local settings = db.auction
     for k, v in pairs(DEFAULTS) do
@@ -354,6 +355,7 @@ local function Send()
         AH.SendSellSearchQuery(key, { { sortOrder = Enum.AuctionHouseSortOrder.Buyout, reverseSort = false } }, false)
     end
     search.sent, search.sentAt = true, GetTime()
+    A.lastQuery = search
 end
 
 -- itemLevel: gear's own (results of that level preferred, when there are
@@ -387,8 +389,10 @@ local function Answer(listings)
     s.fn(listings)
 end
 
+-- (results come before ours is sent too: the client's own, a purchase's
+-- refresh, its auctions as they were; only an answer to ours is taken)
 local function CommodityResults(itemID)
-    if not (search and search.commodity and search.itemID == itemID) then return end
+    if not (search and search.sent and search.commodity and search.itemID == itemID) then return end
     local listings = {}
     for i = 1, AH.GetNumCommoditySearchResults(itemID) do
         local r = AH.GetCommoditySearchResultInfo(itemID, i)
@@ -401,7 +405,9 @@ local function CommodityResults(itemID)
 end
 
 local function ItemResults(itemKey)
-    if not (search and not search.commodity and itemKey and itemKey.itemID == search.itemID) then return end
+    if not (search and search.sent and not search.commodity and itemKey and itemKey.itemID == search.itemID) then
+        return
+    end
     local all, sameLevel = {}, {}
     for i = 1, AH.GetNumItemSearchResults(itemKey) do
         local r = AH.GetItemSearchResultInfo(itemKey, i)
