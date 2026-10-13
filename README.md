@@ -14,7 +14,7 @@ the core, **Improved Forever**:
 | `ImprovedForever_Vibration` | Vibration on game events and spell casts. |
 | `ImprovedForever_Gather` | Names beside the minimap's gathering dots, alerts. |
 | `ImprovedForever_Map` | The peek map. |
-| `ImprovedForever_Chat` | Handwriting (beta, off by default): write letters or words on the touchpad to type in any text box. |
+| `ImprovedForever_Chat` | The chat with the controller: pick a line, then an item or other link in it. |
 | `ImprovedForever_Auction` | The controller auction window, prices over time, tasks. |
 | `ImprovedForever_Junk` | Finds and marks junk, sells it with the vendor's Sell All Junk, destroys it from the bags or the loot window. Formerly Destroy. |
 | `ImprovedForever_Library` | Everything about an item. |
@@ -27,8 +27,8 @@ the core, **Improved Forever**:
   consumables (paged by category), several wheels per combo. Aim with the right stick.
 - **Recent action slot** on R3, placed in Edit Mode.
 - **Touchpad** corner actions.
-- **Touchpad handwriting** (beta, off by default: the Chat tab): while a text box has the focus, write a letter or a whole word on the touchpad
-  (printed, letters side by side) and it's typed in; swipe right for a space, left to delete.
+- **Chat lines**: with the chat open on the controller, D-pad Up picks its lines, left / right the links in a line
+  (their tooltips); Cross opens an item in the Library, Square puts the link in your message.
 - **Button overrides** for L3 click and double-click.
 - **Vibration** on game events and spell casts, with per-action patterns.
 - **Junk**: what the bags no longer need is marked junk (the game's coin on its slot), from quests (QuestieDB's
