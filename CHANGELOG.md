@@ -23,25 +23,6 @@
   spell, a player macro). The next D-pad / face press (L2 / R2 held for their bars) puts it
   in that slot.
 
-## Journal 0.7.0
-
-- **People**: everyone you meet on the road is kept per character (class, race, level, guild)
-  with your dealings: talk, whispers, party chat, emotes, trades, time and deeds in a group,
-  who brought whom back, letters and duels. They show in the day's entries.
-- **Voice**: the diary's writer talks as a race (your own, or another picked in the Journal
-  tab): waking and lying down, a fall, growing stronger, the day's coin, a great moment,
-  the name signed under the page.
-- A session records how it began (level, gold, rested, inn, where), and more is kept:
-  mail, equipment, flight paths, party and duels, reputation, talents, gathering and
-  how you came back from a death.
-
-## Chat 0.7.0
-
-- New module (beta, off by default): while a text box has the focus, letters or whole words
-  written on the DualSense touchpad are read and typed at the cursor. A swipe right types a
-  space, a swipe left deletes. The ink pad over the text box shows the strokes and what was
-  read. Settings in the new Chat tab; `/if ink` prints each read with its runners-up.
-
 ## Auction 0.6.1
 
 - Fixed Buy stuck on "Buying..." when buying the same item again: Forever's client dropped

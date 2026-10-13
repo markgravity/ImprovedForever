@@ -224,6 +224,8 @@ def changed():
             state = f"{len(files.splitlines())} files changed since {tag}" if files else "unchanged"
         else:
             state = f"no tag {tag} yet"
+        if not toc_field("X-Curse-Project-ID", folder):
+            state = "not on CurseForge: not released (" + state + ")"
         print(f"{short(folder):<13} {ver:<10} {state}")
 
 
@@ -232,6 +234,8 @@ def main():
     arg = sys.argv[2] if len(sys.argv) > 2 else ""
     if command == "check":
         folder, ver = parse_tag(arg)
+        if not toc_field("X-Curse-Project-ID", folder):
+            sys.exit(f"{folder} has no '## X-Curse-Project-ID': it isn't on CurseForge (still in development), so it isn't released")
         if version(folder) != ver:
             sys.exit(f"The tag {arg} doesn't match {folder}'s TOC version {version(folder)} (expected {short(folder)}-v{version(folder)})")
         notes(folder, ver)
