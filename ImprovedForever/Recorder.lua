@@ -31,6 +31,7 @@ local function Build()
     local d = IF.UI.Window("ImprovedForeverRecorder", 460, 210, true)
     d:SetFrameStrata("TOOLTIP")
     IF.Focus.Glow(d, true)
+    d.onClose = function() R.Finish(true) end
     d.hint = K.ChatText(d, 13, KC.cream2)
     d.hint:SetPoint("TOP", 0, -40)
     d.hint:SetWidth(400)

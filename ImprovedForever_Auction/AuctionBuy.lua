@@ -104,6 +104,99 @@ function BY.AddPage(page)
     BY.TABS[#BY.TABS + 1] = page
 end
 
+---------------------------------------------------------------------------
+-- The mouse (IF.Input: the look follows the input used last): no legend,
+-- a row of the game's buttons in the window's bottom band instead (a
+-- page's MouseHints() -> { { label, fn } }), each list scrolled with the
+-- wheel, a row under the mouse its tooltip, the hold boxes held down with
+-- the button
+---------------------------------------------------------------------------
+local function Mouse()
+    return not IF.Input.Pad()
+end
+BY.Mouse = Mouse
+
+-- The wheel over frames: fn(dir), -1 up, 1 down
+function BY.Wheel(frames, fn)
+    for _, frame in ipairs(frames) do
+        frame:EnableMouseWheel(true)
+        frame:SetScript("OnMouseWheel", function(_, delta) fn(delta > 0 and -1 or 1) end)
+    end
+end
+
+-- A row under the mouse: its tooltip (fn(row) sets GameTooltip; false:
+-- none), the picked one's back as it leaves
+function BY.Hover(row, fn)
+    row:HookScript("OnEnter", function(self)
+        if not Mouse() then return end
+        BY.hover = self
+        GameTooltip:SetOwner(BY.window, "ANCHOR_NONE")
+        BY.PlaceTip()
+        if fn(self) == false then return GameTooltip:Hide() end
+        GameTooltip:Show()
+        BY.Compare()
+    end)
+    row:HookScript("OnLeave", function(self)
+        if BY.hover ~= self then return end
+        BY.hover = nil
+        if GameTooltip:GetOwner() == BY.window then GameTooltip:Hide() end
+        BY.Render()
+    end)
+    -- (Alt + click: its item in the Library, as an item's anywhere else)
+    row:HookScript("OnClick", function(self)
+        if not (Mouse() and IsAltKeyDown() and IF.Library and BY.hover == self) then return end
+        local _, link = GameTooltip:GetItem()
+        if link then IF.Library.Open(link, "auction") end
+    end)
+end
+
+-- A row's tooltip up (the picked one's waits)
+function BY.Hovering()
+    local row = BY.hover
+    return row ~= nil and Mouse() and row:IsVisible() and row:IsMouseOver()
+end
+
+-- A small button of the game's (with the mouse): label, fn on a click
+function BY.Button(parent, label, fn, width)
+    local b = K.NewFrame("Button", nil, parent, "UIPanelButtonTemplate")
+    b:SetSize(width or 90, 22)
+    b:SetText(label)
+    b:SetScript("OnClick", function() fn() end)
+    return b
+end
+
+-- A ‹ or › over a text arrow, for the mouse: fn(fast) (Shift held: fast)
+function BY.ArrowButton(parent, arrow, fn)
+    local b = K.NewFrame("Button", nil, parent)
+    b:SetSize(32, 36)
+    b:SetPoint("CENTER", arrow, "CENTER", 0, 0)
+    b:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight", "ADD")
+    b:SetScript("OnClick", function() fn(IsShiftKeyDown()) end)
+    return b
+end
+
+-- A number typed with the keyboard (with the mouse), in place of a big
+-- one: onSet(n) as it's entered
+function BY.NumberBox(parent, width, onSet)
+    local e = K.NewFrame("EditBox", nil, parent, "InputBoxTemplate")
+    e:SetSize(width or 70, 30)
+    e:SetAutoFocus(false)
+    e:SetNumeric(true)
+    e:SetMaxLetters(6)
+    e:SetJustifyH("CENTER")
+    local function Set(self)
+        local n = tonumber(self:GetText())
+        if n then onSet(n) end
+    end
+    e:SetScript("OnEnterPressed", function(self)
+        Set(self)
+        self:ClearFocus()
+    end)
+    e:SetScript("OnEditFocusLost", Set)
+    e:Hide()
+    return e
+end
+
 local Panel, FocusStroke = IF.UI.Panel, IF.UI.FocusStroke
 
 -- A badge: a small rounded pill with a short text (a price against its
@@ -485,6 +578,18 @@ function BY.HoldBox(parent)
     hold.icon = IF.HoldIcon(hold, 22)
     hold.text = hold:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
     hold.text:SetPoint("LEFT", hold.icon, "RIGHT", 4, 0)
+    -- (the mouse: held down on it as the pad's button, hold.onDown /
+    -- hold.onUp; lit under it)
+    hold:EnableMouse(true)
+    hold.lit = hold:CreateTexture(nil, "HIGHLIGHT")
+    hold.lit:SetAllPoints()
+    hold.lit:SetColorTexture(1, 0.9, 0.6, 0.08)
+    hold:SetScript("OnMouseDown", function(self, button)
+        if button == "LeftButton" and self.onDown then self.onDown() end
+    end)
+    hold:SetScript("OnMouseUp", function(self, button)
+        if button == "LeftButton" and self.onUp then self.onUp() end
+    end)
     -- p: 0 to 1; key: the button's glyph key; verb: "Buy"...; extra
     -- (optional): after it ("· 1 silver": what it costs)
     function hold:SetHold(p, key, verb, extra)
@@ -492,12 +597,18 @@ function BY.HoldBox(parent)
         self.fill:SetProgress(p)
         self.icon:SetKey(key)
         self.icon:SetProgress(p)
+        -- (with the mouse no glyph: the box itself is held)
+        local pad = IF.Input.Pad()
+        self.icon:SetShown(pad)
         self.text:SetText((full and "Release to " or "Hold to ") .. verb
             .. (extra and ("  |cffd8ccb0·|r  " .. extra) or ""))
         -- (the icon and the words centred together)
-        local w = self.icon:GetWidth() + 4 + self.text:GetStringWidth()
+        local iconW = pad and (self.icon:GetWidth() + 4) or 0
+        local w = iconW + self.text:GetStringWidth()
         self.icon:ClearAllPoints()
         self.icon:SetPoint("LEFT", self, "CENTER", -w / 2, 0)
+        self.text:ClearAllPoints()
+        self.text:SetPoint("LEFT", self, "CENTER", -w / 2 + iconW, 0)
         self.text:SetTextColor(1, full and 1 or 0.82, full and 0.6 or 0)
     end
     return hold
@@ -627,6 +738,24 @@ dStatus:SetJustifyH("CENTER")
 dQtyMid:SetPoint("BOTTOM", dHold, "TOP", 0, 24)
 dQtyGroup:SetPoint("CENTER")
 
+-- With the mouse: the arrows clicked, the quantity typed, the auctions
+-- looked up again with a button
+local D, DetailPress
+local dQtyEdit = BY.NumberBox(dQtyGroup, 80, function(n)
+    if not D then return end
+    local avail = 0
+    for _, l in ipairs(D.listings or {}) do avail = avail + l.count - (l.own or 0) end
+    D.qty = math.max(1, math.min(math.max(1, avail), n))
+    D.state, D.quote, D.message = nil, nil, nil
+    BY.Render()
+end)
+dQtyEdit:SetPoint("CENTER", dQty, "CENTER", 0, 0)
+local dQtyLeftButton = BY.ArrowButton(dQtyGroup, dQtyLeft, function(fast) DetailPress("LEFT", fast) end)
+local dQtyRightButton = BY.ArrowButton(dQtyGroup, dQtyRight, function(fast) DetailPress("RIGHT", fast) end)
+local dRefresh = BY.Button(detail, "Refresh", function() BY.SearchItem() end, 80)
+dRefresh:SetPoint("TOPRIGHT", -12, -12)
+dRefresh:Hide()
+
 ---------------------------------------------------------------------------
 -- Categories
 ---------------------------------------------------------------------------
@@ -688,7 +817,7 @@ local function SendQuery()
         or { { sortOrder = Enum.AuctionHouseSortOrder.Price, reverseSort = false },
             { sortOrder = Enum.AuctionHouseSortOrder.Name, reverseSort = false } }
     AH.SendBrowseQuery({
-        searchString = "", sorts = sorts, filters = filters,
+        searchString = BY.search or "", sorts = sorts, filters = filters,
         itemClassFilters = cat and cat.filters or nil,
         minLevel = 0, maxLevel = s.buyMyLevel and UnitLevel("player") or 0,
     })
@@ -762,9 +891,10 @@ local function ResultsIn()
     BY.Render()
 end
 
--- Near the end of what has come: the next part asked for
-local function MoreIfNeeded()
-    if BY.index > #BY.results - 10 and AH.HasFullBrowseResults and not AH.HasFullBrowseResults() then
+-- Near the end of what has come: the next part asked for (at: the row
+-- reached, the pick's or the wheel's)
+local function MoreIfNeeded(at)
+    if (at or BY.index) > #BY.results - 10 and AH.HasFullBrowseResults and not AH.HasFullBrowseResults() then
         -- (with only upgrades shown, few of what came may show)
         AH.RequestMoreBrowseResults()
     end
@@ -789,7 +919,7 @@ end
 -- searching, state (nil, "quote": waiting for the price, "confirm":
 -- priced, its popup up, "buying"), quote (unit, total), message }
 ---------------------------------------------------------------------------
-local D
+-- (D: declared with the item's screen, above)
 -- Auctions bought this visit (auctionID -> true): never offered again, a
 -- list that comes back still holding one (the server's a moment behind)
 local boughtIDs = {}
@@ -980,6 +1110,8 @@ end
 -- Tooltips show as the bag window's do: the game's own setting (CVar
 -- GamepadDisableTooltips), which R3 turns on and off here too
 function BY.TipsOff()
+    -- (with the mouse: always on, as the game's own)
+    if Mouse() then return false end
     local get = C_CVar and C_CVar.GetCVarBool or GetCVarBool
     return get and get("GamepadDisableTooltips") or false
 end
@@ -1039,6 +1171,7 @@ local function ItemKeyTip(key)
 end
 
 function BY.Tip()
+    if BY.Hovering() then return end
     local tipOwner = GameTooltip:GetOwner() == win
     local result = BY.results[BY.index]
     if not win:IsShown() or filterBox:IsShown() or (not D and not result) or BY.TipsOff() then
@@ -1321,11 +1454,105 @@ local function Bought(what)
 end
 
 ---------------------------------------------------------------------------
+-- The mouse: the wheel over each list, the rows' tooltips, the hold box
+-- held, a search box over the categories
+---------------------------------------------------------------------------
+local CloseFilters, RenderFilters
+do
+    -- (the wheel scrolls the results, the pick left where it is)
+    local function ScrollResults(dir)
+        local n = #BY.results
+        if n == 0 then return end
+        BY.freeTop = true
+        BY.top = math.max(1, math.min(math.max(1, n - LIST_ROWS + 1), BY.top + dir))
+        MoreIfNeeded(BY.top + LIST_ROWS - 1)
+        BY.Render()
+    end
+    local list = { content }
+    for _, r in ipairs(listRows) do list[#list + 1] = r end
+    BY.Wheel(list, ScrollResults)
+    local sides = { side }
+    for _, r in ipairs(sideRows) do sides[#sides + 1] = r end
+    BY.Wheel(sides, function(dir) BY.SetMain(BY.main + dir) end)
+    BY.Wheel({ bar2 }, function(dir) BY.SetSub(BY.sub + dir) end)
+    BY.Wheel({ bar3 }, function(dir) BY.SetSubSub(BY.subsub + dir) end)
+    -- (the item's screen: a commodity's quantity, else the auction)
+    local screens = { detail }
+    for _, r in ipairs(dRows) do screens[#screens + 1] = r end
+    BY.Wheel(screens, function(dir)
+        if not D then return end
+        if D.commodity then
+            DetailPress(dir < 0 and "RIGHT" or "LEFT", IsShiftKeyDown())
+        else
+            DetailPress(dir < 0 and "UP" or "DOWN")
+        end
+    end)
+
+    for _, r in ipairs(listRows) do
+        BY.Hover(r, function(self)
+            local result = self.index and BY.results[self.index]
+            if not result then return false end
+            ItemKeyTip(result.itemKey)
+            AddVersions(result.itemKey)
+        end)
+    end
+    for _, r in ipairs(dRows) do
+        r:SetScript("OnClick", function(self)
+            if not (D and self.index) or D.state == "buying" then return end
+            if detail:GetParent() == buyPage then BY.detailFocus = true end
+            DropQuote()
+            D.row, D.state, D.message = self.index, nil, nil
+            BY.Render()
+        end)
+        BY.Hover(r, function(self)
+            local a = D and not D.commodity and self.index and Auctions()[self.index]
+            if not (a and a.link) then return false end
+            GameTooltip:SetHyperlink(a.link)
+        end)
+    end
+    for _, row in ipairs(ddRows) do
+        row:HookScript("OnEnter", function(self)
+            if Mouse() and Selectable(self.entry) then
+                BY.filterRow = self.index
+                RenderFilters()
+            end
+        end)
+    end
+
+    -- (held down on: as Cross held on the item's screen)
+    dHold.onDown = function()
+        if filterBox:IsShown() then CloseFilters() end
+        if detail:GetParent() == buyPage then BY.detailFocus = true end
+        BY.MouseDown("A")
+    end
+    dHold.onUp = function() BY.MouseUp("A") end
+
+    -- The search box, where the categories' title is: what's typed looked
+    -- up (in the chosen category) a moment after
+    local ok, box = pcall(K.NewFrame, "EditBox", "ImprovedForeverAuctionSearch", side, "SearchBoxTemplate")
+    if not ok then box = K.NewFrame("EditBox", "ImprovedForeverAuctionSearch", side, "InputBoxTemplate") end
+    box:SetSize(SIDE_W - 28, 20)
+    box:SetPoint("TOP", 2, -6)
+    box:SetAutoFocus(false)
+    box:HookScript("OnTextChanged", function(self, user)
+        local text = strtrim(self:GetText() or "")
+        if text == (BY.search or "") then return end
+        BY.search = text
+        BY.Query()
+    end)
+    box:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
+    box:Hide()
+    BY.searchBox = box
+end
+
+---------------------------------------------------------------------------
 -- Drawing
 ---------------------------------------------------------------------------
 local function RenderSide()
     local mains = Mains()
-    sideTitle:SetText(Glyph("LS", 18) .. " Category")
+    -- (with the mouse: the search box in its place)
+    sideTitle:SetText(Mouse() and "" or (Glyph("LS", 18) .. " Category"))
+    BY.searchBox:SetShown(Mouse())
     local top = math.max(1, math.min(BY.main - math.floor(SIDE_ROWS / 2), #mains - SIDE_ROWS + 1))
     local fr, fg, fb = FocusColor()
     for i, r in ipairs(sideRows) do
@@ -1348,10 +1575,12 @@ local function RenderResults()
     local n = #results
     local per = LIST_ROWS
     BY.index = math.max(1, math.min(BY.index, math.max(1, n)))
-    -- Scrolled keeping the picked one in view
-    if BY.index < BY.top then BY.top = BY.index end
-    if BY.index > BY.top + per - 1 then BY.top = BY.index - per + 1 end
-    BY.top = math.max(1, BY.top)
+    -- Scrolled keeping the picked one in view (unless the wheel scrolled it)
+    if not BY.freeTop then
+        if BY.index < BY.top then BY.top = BY.index end
+        if BY.index > BY.top + per - 1 then BY.top = BY.index - per + 1 end
+    end
+    BY.top = math.max(1, math.min(BY.top, math.max(1, n - per + 1)))
     emptyText:SetShown(n == 0)
     emptyText:SetText(BY.searching and "Searching..." or "Nothing listed here")
     local fr, fg, fb = FocusColor()
@@ -1395,6 +1624,7 @@ local function RenderResults()
     if #qualities > 0 then active[#active + 1] = table.concat(qualities, " / ") end
     if s.buyMyLevel then active[#active + 1] = "up to my level" end
     if s.buyUpgrades == "only" then active[#active + 1] = "upgrades only" end
+    if BY.search and BY.search ~= "" then path = path .. "   ·   |cffd8ccb0\"" .. BY.search .. "\"|r" end
     status:SetText(path .. "   ·   " .. (BY.searching and "searching..." or (n .. " found"))
         .. (#active > 0 and ("   ·   |cffc9a25a" .. table.concat(active, ", ") .. "|r") or ""))
 end
@@ -1460,8 +1690,19 @@ local function RenderDetail()
         dQtyLeft:SetTextColor(fr, fg, fb)
         dQtyRight:SetTextColor(fr, fg, fb)
         dQtyLabel:SetText("")
+        -- (with the mouse: typed, its arrows clicked)
+        local mouse = Mouse()
+        dQty:SetAlpha(mouse and 0 or 1)
+        dQtyEdit:SetShown(mouse)
+        if mouse then
+            if not dQtyEdit:HasFocus() then dQtyEdit:SetText(D.qty) end
+            dQtyLabel:SetText("of " .. available .. "  |cff9d917a(Shift: by 10)|r")
+        end
+        dQtyLeftButton:SetShown(mouse)
+        dQtyRightButton:SetShown(mouse)
     else
         dQtyMid:Hide()
+        dQtyEdit:Hide()
         local auctions = Auctions()
         D.row = math.max(1, math.min(D.row, math.max(1, #auctions)))
         -- (as many rows as fit between the prices and the hold box)
@@ -1497,6 +1738,7 @@ local function RenderDetail()
         for i, r in ipairs(dRows) do
             local a = i <= fit and auctions[top + i - 1]
             r:SetShown(a and true or false)
+            r.index = a and top + i - 1 or nil
             if a then
                 local on = top + i - 1 == D.row
                 local upgrade = S().buyUpgrades ~= "off" and a.link and IF.Upgrades.IsUpgrade(a.link, nil, nil, true)
@@ -1518,18 +1760,21 @@ local function RenderDetail()
                     upgrade = upgrade,
                     gain = gainText and { gainText, gainColor }, deal = dealText and { dealText, dealColor },
                 })
-                -- (beside the list, not gone into: no pick shown)
-                r.focus:SetShown(on and DetailActive())
+                -- (beside the list, not gone into: no pick shown; with the
+                -- mouse it's clicked, always shown)
+                r.focus:SetShown(on and (DetailActive() or Mouse()))
                 r.focus:SetVertexColor(fr, fg, fb)
             end
         end
     end
     dStatus:SetText(D.message or "")
+    dRefresh:SetShown(Mouse())
     dHold:SetHold(BY.HoldProgress(D.holdStart), "A", "Buy", HoldPrice())
 end
 
-local function RenderFilters()
-    ddHint:SetText(Glyph("DPAD", 16) .. " Move   " .. Glyph("A", 16) .. " Select   " .. Glyph("B", 16) .. " Close")
+function RenderFilters()
+    ddHint:SetText(Mouse() and "Click to tick  ·  Done closes"
+        or (Glyph("DPAD", 16) .. " Move   " .. Glyph("A", 16) .. " Select   " .. Glyph("B", 16) .. " Close"))
     filterBox:SetSize(math.max(filterBox.baseWidth, ddHint:GetStringWidth() + DD_INSET.left + DD_INSET.right),
         filterBox.baseHeight)
     for i, row in ipairs(ddRows) do
@@ -1564,8 +1809,42 @@ local function RenderTabs()
     sideTabs:Render(BY.TABS, BY.tab)
 end
 
--- The legend: a page's buttons, then the right stick for the tabs
-local function SetHints(text)
+-- The legend: a page's buttons, then the right stick for the tabs (with
+-- the mouse: no legend, as the game's mouse windows; the buttons, mouse,
+-- in the window's bottom band instead, at its right; the Library by Alt +
+-- click, as everywhere)
+local mouseBar = K.NewFrame("Frame", nil, win)
+mouseBar:SetPoint("BOTTOMRIGHT", win, "BOTTOMRIGHT", -16, 6)
+mouseBar:SetSize(1, 26)
+mouseBar.buttons = {}
+
+local function SetMouseBar(list)
+    local x = 0
+    for i, def in ipairs(list) do
+        local b = mouseBar.buttons[i]
+        if not b then
+            b = BY.Button(mouseBar, "", function() end)
+            b:SetHeight(26)
+            b:SetScript("OnClick", function(self) if self.fn then self.fn() end end)
+            mouseBar.buttons[i] = b
+        end
+        b.fn = def[2]
+        b:SetText(def[1])
+        b:SetWidth(math.max(96, b:GetFontString():GetStringWidth() + 28))
+        b:ClearAllPoints()
+        b:SetPoint("LEFT", mouseBar, "LEFT", x, 0)
+        b:Show()
+        x = x + b:GetWidth() + 8
+    end
+    for i = #list + 1, #mouseBar.buttons do mouseBar.buttons[i]:Hide() end
+    mouseBar:SetWidth(math.max(1, x - 8))
+end
+
+local function SetHints(text, mouseList)
+    local mouse = Mouse()
+    legend:SetShown(not mouse)
+    mouseBar:SetShown(mouse)
+    if mouse then return SetMouseBar(mouseList or {}) end
     legend:SetText(text .. "   " .. Glyph("RS") .. " Tabs (tilt) / " .. (BY.TipsOff() and "Tooltip (click)" or "No tooltip (click)")
         .. ((IF.Library and IF.Library.Settings().enabled) and " / Hold to Open Library" or ""))
 end
@@ -1677,7 +1956,7 @@ function BY.Render()
     if page then
         titleText:SetText("Auction House  ·  " .. page.label)
         page.Render()
-        SetHints(page.Hints())
+        SetHints(page.Hints(), page.MouseHints and page.MouseHints() or {})
         return
     end
     titleText:SetText("Auction House  ·  Buy")
@@ -1700,7 +1979,13 @@ function BY.Render()
         text = Glyph("A") .. " Open   " .. Glyph("DPAD") .. " Move   " .. Glyph("LS") .. " Filters   "
             .. Glyph("B") .. " Close"
     end
-    SetHints(text)
+    local mouseList
+    if filterBox:IsShown() then
+        mouseList = { { "Done", function() BY.Press("LS") end } }
+    else
+        mouseList = { { "Filters", function() BY.Press("LS") end } }
+    end
+    SetHints(text, mouseList)
     BY.Tip()
 end
 
@@ -1722,6 +2007,7 @@ local function MoveResults(name, fast)
     if not d then return end
     if fast and (name == "UP" or name == "DOWN") then d = d * 5 end
     BY.index = math.max(1, math.min(n, BY.index + d))
+    BY.freeTop = false
     MoreIfNeeded()
 end
 
@@ -1734,7 +2020,8 @@ function BY.PickFilter()
     BY.Render()
 end
 
-local function CloseFilters()
+function BY.CloseFilters() CloseFilters() end
+function CloseFilters()
     filterBox:Hide()
     if BY.filtersChanged then
         BY.filtersChanged = false
@@ -1744,7 +2031,7 @@ end
 
 -- The item's screen's presses (true: taken). stay: Circle not taken (a
 -- page showing it all along: the Tasks tab)
-local function DetailPress(name, fast, stay)
+function DetailPress(name, fast, stay)
     if not D then return false end
     if name == "B" then
         if stay then return false end
@@ -1862,6 +2149,29 @@ function BY.Press(name, fast)
     end
     BY.Render()
 end
+
+-- The mouse's press (a button, a hold box held) as the pad's: down,
+-- then up (Circle on its release, a hold let go there)
+function BY.MouseDown(name)
+    if name ~= "B" then BY.Press(name) end
+end
+
+function BY.MouseUp(name)
+    if name == "B" then return BY.Press("B") end
+    if IF.AuctionConfirm.IsShown() then return end
+    if D and D.holdStart then return BY.DetailRelease(name) end
+    local page = CurrentPage()
+    if page and page.Release then page.Release(name) end
+end
+
+-- The close button: the auction house closed (ours goes with it)
+win.onClose = function()
+    if AH.CloseAuctionHouse then AH.CloseAuctionHouse() else win:Hide() end
+end
+
+IF.Input.OnChange(function()
+    if win:IsShown() then BY.Render() end
+end)
 
 local catcher = K.NewFrame("Frame", nil, win)
 catcher:SetAllPoints(win)

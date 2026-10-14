@@ -223,6 +223,12 @@ end
 local shownCombo
 local function Refresh(force)
     if not IF.db then return end
+    -- (only with the pad in hand: R3 is the pad's; while being placed, still)
+    if not IF.Input.Pad() and not slot.editing then
+        shownCombo = nil
+        slot:Hide()
+        return
+    end
     local combo = HeldCombo()
     if combo == shownCombo and not force then return end
     shownCombo = combo
@@ -297,6 +303,7 @@ events:RegisterEvent("PLAYER_ENTERING_WORLD")
 events:SetScript("OnEvent", function() Refresh(true) end)
 IF.OnLogin(function() Refresh(true) end)
 IF.OnPadStyleChanged(function() Refresh(true) end)
+IF.Input.OnChange(function() Refresh(true) end)
 
 ---------------------------------------------------------------------------
 -- Edit mode: while the game's own Edit Mode is open, the slot shows its

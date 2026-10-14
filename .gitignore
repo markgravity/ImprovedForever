@@ -5,3 +5,4 @@ dist/
 .env
 tools/.lua51/
 tools/.models/
+.codegraph/

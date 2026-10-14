@@ -1,7 +1,8 @@
 -- The Map tab, a tab of settings (IF.SettingsPage, SettingsPage.lua): how
 -- the peek map looks (opacity, size, place on the screen and an offset
--- from it: a slider each way); seen the next time it opens. Its hotkey and
--- touchpad corner are set in the Controller tab (Binds.lua). PeekMap.lua does
+-- from it: a slider each way); seen the next time it opens. Its hotkey
+-- (also on the Controller tab, Binds.lua) and its keyboard key (the game's
+-- Key Bindings); its touchpad corner on the Controller tab. PeekMap.lua does
 -- the work.
 local IF = ImprovedForever
 
@@ -89,6 +90,36 @@ local ITEMS = {
         slider = Offset("y", "Down", "Up"),
     },
 }
+
+-- Its keys: the pad's press (recorded here as on the Controller tab, which
+-- needs the Controller module), a keyboard key (the game's Key Bindings)
+local BINDING = "CLICK ImprovedForeverPeekMapHold:LeftButton"
+
+local function KeyboardKey()
+    local key = GetBindingKey and GetBindingKey(BINDING)
+    return key and (GetBindingText and GetBindingText(key) or key) or nil
+end
+
+table.insert(ITEMS, 1, {
+    key = "hotkey", group = "look", label = "Hotkey",
+    tip = "Held: the map shows, see-through; let go and it closes. Works in combat. Square records the"
+        .. " controller's press: one button, or hold one and press another (recording it again unbinds it)."
+        .. " A keyboard key: Key Bindings > AddOns (Peek map).",
+    bindable = true,
+    chord = true,
+    bindId = "peekmap",
+    toggle = true,
+    binding = function() return PeekMap.Key() end,
+    keyText = function(size)
+        local spec = PeekMap.Key()
+        return spec and IF.Binds.Text(spec, size) or "Not bound"
+    end,
+})
+table.insert(ITEMS, 2, {
+    key = "keyboard", group = "look", label = "Keyboard key",
+    tip = "Held: the map, as the hotkey. Set in the game's Key Bindings > AddOns (Peek map).",
+    text = function() return KeyboardKey() or "Not bound" end,
+})
 
 local GROUPS = {
     { key = "look", label = "Peek map" },

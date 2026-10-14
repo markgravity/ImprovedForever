@@ -814,7 +814,10 @@ function Page:tip(line, book)
     GameTooltip:SetText(line.plain or "")
     if line.sub then GameTooltip:AddLine("<" .. line.sub .. ">", 1, 1, 1) end
     if line.spot then GameTooltip:AddLine(LB.SpotText(line.spot), 1, 1, 1) end
-    GameTooltip:AddLine(Glyph(line.kind == "place" and "A" or "X", 16) .. " Show on Map", 0.6, 0.6, 0.6)
+    -- (with the mouse: a click on a place, a right-click on the others)
+    local how = IF.Input.Pad() and (Glyph(line.kind == "place" and "A" or "X", 16) .. " ")
+        or (line.kind == "place" and "Click: " or "Right-click: ")
+    GameTooltip:AddLine(how .. "Show on Map", 0.6, 0.6, 0.6)
     GameTooltip:Show()
     return true
 end

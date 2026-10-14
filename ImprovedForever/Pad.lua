@@ -237,10 +237,12 @@ end
 -- legend = IF.InputLegend(parent); legend:Set(defs) lays it out and shows
 -- it (nil: hidden). A def: { key, glyph, text } (key: the button, "PAD1";
 -- glyph: its IF.GlyphText key, when no template; hold = true: the game's
--- press-and-hold ring round it, in legend.rings), or { glyph = "DPAD_LR",
+-- press-and-hold ring round it, in legend.rings; pad = true: no button
+-- for it with the mouse), or { glyph = "DPAD_LR",
 -- text } (one glyph for a pair: the D-pad's left / right, up / down).
 -- Placed by the caller.
 local LEGEND_PAD, PROMPT_GAP = 10, 15
+local legends = setmetatable({}, { __mode = "k" })
 function IF.InputLegend(parent)
     local legend = CreateFrame("Frame", nil, nil)
     legend:SetParent(parent)
@@ -318,9 +320,113 @@ function IF.InputLegend(parent)
         return prompts
     end
 
+    -- With the mouse: no legend (the game's mouse windows have none), the
+    -- game's buttons inside the window instead, in legend.row (at its
+    -- bottom right; the caller may place it elsewhere): one per press that
+    -- does something (not the D-pad's moves, the sticks', or a def with
+    -- pad = true: the pad's own, as the L2 / R2 switch), pressed and
+    -- released as the pad's button would be (a hold: held down, its bar
+    -- filling, in legend.rings). Only when legend:SetPress(press) gave it
+    -- where to: press(key, down), or a catcher frame (its OnGamePadButton
+    -- Down / Up).
+    local row = CreateFrame("Frame", nil, nil)
+    row:SetParent(parent)
+    row:SetFrameLevel(parent:GetFrameLevel() + 5)
+    row:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT", -12, 10)
+    row:SetSize(1, 24)
+    row:Hide()
+    legend.row = row
+    local mouseBuilt = {}
+    local function Pressed(key, down)
+        local press = legend.press
+        if type(press) == "function" then return press(key, down) end
+        local handler = press and press:GetScript(down and "OnGamePadButtonDown" or "OnGamePadButtonUp")
+        if handler then handler(press, key) end
+    end
+
+    local function MouseButton(def)
+        local b = CreateFrame("Button", nil, nil, "UIPanelButtonTemplate")
+        b:SetParent(row)
+        b:SetText(def[3] or def.text or "")
+        b:SetSize(math.max(64, (b:GetFontString() and b:GetFontString():GetStringWidth() or 60) + 28), 24)
+        b:HookScript("OnMouseDown", function(_, button) if button == "LeftButton" then Pressed(def[1], true) end end)
+        b:HookScript("OnMouseUp", function(_, button) if button == "LeftButton" then Pressed(def[1], false) end end)
+        if def.hold then
+            local fill = b:CreateTexture(nil, "OVERLAY")
+            fill:SetPoint("BOTTOMLEFT", 4, 3)
+            fill:SetHeight(3)
+            fill:SetColorTexture(1, 0.82, 0.2, 0.9)
+            local bar = { fill = fill }
+            function bar:SetProgress(p)
+                p = math.max(0, math.min(1, p or 0))
+                fill:SetWidth(math.max(0.01, (b:GetWidth() - 8) * p))
+                fill:SetShown(p > 0)
+            end
+            bar:SetProgress(0)
+            legend.rings[#legend.rings + 1] = bar
+        end
+        return b
+    end
+
+    local SKIP = { PADDUP = true, PADDDOWN = true, PADDLEFT = true, PADDRIGHT = true,
+        PADRSTICK = true }
+    local function MouseList(defs)
+        if mouseBuilt[defs] then return mouseBuilt[defs] end
+        local list = {}
+        for _, def in ipairs(defs) do
+            local key = def[1]
+            if type(key) == "string" and not SKIP[key] and not def.pad and (def[3] or def.text) then
+                list[#list + 1] = MouseButton(def)
+            end
+        end
+        mouseBuilt[defs] = list
+        return list
+    end
+
+    local function Lay(list, gap)
+        local x, height = 0, 0
+        for _, p in ipairs(list) do
+            p:ClearAllPoints()
+            p:SetPoint("LEFT", row, "LEFT", x, 0)
+            x = x + p:GetWidth() + gap
+            height = math.max(height, p:GetHeight())
+        end
+        row:SetSize(math.max(1, x - gap), math.max(1, height))
+    end
+
+    -- (hidden: its buttons too)
+    local hide = legend.Hide
+    function legend:Hide()
+        hide(self)
+        row:Hide()
+    end
+
+    function legend:SetPress(press)
+        self.press = press
+        if self.defs then self:Set(self.defs) end
+    end
+
     function legend:Set(defs)
+        self.defs = defs
         if not defs then return self:Hide() end
-        local list = Build(defs)
+        local mouse = not IF.Input.Pad()
+        local list = (mouse and self.press) and MouseList(defs) or {}
+        for set, ps in pairs(mouseBuilt) do
+            for _, p in ipairs(ps) do p:SetShown(mouse and set == defs) end
+        end
+        for set, ps in pairs(built) do
+            for _, p in ipairs(ps) do p:SetShown(not mouse and set == defs) end
+        end
+        if mouse then
+            self:Hide()
+            if #list > 0 then
+                Lay(list, 8)
+                row:Show()
+            end
+            return
+        end
+        row:Hide()
+        list = Build(defs)
         for set, ps in pairs(built) do
             for _, p in ipairs(ps) do p:SetShown(set == defs) end
         end
@@ -335,8 +441,18 @@ function IF.InputLegend(parent)
         self:Show()
     end
 
+    legends[legend] = true
     return legend
 end
+
+-- The input changed: each legend in use laid out again for it
+IF.OnLogin(function()
+    IF.Input.OnChange(function()
+        for legend in pairs(legends) do
+            if legend.defs then legend:Set(legend.defs) end
+        end
+    end)
+end)
 
 -- A button's name as printed on the pad in use ("Cross", "A", "B"...)
 function IF.ButtonName(key)

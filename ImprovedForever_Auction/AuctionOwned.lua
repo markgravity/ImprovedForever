@@ -28,6 +28,15 @@ local auctions = {}
 local sel, top = 1, 1
 local loading = false
 local holding                      -- { id, start }: Square held on an auction
+local freeTop = false              -- the wheel scrolled the list (the pick out of view, kept)
+
+local function AuctionTip(a)
+    if a.itemLink then
+        GameTooltip:SetHyperlink(a.itemLink)
+    elseif GameTooltip.SetItemKey then
+        GameTooltip:SetItemKey(a.itemKey.itemID, a.itemKey.itemLevel, a.itemKey.itemSuffix)
+    end
+end
 
 local function TimeLeft(a)
     local s = a.timeLeftSeconds
@@ -117,15 +126,32 @@ function OW.Build(parent)
         r:SetScript("OnClick", function(self)
             if self.index then
                 sel = self.index
+                holding = nil
                 BY.Render()
             end
         end)
+        BY.Hover(r, function(self)
+            local a = self.index and auctions[self.index]
+            if not a then return false end
+            AuctionTip(a)
+        end)
         rows[i] = r
     end
-    -- "Hold to Cancel", at the bottom (AuctionBuy.lua's hold box)
+    -- (the wheel scrolls the list, the pick left where it is)
+    local wheel = { box }
+    for _, r in ipairs(rows) do wheel[#wheel + 1] = r end
+    BY.Wheel(wheel, function(dir)
+        freeTop = true
+        top = math.max(1, math.min(math.max(1, #auctions - #rows + 1), top + dir))
+        BY.Render()
+    end)
+    -- "Hold to Cancel", at the bottom (AuctionBuy.lua's hold box; held
+    -- down with the mouse too)
     f.hold = BY.HoldBox(box)
     f.hold:SetPoint("BOTTOMLEFT", 8, 8)
     f.hold:SetPoint("BOTTOMRIGHT", -8, 8)
+    f.hold.onDown = function() BY.MouseDown("X") end
+    f.hold.onUp = function() BY.MouseUp("X") end
     return f
 end
 
@@ -134,8 +160,10 @@ function OW.Render()
     local n = #auctions
     sel = math.max(1, math.min(sel, math.max(1, n)))
     local shown = #rows
-    if sel < top then top = sel end
-    if sel > top + shown - 1 then top = sel - shown + 1 end
+    if not freeTop then
+        if sel < top then top = sel end
+        if sel > top + shown - 1 then top = sel - shown + 1 end
+    end
     top = math.max(1, math.min(top, math.max(1, n - shown + 1)))
     local active, sold, worth, undercut = 0, 0, 0, 0
     for _, a in ipairs(auctions) do
@@ -184,14 +212,12 @@ function OW.Render()
     OW.RenderHold()
     -- The picked one's tooltip, under the tabs
     local a = not BY.TipsOff() and auctions[sel]
-    if a then
+    if BY.Hovering() then
+        return
+    elseif a then
         GameTooltip:SetOwner(BY.window, "ANCHOR_NONE")
         BY.PlaceTip()
-        if a.itemLink then
-            GameTooltip:SetHyperlink(a.itemLink)
-        elseif GameTooltip.SetItemKey then
-            GameTooltip:SetItemKey(a.itemKey.itemID, a.itemKey.itemLevel, a.itemKey.itemSuffix)
-        end
+        AuctionTip(a)
         GameTooltip:Show()
         BY.Compare()
     elseif GameTooltip:GetOwner() == BY.window then
@@ -242,6 +268,11 @@ function OW.Hints()
     return table.concat(parts, "   ")
 end
 
+-- The mouse's buttons in the legend's place (the hold box cancels)
+function OW.MouseHints()
+    return { { "Refresh", function() BY.Press("Y") end } }
+end
+
 -- Square held: the hold starts on the picked auction (one that can be)
 local function CancelStart()
     local a = auctions[sel]
@@ -271,6 +302,7 @@ function OW.Press(name, fast)
     -- (anything else pressed while holding: the hold dropped)
     if holding and name ~= "X" then holding = nil end
     if name == "UP" or name == "DOWN" then
+        freeTop = false
         sel = math.max(1, math.min(#auctions, sel + (name == "UP" and -1 or 1) * (fast and 5 or 1)))
         OW.message = nil
     elseif name == "Y" then

@@ -70,6 +70,30 @@ qtyRight:SetText("›")
 local qtyLabel = K.ChatText(panel, 14, KC.dimGold)
 qtyLabel:SetPoint("TOP", qty, "BOTTOM", 0, -8)
 
+-- With the mouse: the number typed, its arrows clicked, the wheel over the
+-- panel; the game's close button in its corner
+local Step, S
+local BY = IF.AuctionBuy
+local qtyEdit = BY.NumberBox(panel, 90, function(n)
+    if S then
+        S.count = math.max(1, math.min(999, n))
+        TC.Render()
+    end
+end)
+qtyEdit:SetPoint("CENTER", qty, "CENTER", 0, 0)
+local qtyLeftButton = BY.ArrowButton(panel, qtyLeft, function(fast) Step(fast and "DOWN" or "LEFT") end)
+local qtyRightButton = BY.ArrowButton(panel, qtyRight, function(fast) Step(fast and "UP" or "RIGHT") end)
+panel:EnableMouseWheel(true)
+panel:SetScript("OnMouseWheel", function(_, delta) if S then Step(delta > 0 and "RIGHT" or "LEFT") end end)
+do
+    local made, close = pcall(K.NewFrame, "Button", nil, panel, "UIPanelCloseButton")
+    if made and close then
+        close:SetPoint("TOPRIGHT", panel, "TOPRIGHT", 1, 0)
+        close:SetFrameLevel(panel:GetFrameLevel() + 10)
+        close:SetScript("OnClick", function() TC.Close() end)
+    end
+end
+
 -- The reagents, as a receipt: name left, had / to buy and where right
 local LINE = 20
 local receipt = K.NewFrame("Frame", nil, panel)
@@ -96,7 +120,8 @@ local profitValue = K.ChatText(receipt, 14, KC.title)
 profitValue:SetJustifyH("RIGHT")
 totalValue:SetJustifyH("RIGHT")
 
--- Its buttons in the game's legend under it
+-- Its buttons in the game's legend under it (with the mouse: in the
+-- panel, at its bottom right)
 local legend = IF.InputLegend(panel)
 legend:SetPoint("TOPRIGHT", panel, "BOTTOMRIGHT", 0, -6)
 local PROMPTS = {
@@ -110,9 +135,8 @@ local PROMPTS = {
 local withSwitch = {}
 
 ---------------------------------------------------------------------------
--- What it shows: S = { recipe, count }
+-- What it shows: S = { recipe, count } (declared above)
 ---------------------------------------------------------------------------
-local S
 
 local function Render()
     if not S then return end
@@ -123,6 +147,12 @@ local function Render()
     sub:SetText(r.makes > 1 and ("makes " .. r.makes .. " each") or "")
     qty:SetText(S.count)
     qtyLabel:SetText("to make" .. (r.makes > 1 and (" (" .. S.count * r.makes .. " items)") or ""))
+    local mouse = not IF.Input.Pad()
+    qty:SetAlpha(mouse and 0 or 1)
+    qtyEdit:SetShown(mouse)
+    if mouse and not qtyEdit:HasFocus() then qtyEdit:SetText(S.count) end
+    qtyLeftButton:SetShown(mouse)
+    qtyRightButton:SetShown(mouse)
     -- Each reagent: had and still to buy (what other tasks want counted too)
     local others = {}
     for _, e in ipairs(TK.Needs()) do others[e.itemID] = e.need end
@@ -187,7 +217,8 @@ local function Render()
     end
     y = y - LINE
     receipt:SetHeight(-y)
-    panel:SetHeight(170 - y + 20)
+    -- (with the mouse: room at its bottom for its buttons, the legend's row)
+    panel:SetHeight(170 - y + 20 + (IF.Input.Pad() and 0 or 34))
     local fr, fg, fb = 1, 0.9, 0.4
     qtyLeft:SetTextColor(fr, fg, fb)
     qtyRight:SetTextColor(fr, fg, fb)
@@ -204,6 +235,8 @@ local function Render()
     end
     legend:Set(withSwitch[id])
 end
+TC.Render = Render
+IF.Input.OnChange(function() if panel:IsShown() then Render() end end)
 
 function TC.Open(recipeID, count)
     local recipe = recipeID and TK.Recipe(recipeID)
@@ -252,7 +285,7 @@ TC.switch = IF.Focus.Switch(panel, {
     end,
 })
 
-local function Step(name)
+function Step(name)
     -- (the D-pad: left / right 1, up / down 5)
     local step = (name == "LEFT" or name == "RIGHT") and 1 or 5
     local up = name == "RIGHT" or name == "UP"
@@ -297,6 +330,8 @@ if catcher.EnableGamePadButton then
     -- until it is wanted, else a frame on screen takes the pad from login)
     catcher:EnableGamePadButton(false)
 end
+-- (the mouse: the legend's Add Task and Cancel pressed as the pad's)
+legend:SetPress(catcher)
 panel:SetScript("OnUpdate", function()
     TC.switch:Update()
     if held and GetTime() >= held.next then
@@ -442,15 +477,45 @@ local function SetAddRing(p)
     if inPrompt then inPrompt.ring:SetProgress(p) end
 end
 
+-- With the mouse: an Add Task button of ours under the profession window
+-- (our own frame, only placed against the game's), for the recipe shown
+local addButton = K.NewFrame("Button", "ImprovedForeverAddTaskButton", UIParent, "UIPanelButtonTemplate")
+addButton:SetSize(120, 24)
+addButton:SetFrameStrata("HIGH")
+addButton:SetText("Add Task")
+addButton:SetScript("OnClick", function()
+    local recipe = CurrentRecipe()
+    if recipe then TC.Open(recipe, CurrentAmount()) end
+end)
+addButton:SetScript("OnEnter", function(self)
+    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+    GameTooltip:SetText("Add Task")
+    GameTooltip:AddLine("Make this recipe a task: what it still needs to buy, tracked beside the quests.", 1, 1, 1, true)
+    GameTooltip:Show()
+end)
+addButton:SetScript("OnLeave", function(self)
+    if GameTooltip:GetOwner() == self then GameTooltip:Hide() end
+end)
+addButton:Hide()
+
 local addShown = false              -- the prompt up last frame (the press checked against it)
 local watch = CreateFrame("Frame")
 watch:SetScript("OnUpdate", function()
     local frame = _G.ProfessionsFrame
     if not (frame and frame:IsShown()) then
         if addLegend:IsShown() then addLegend:Hide() end
+        if addButton:IsShown() then addButton:Hide() end
         GiveBackWidth()
         addStart, addWasDown, addShown = nil, false, false
         return
+    end
+    local mouseAdd = not IF.Input.Pad() and not panel:IsShown() and not IF.InCombat() and CurrentRecipe() ~= nil
+    if mouseAdd and not addButton:IsShown() then
+        addButton:ClearAllPoints()
+        addButton:SetPoint("TOPRIGHT", frame, "BOTTOMRIGHT", 0, -4)
+        addButton:Show()
+    elseif not mouseAdd and addButton:IsShown() then
+        addButton:Hide()
     end
     local down = IsKeyDown and IsKeyDown(ADD_KEY) or false
     -- (a press counts if the prompt was up just before it: the cursor on

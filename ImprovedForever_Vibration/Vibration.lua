@@ -458,6 +458,8 @@ local timers = {}
 local HIGH_FLOOR = 0.5
 
 local function motors(low, high)
+    -- (no pad API on this client: nothing to drive)
+    if not (C_GamePad and C_GamePad.SetVibration) then return end
     if high > 0 then high = HIGH_FLOOR + (1 - HIGH_FLOOR) * high end
     C_GamePad.SetVibration("Low", low)
     C_GamePad.SetVibration("High", high)
@@ -545,7 +547,7 @@ shaper:SetScript("OnUpdate", function()
     if not low then
         local resume = shapeOnce and V.looping
         StopShape()
-        C_GamePad.StopVibration()
+        if C_GamePad and C_GamePad.StopVibration then C_GamePad.StopVibration() end
         if resume then Resume(resume) end
         return
     end

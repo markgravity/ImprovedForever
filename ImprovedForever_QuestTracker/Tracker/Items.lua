@@ -6,11 +6,13 @@ local _, IQT = ...
 -- in the tracker (a secure frame in it would lock the tracker's layout in
 -- combat): kept over theirs out of combat; when combat starts, left where
 -- they are on screen (the tracker can move under them) until it ends.
--- The pad's A on an item clicks its secure button (Pad.lua, Secure.lua).
+-- The pad's A on an item clicks its secure button (Pad.lua).
 local Items = {}
 IQT.Items = Items
 
 local pool, active = {}, {}   -- active: item button -> secure button
+local ITEM_MODULES = { "IFQuestObjectiveTracker", "IFCampaignQuestObjectiveTracker",
+	"IFBonusObjectiveTracker", "IFWorldQuestObjectiveTracker" }
 local count = 0
 
 local function NewSecure()
@@ -75,10 +77,12 @@ function Items.Sync()
 		return
 	end
 	Items.pending = nil
-	local module = IFQuestObjectiveTracker
 	local shown = {}
-	if module and module.usedRightEdgeFrames then
-		for _, frame in pairs(module.usedRightEdgeFrames) do
+	-- (every module that shows quest items: the quests', the campaign's,
+	-- the bonus objectives' and world quests')
+	for _, name in ipairs(ITEM_MODULES) do
+		local module = _G[name]
+		for _, frame in pairs(module and module.usedRightEdgeFrames or {}) do
 			if frame.template == "IFQuestObjectiveItemButtonTemplate" and frame:IsVisible() then
 				shown[frame] = true
 				Attach(frame)

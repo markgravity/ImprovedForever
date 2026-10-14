@@ -9,7 +9,9 @@
 --   an ordinary item a quest needs says so in its tooltip, in orange:
 --     "Needed for "Redridge Goulash"";
 --   L2 + L3 on a bag item (watched, not taken; rebindable in the Controller
---     tab) marks it junk, or not junk: remembered for the character, by item.
+--     tab) marks it junk, or not junk: remembered for the character, by item;
+--     with the mouse Alt + right-click on it does (or a key binding, on the
+--     bag item under the mouse).
 -- Never in combat.
 local IF = ImprovedForever
 
@@ -295,6 +297,21 @@ watcher:SetScript("OnUpdate", function()
     wasDown = down
 end)
 
+-- The mouse: Alt + right-click on a bag item (the core's Input.lua), or a
+-- key binding on the bag item under it
+local function MarkHovered(item)
+    if not (item and item.bag) or IF.InCombat() then return end
+    J.Toggle(item.bag, item.slot)
+end
+
+IF.Input.AddItemClick({
+    id = "junkmark", button = "RightButton", label = "Mark junk / not junk",
+    when = function(item) return item.bag ~= nil and SlotInfo(item.bag, item.slot) ~= nil end,
+    fn = MarkHovered,
+})
+IF.Actions.PressButton("ImprovedForeverJunkMark", function() MarkHovered(IF.Input.Hovered()) end)
+_G["BINDING_NAME_CLICK ImprovedForeverJunkMark:LeftButton"] = "Mark the bag item under the mouse junk / not junk"
+
 -- Its binding, on the Controller tab (Binds.lua)
 local B = IF.Binds
 B.Add({
@@ -361,10 +378,14 @@ end
 ---------------------------------------------------------------------------
 -- /if junk: how many marks; /if junk forget: every mark forgotten
 ---------------------------------------------------------------------------
--- Why a bag item has its verdict: the item under the cursor, else the
--- first of an item id or link given
+-- Why a bag item has its verdict: the item under the cursor (the pad's,
+-- else the mouse's), else the first of an item id or link given
 local function Why(msg)
     local bag, slot = J.FocusedSlot()
+    if not bag then
+        local item = IF.Input.Hovered()
+        if item and item.bag then bag, slot = item.bag, item.slot end
+    end
     local id = tonumber((msg or ""):match("item:(%d+)") or (msg or ""):match("why%s+(%d+)"))
     if id then
         bag = nil

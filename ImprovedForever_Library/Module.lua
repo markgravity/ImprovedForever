@@ -5,6 +5,8 @@ local IF = ImprovedForever
 
 IF.AddModule({ key = "library", label = "Library", icon = IF.TEX .. "ic_mod_library", addon = ... })
 
+BINDING_HEADER_IMPROVEDFOREVER_LIBRARY = "Improved Forever: Library"
+
 -- /if library <item id or link>: an item's Library page
 IF.AddCommand("library", function(args, msg)
     local id = tonumber(args[1]) or tonumber((msg or ""):match("item:(%d+)"))

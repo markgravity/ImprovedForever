@@ -51,6 +51,12 @@ local ITEMS = {
             .. " this character, by item: a mistaken verdict stays corrected. An item a quest needs (in your"
             .. " log or still to do) can't be marked junk. Watched, not taken: the button"
             .. " keeps its own action. In the Destroy panel, R1 does the same.",
+        -- (the mouse's way, while it's the one in hand)
+        note = function()
+            if IF.Input.Pad() then return nil end
+            return "With the mouse: Alt + right-click a bag item, or bind a key to the bag item under the mouse"
+                .. " (Key Bindings > AddOns). In the Destroy panel, its Mark Junk button."
+        end,
         bindable = true, chord = true, bindId = "junkmark",
         binding = function() return S().mark and J.MarkKey() or nil end,
         keyText = function(size) return J.MarkKeyText(size) end,
@@ -82,6 +88,11 @@ local ITEMS = {
         key = "key", group = "destroy", label = "Opens with",
         tip = "The press that opens the panel while a bag is open: one button, or hold one and press another."
             .. " Watched, not taken: the button keeps its own action outside the bags.",
+        note = function()
+            if IF.Input.Pad() then return nil end
+            return "With the mouse: bind a key to it (Key Bindings > AddOns), or /if destroy. With the bags"
+                .. " full, the loot window shows a Destroy button."
+        end,
         bindable = true, chord = true, bindId = "destroy",
         binding = function() return DS.OpenKey() end,
         keyText = function(size) return DS.OpenKeyText(size) end,

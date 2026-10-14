@@ -239,9 +239,21 @@ function Gather.Toggle()
     Gather.SetLabels(not Gather.Settings().labels)
 end
 
+-- (a key binding's click comes on the press and again on the release:
+-- acted on the press, its release let go; a /click sends one of them,
+-- acted on: as the core's IF.Actions.PressButton)
 local toggle = K.NewFrame("Button", "ImprovedForeverNodeScan", UIParent)
 toggle:RegisterForClicks("AnyDown", "AnyUp")
-toggle:SetScript("OnClick", Gather.Toggle)
+toggle:SetScript("OnClick", function(self, _, down)
+    if down then
+        self.pressed = true
+    elseif self.pressed then
+        self.pressed = false
+        return
+    end
+    lastToggle = 0
+    Gather.Toggle()
+end)
 _G["BINDING_NAME_CLICK ImprovedForeverNodeScan:LeftButton"] = "Minimap labels"
 
 ---------------------------------------------------------------------------

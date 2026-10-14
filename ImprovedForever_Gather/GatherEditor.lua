@@ -42,17 +42,27 @@ local function Choice(key, label, choices)
     }
 end
 
+-- (the labels' help, for the pad or the mouse and keyboard: IF.Input)
+local LABELS_TIP_PAD = "Every herb and ore on the minimap gets its name beside it, in its skill colour."
+    .. " Square records a hotkey that shows / hides them: one button, or hold one"
+    .. " and press another (recording the same one again unbinds it). The buttons keep their own"
+    .. " actions too. Also a touchpad corner or override action, and Key Bindings > AddOns"
+    .. " (Minimap labels)."
+local LABELS_TIP_MOUSE = "Every herb and ore on the minimap gets its name beside it, in its skill colour."
+    .. " Click to show / hide them. A key does it too: Key Bindings > AddOns (Minimap labels),"
+    .. " or /if nodes."
+local ALERT_TIP_PAD = "The minimap is read every few seconds; a node worth having that appears pulses the controller,"
+    .. " plays a sound and says what and where. Not in combat."
+local ALERT_TIP_MOUSE = "The minimap is read every few seconds; a node worth having that appears plays a sound"
+    .. " and says what and where (and pulses a controller, when one is used). Not in combat."
+
 local SKILL_TIP = "Herbs and ore are coloured by the skill point they give, as the game colours recipes:"
     .. " orange always, yellow mostly, green rarely, grey never; red is beyond your skill."
 
 local ITEMS = {
     Item({
         key = "labels", group = "labels", label = "Labels",
-        tip = "Every herb and ore on the minimap gets its name beside it, in its skill colour."
-            .. " Square records a hotkey that shows / hides them: one button, or hold one"
-            .. " and press another (recording the same one again unbinds it). The buttons keep their own"
-            .. " actions too. Also a touchpad corner or override action, and Key Bindings > AddOns"
-            .. " (Minimap labels).",
+        tip = function() return IF.Input.Pad() and LABELS_TIP_PAD or LABELS_TIP_MOUSE end,
         bindable = true,
         chord = true,
         bindId = "gather",
@@ -73,8 +83,7 @@ local ITEMS = {
     }, OnOff(function() return S().need end, function(on) S().need = on end, "Skill needed")),
     Item({
         key = "alert", group = "alert", label = "Alerts",
-        tip = "The minimap is read every few seconds; a node worth having that appears pulses the controller,"
-            .. " plays a sound and says what and where. Not in combat.",
+        tip = function() return IF.Input.Pad() and ALERT_TIP_PAD or ALERT_TIP_MOUSE end,
     }, OnOff(function() return S().alert end, function(on)
         S().alert = on
         Gather.ApplyAlert()
@@ -126,3 +135,4 @@ local GROUPS = {
 }
 
 IF.GatherEditor = IF.SettingsPage({ key = "gather", label = "Gather", module = "gather", order = 40 }, GROUPS, ITEMS)
+

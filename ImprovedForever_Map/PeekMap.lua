@@ -249,7 +249,9 @@ end)
 
 ---------------------------------------------------------------------------
 -- The hotkey: a button, or one held + one pressed ("PADLSHOULDER+PADDUP"),
--- taken over: an override binding on the hold button. Out of combat.
+-- taken over: an override binding on the hold button. Out of combat. A
+-- keyboard key: the game's Key Bindings > AddOns (Bindings.xml: a click
+-- of the hold button, pressed and released as the key is).
 ---------------------------------------------------------------------------
 function PeekMap.IsPeeking()
     return peeking
@@ -267,7 +269,9 @@ function PeekMap.Apply()
         return
     end
     pending = false
-    local macro = IF.Touch and IF.Touch.Macro("map")
+    -- (the core's macro for the map's button: the Controller module's
+    -- touchpad not needed)
+    local macro = IF.Actions and IF.Actions.Macro("map")
     if WorldMapFrame then
         hold:SetFrameRef("map", WorldMapFrame)
         if WorldMapFrame.ScrollContainer then hold:SetFrameRef("map-scroll", WorldMapFrame.ScrollContainer) end

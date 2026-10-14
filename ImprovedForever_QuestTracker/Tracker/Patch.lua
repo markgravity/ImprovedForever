@@ -69,6 +69,21 @@ blocker:SetFrameLevel(IFObjectiveTrackerFrame:GetFrameLevel())
 blocker:EnableMouse(true)
 blocker:SetMouseMotionEnabled(true)
 
+-- And over the game's unseen box: it isn't told of a collapse on ours
+-- (Pad.lua), so where ours is shorter its quests would still take the
+-- mouse (a tooltip, a click opening the map, a shift-click untracking).
+-- Only anchored to it: none of its frames' properties set.
+if ObjectiveTrackerFrame and ObjectiveTrackerFrame.NineSlice then
+	local under = CreateFrame("Frame", nil, nil)
+	under:SetParent(IFObjectiveTrackerFrame)
+	under:SetPoint("TOPLEFT", ObjectiveTrackerFrame.NineSlice, "TOPLEFT")
+	under:SetPoint("BOTTOMRIGHT", ObjectiveTrackerFrame.NineSlice, "BOTTOMRIGHT")
+	under:SetFrameLevel(IFObjectiveTrackerFrame:GetFrameLevel())
+	under:EnableMouse(true)
+	under:SetMouseMotionEnabled(true)
+	IQT.nativeBlocker = under
+end
+
 -- Edit Mode's opacity, as the game's tracker has it
 local function MirrorOpacity()
 	local alpha = ObjectiveTrackerManager and ObjectiveTrackerManager.backgroundAlpha

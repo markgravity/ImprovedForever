@@ -6,3 +6,6 @@ IF.AddModule({ key = "map", label = "Map", icon = IF.TEX .. "ic_mod_map", addon 
 
 -- /if peek: the peek map's hotkey binding; prints each press
 IF.AddCommand("peek", function() IF.PeekMap.Probe() end, ": the peek map's binding, each press")
+
+BINDING_HEADER_IMPROVEDFOREVER_MAP = "Improved Forever: Map"
+_G["BINDING_NAME_CLICK ImprovedForeverPeekMapHold:LeftButton"] = "Peek map (held)"

@@ -34,10 +34,15 @@ local function Shown(f)
 end
 F.Shown = Shown
 
--- The window's own focus glow, on or off
+-- The window's own focus glow, on or off (only with the pad in hand:
+-- IF.Input; put back as it changes)
+local glows = setmetatable({}, { __mode = "k" })
+
 function F.Glow(win, on)
     local glow = win and win.FrameGlow
-    if glow then glow:SetShown(on and true or false) end
+    if not glow then return end
+    glows[win] = on and true or false
+    glow:SetShown(glows[win] and IF.Input.Pad())
 end
 
 -- (screen x of a window's centre, in UIParent's units)
@@ -122,14 +127,18 @@ local function DimWindow(list, f)
 end
 
 -- hide: dim the game's cursor, its focused window, the bags and the loot
--- window, and extra (more game windows); else put them back
+-- window, and extra (more game windows); else put them back. Only with
+-- the pad in hand (the mouse shows no focus to dim)
+local dimmed = {}
+
 function F.DimNative(owner, hide, extra)
     local list = dims[owner] or {}
     dims[owner] = list
+    dimmed[owner] = hide and { extra = extra } or nil
     -- (what was dimmed before back first: another window may be focused now)
     for _, f in ipairs(list) do F.Fade(f, false) end
     wipe(list)
-    if not hide then return end
+    if not (hide and IF.Input.Pad()) then return end
     local nav = _G.SmartNavigation
     Dim(list, nav and nav.Pointer)
     local m = F.Manager()
@@ -139,6 +148,12 @@ function F.DimNative(owner, hide, extra)
     for i = 1, NUM_CONTAINER_FRAMES or 13 do DimWindow(list, _G["ContainerFrame" .. i]) end
     for _, f in ipairs(extra or {}) do DimWindow(list, f) end
 end
+
+-- The input changed: the glows and the game's focus as it wants them
+IF.Input.OnChange(function()
+    for win, on in pairs(glows) do F.Glow(win, on) end
+    for owner, d in pairs(dimmed) do F.DimNative(owner, true, d.extra) end
+end)
 
 ---------------------------------------------------------------------------
 -- The switch between one of our windows and the game's: F.Switch(win, opts)
@@ -192,7 +207,7 @@ end
 function Switch:Hint()
     local label, key = self:Behind()
     if not label then return nil end
-    return { key == "LT" and "PADLTRIGGER" or "PADRTRIGGER", key, label }
+    return { key == "LT" and "PADLTRIGGER" or "PADRTRIGGER", key, label, pad = true }
 end
 
 function Switch:Set(focus)
@@ -528,11 +543,12 @@ function F.Cursor(parent)
     cur:SetScript("OnHide", function()
         arrow.cursorAnim:Stop()
     end)
-    -- (only where the pad is: its window glowing, when it has a glow)
+    -- (only where the pad is: its window glowing, when it has a glow; and
+    -- only with the pad in hand)
     cur:SetScript("OnUpdate", function(self)
         local win = TopWindow(self)
         local glow = win and win.FrameGlow
-        self:SetAlpha((glow and not glow:IsShown()) and 0 or 1)
+        self:SetAlpha(((glow and not glow:IsShown()) or not IF.Input.Pad()) and 0 or 1)
     end)
     function cur:Point(target, dx, dy)
         local _, nav = NativeCursor()

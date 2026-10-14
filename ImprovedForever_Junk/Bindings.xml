@@ -1,0 +1,4 @@
+<Bindings>
+	<Binding name="CLICK ImprovedForeverDestroyOpen:LeftButton" header="IMPROVEDFOREVER_JUNK" category="ADDONS"/>
+	<Binding name="CLICK ImprovedForeverJunkMark:LeftButton" category="ADDONS"/>
+</Bindings>

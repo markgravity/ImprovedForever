@@ -116,6 +116,18 @@ function UI.Window(name, width, height, opaque)
         win.titleText:SetPoint("TOP", 0, -8)
     end
     function win:SetTitle(text) self.titleText:SetText(text) end
+    -- The game's close button in its corner (for the mouse): win.onClose()
+    -- when set (the auction window closes the auction house), else hidden
+    -- (where the game's own goes: UIPanelCloseButtonDefaultAnchors)
+    local made, close = pcall(K.NewFrame, "Button", nil, win, "UIPanelCloseButton")
+    if made and close then
+        close:SetPoint("TOPRIGHT", win, "TOPRIGHT", 1, 0)
+        close:SetFrameLevel(win:GetFrameLevel() + 10)
+        close:SetScript("OnClick", function()
+            if win.onClose then win.onClose() else win:Hide() end
+        end)
+        win.CloseButton = close
+    end
     return win
 end
 
@@ -180,7 +192,7 @@ function UI.SideTabs(win, onSelect)
         for i = #list + 1, #self.buttons do self.buttons[i]:Hide() end
         glyph:ClearAllPoints()
         if self.buttons[1] then glyph:SetPoint("BOTTOM", self.buttons[1], "TOP", -3, 4) end
-        glyph:SetText(#list > 1 and IF.GlyphText("RS", 26) or "")
+        glyph:SetText((#list > 1 and IF.Input.Pad()) and IF.GlyphText("RS", 26) or "")
     end
 
     -- The first tab button (a tooltip placed beside the window goes past them)
@@ -303,8 +315,10 @@ function UI.ChipBar(parent, leftKey, rightKey, onClick)
     -- names: the chips' names; selected: which (1-based); one name: nothing to pick
     function bar:Render(names, selected)
         local enabled = #names > 1
-        self.left:SetText(leftKey and IF.GlyphText(leftKey, 22) or "")
-        self.right:SetText(rightKey and IF.GlyphText(rightKey, 22) or "")
+        -- (the pad's glyphs at its ends; with the mouse the chips are clicked)
+        local pad = IF.Input.Pad()
+        self.left:SetText((pad and leftKey) and IF.GlyphText(leftKey, 22) or "")
+        self.right:SetText((pad and rightKey) and IF.GlyphText(rightKey, 22) or "")
         self.left:SetAlpha(enabled and 1 or 0.3)
         self.right:SetAlpha(enabled and 1 or 0.3)
         local widths, total = {}, 0

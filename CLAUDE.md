@@ -93,6 +93,20 @@ focus the way Forever's native windows do. The shared code is
 - This includes the Improved Forever config window. Center only
   confirmations, the way the game centres its dialogs.
 
+## Mouse and keyboard: every module but Controller and Wheel
+- Every window and action also works with the mouse and keyboard (mouse + Esc;
+  no arrow-key navigation). The pad path stays complete.
+- The look follows the input used last: `IF.Input.Pad()` (`ImprovedForever/Input.lua`),
+  re-render on `IF.Input.OnChange`. Don't read `C_GamePad.IsEnabled()` for this.
+- Pad-only visuals (FrameGlow, cursor, DimNative) already go dark with the mouse.
+- Legends: `legend:SetPress(catcher)` turns an `IF.InputLegend` into the game's
+  buttons with the mouse (a click presses the pad key; held = held). Mark the
+  pad's own entries `pad = true`.
+- Lists scroll with the wheel; a row under the mouse shows its tooltip; windows
+  have the game's close button (`UI.Window`: `win.onClose`) and close on Esc.
+- Item actions: Alt + click via `IF.Input.AddItemClick` (Alt + Left: Library,
+  Alt + Right: mark junk), plus a key binding on `IF.Input.Hovered()`.
+
 ## Quest Tracker: our fork of the game's tracker
 - `ImprovedForever_QuestTracker/Tracker/Blizzard_*` is Forever's own
   Blizzard_ObjectiveTracker, every global renamed with an `IF` prefix, made by

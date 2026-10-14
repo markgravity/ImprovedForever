@@ -198,8 +198,10 @@ function C.Show(o)
         receipt:SetHeight(-ry)
         y = y + ry - 8
     end
-    acceptButton:SetText(IF.GlyphText("A", 18) .. " " .. (o.accept or "OK"))
-    cancelButton:SetText(IF.GlyphText("B", 18) .. " " .. (o.cancel or "Cancel"))
+    -- (the pad's glyphs on them; with the mouse only the words)
+    local pad = IF.Input.Pad()
+    acceptButton:SetText((pad and (IF.GlyphText("A", 18) .. " ") or "") .. (o.accept or "OK"))
+    cancelButton:SetText((pad and (IF.GlyphText("B", 18) .. " ") or "") .. (o.cancel or "Cancel"))
     acceptButton:SetWidth(math.max(140, acceptButton:GetTextWidth() + 30))
     cancelButton:SetWidth(math.max(140, cancelButton:GetTextWidth() + 30))
     local over = o.over or UIParent
@@ -257,7 +259,10 @@ events:RegisterEvent("AUCTION_HOUSE_CLOSED")
 events:RegisterEvent("PLAYER_REGEN_DISABLED")
 events:SetScript("OnEvent", function() C.Hide() end)
 tinsert(UISpecialFrames, box:GetName())
+-- (closed by Escape: as Cancel, its onCancel told)
 box:SetScript("OnHide", function()
     shade:Hide()
+    local o = opts
     opts = nil
+    if o and o.onCancel then o.onCancel() end
 end)

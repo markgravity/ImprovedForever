@@ -113,6 +113,14 @@ empty:SetPoint("CENTER", 0, 20)
 empty:SetWidth(ITEMS_W - 40)
 empty:SetJustifyH("CENTER")
 local rows = {}
+local hovered                          -- (the row under the mouse: its tooltip up)
+local function ItemTip(w)
+    GameTooltip:SetOwner(panel, "ANCHOR_NONE")
+    GameTooltip:ClearAllPoints()
+    GameTooltip:SetPoint("TOPLEFT", panel, "TOPRIGHT", 8, 0)
+    GameTooltip:SetMerchantItem(w.index)
+    GameTooltip:Show()
+end
 for i = 1, ROWS - 2 do
     local r = BY.ItemRow(box, ITEMS_W - 16, ROW_H - 4, ITEMS_W - 16 - 50 - 110)
     r:SetPoint("TOPLEFT", 8, -30 - (i - 1) * ROW_H)
@@ -121,6 +129,18 @@ for i = 1, ROWS - 2 do
             VT.column, VT.sel = "items", self.index
             VT.Render()
         end
+    end)
+    -- (with the mouse: its tooltip while over it)
+    r:HookScript("OnEnter", function(self)
+        local w = self.index and VT.list[self.index]
+        if IF.Input.Pad() or not w then return end
+        hovered = self
+        ItemTip(w)
+    end)
+    r:HookScript("OnLeave", function(self)
+        if hovered ~= self then return end
+        hovered = nil
+        VT.Render()
     end)
     rows[i] = r
 end
@@ -140,6 +160,23 @@ legend:SetBackdropColor(0.05, 0.04, 0.03, 0.92)
 legend:SetBackdropBorderColor(0.45, 0.38, 0.25, 1)
 local hints = legend:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 hints:SetPoint("CENTER")
+-- With the mouse: no legend; Buy All held beside the hold box (which buys
+-- the picked one), the game's close button in the corner
+local MOUSE_W = 150
+local mouseBar = K.NewFrame("Frame", nil, box)
+mouseBar:SetPoint("BOTTOMRIGHT", box, "BOTTOMRIGHT", -8, 8)
+mouseBar:SetSize(MOUSE_W, 34)
+local buyAll = BY.Button(mouseBar, "Hold to Buy All", function() end, MOUSE_W)
+buyAll:SetPoint("RIGHT")
+buyAll:SetHeight(34)
+do
+    local made, close = pcall(K.NewFrame, "Button", nil, panel, "UIPanelCloseButton")
+    if made and close then
+        close:SetPoint("TOPRIGHT", panel, "TOPRIGHT", 1, 0)
+        close:SetFrameLevel(panel:GetFrameLevel() + 10)
+        close:SetScript("OnClick", function() VT.Close() end)
+    end
+end
 
 -- Held: { key ("A": the picked item, "Y": all), start }
 local holding
@@ -167,7 +204,8 @@ function VT.Render()
     VT.list = list
     VT.sel = math.max(1, math.min(VT.sel, #list))
     tasks:Render(VT.column == "tasks", #Wanted(nil) .. " sold here")
-    boxTitle:SetText((VT.column == "items" and Glyph("DPAD_UD", 18) .. " " or "") .. "Sold here"
+    local mouse = not IF.Input.Pad()
+    boxTitle:SetText((VT.column == "items" and not mouse and Glyph("DPAD_UD", 18) .. " " or "") .. "Sold here"
         .. (tasks:Picked() and (" for " .. tasks:Picked().name) or ""))
     empty:SetShown(#list == 0)
     empty:SetText(#TK.Tasks() == 0 and "No tasks yet" or "Nothing this vendor sells for it")
@@ -194,21 +232,23 @@ function VT.Render()
     -- windows; L2 or R2, by the side it's on, to the merchant's window)
     local ours = VT.switch.focus == "ours"
     IF.Focus.Glow(panel, ours)
-    legend:SetShown(ours)
+    legend:SetShown(ours and not mouse)
+    mouseBar:SetShown(mouse and #list > 1)
+    -- (the hold box clear of it)
+    hold:SetPoint("BOTTOMRIGHT", box, "BOTTOMRIGHT", (mouse and #list > 1) and -(8 + MOUSE_W + 6) or -8, 8)
     local label, key = VT.switch:Behind()
     hints:SetText(Glyph("DPAD_LR") .. " Tasks / Items   " .. Glyph("DPAD_UD") .. " Move   "
         .. (#list > 0 and (Glyph("A") .. " Hold to Buy   " .. Glyph("Y") .. " Hold to Buy All   ") or "")
         .. (label and (Glyph(key) .. " " .. label .. "   ") or "")
         .. Glyph("B") .. " Close")
     legend:SetWidth(math.max(W, hints:GetStringWidth() + 28))
-    -- The picked one's tooltip, beside the panel
+    -- The picked one's tooltip, beside the panel (a row's under the mouse
+    -- first)
     local w = list[VT.sel]
-    if w then
-        GameTooltip:SetOwner(panel, "ANCHOR_NONE")
-        GameTooltip:ClearAllPoints()
-        GameTooltip:SetPoint("TOPLEFT", panel, "TOPRIGHT", 8, 0)
-        GameTooltip:SetMerchantItem(w.index)
-        GameTooltip:Show()
+    if hovered and hovered:IsMouseOver() and mouse then
+        return
+    elseif w then
+        ItemTip(w)
     elseif GameTooltip:GetOwner() == panel then
         GameTooltip:Hide()
     end
@@ -261,6 +301,26 @@ end
 local function HoldDrop()
     holding = nil
     RenderHold()
+end
+
+-- (the mouse: the hold box held down buys the picked one, Buy All held
+-- them all)
+hold.onDown = function()
+    VT.column = "items"
+    HoldStart("A")
+end
+hold.onUp = function() HoldRelease("A") end
+buyAll:HookScript("OnMouseDown", function(_, button) if button == "LeftButton" then HoldStart("Y") end end)
+buyAll:HookScript("OnMouseUp", function(_, button) if button == "LeftButton" then HoldRelease("Y") end end)
+-- (the wheel: the item above / below)
+do
+    local wheel = { box }
+    for _, r in ipairs(rows) do wheel[#wheel + 1] = r end
+    BY.Wheel(wheel, function(dir)
+        VT.column = "items"
+        VT.sel = math.max(1, math.min(#VT.list, VT.sel + dir))
+        VT.Render()
+    end)
 end
 
 panel:SetScript("OnUpdate", function()
@@ -417,6 +477,24 @@ local function HidePrompt()
     holder.box, holder.setWidth = nil, nil
 end
 
+-- With the mouse: a Tasks button of ours under the merchant's window (our
+-- own frame, only placed against the game's)
+local open = K.NewFrame("Button", "ImprovedForeverVendorTasksButton", UIParent, "UIPanelButtonTemplate")
+open:SetSize(100, 24)
+open:SetFrameStrata("HIGH")
+open:SetText("Tasks")
+open:SetScript("OnClick", function() VT.Open() end)
+open:SetScript("OnEnter", function(self)
+    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+    GameTooltip:SetText("Tasks")
+    GameTooltip:AddLine("What your tasks still need that this vendor sells.", 1, 1, 1, true)
+    GameTooltip:Show()
+end)
+open:SetScript("OnLeave", function(self)
+    if GameTooltip:GetOwner() == self then GameTooltip:Hide() end
+end)
+open:Hide()
+
 local wasDown, wanted, checkAt = false, false, 0
 local watch = CreateFrame("Frame")
 watch:Hide()
@@ -427,6 +505,14 @@ watch:SetScript("OnUpdate", function()
         wanted = #Wanted(nil) > 0
     end
     local can = wanted and not panel:IsShown() and not IF.InCombat()
+    local mouse = can and not IF.Input.Pad() and _G.MerchantFrame and _G.MerchantFrame:IsShown()
+    if mouse and not open:IsShown() then
+        open:ClearAllPoints()
+        open:SetPoint("TOPRIGHT", _G.MerchantFrame, "BOTTOMRIGHT", 0, -4)
+        open:Show()
+    elseif not mouse and open:IsShown() then
+        open:Hide()
+    end
     local box = can and LegendBox()
     local holder = box and Prompt()
     if holder then
@@ -451,6 +537,7 @@ events:SetScript("OnEvent", function(_, event)
         watch:Show()
     elseif event == "MERCHANT_CLOSED" then
         watch:Hide()
+        open:Hide()
         HidePrompt()
         VT.Close()
     elseif event == "PLAYER_REGEN_DISABLED" then
@@ -462,5 +549,9 @@ events:SetScript("OnEvent", function(_, event)
 end)
 
 TK.OnChange(function()
+    if panel:IsShown() then VT.Render() end
+end)
+
+IF.Input.OnChange(function()
     if panel:IsShown() then VT.Render() end
 end)

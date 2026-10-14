@@ -57,6 +57,11 @@ local ITEMS = {
             .. " stick picks the category, L1 / R1 and L2 / R2 the next two levels, L3 the filters), Sell (your"
             .. " bags sorted for profit), Auctions (yours, to cancel) and Tasks. Off: the game's own window, and every"
             .. " auction feature off (no scan, no prices in tooltips, for junk or in the Destroy panel).",
+        mouseTip = "Opens over the auction house, its tabs down the right: Buy (categories on the left, a search box"
+            .. " over them, Filters under the window; a click picks, the wheel scrolls), Sell (your bags sorted for"
+            .. " profit: type the price, click the duration, hold the Hold to Sell bar), Auctions (yours: hold Hold to"
+            .. " Cancel) and Tasks. Off: the game's own window, and every auction feature off (no scan, no prices in"
+            .. " tooltips, for junk or in the Destroy panel).",
     }, OnOff(function() return S().buy end, function(on) S().buy = on end, "Auction window")),
     Item({
         key = "scan", group = "scan", label = "Scan on open",
@@ -106,6 +111,9 @@ local ITEMS = {
         key = "pricing", group = "sell", label = "Start at",
         tip = "The price the Sell tab suggests first; Triangle goes through the others. With none listed,"
             .. " the market price; with nothing known, three times what a vendor pays. A price you set by"
+            .. " hand for an item comes first next time (Your last price).",
+        mouseTip = "The price the Sell tab suggests first; a click on its name goes through the others. With none"
+            .. " listed, the market price; with nothing known, three times what a vendor pays. A price you set by"
             .. " hand for an item comes first next time (Your last price).",
     }, Choice("pricing", "Start at", {
         { "undercut", "Undercut the lowest" }, { "match", "Match the lowest" },
@@ -164,6 +172,10 @@ ITEMS[#ITEMS + 1] = Item({
         .. " Triangle, in a profession window: Add Task) with its reagents for all its crafts, had and needed,"
         .. " where from. With the tracker focused, L2 moves into it: Cross opens a recipe, Square crafts."
         .. " The auction house's Tasks tab and a vendor's (Triangle) buy what is missing.",
+    mouseTip = "A Tasks panel on top of the quest tracker, in its look: each task (Add Task, under a profession"
+        .. " window) with its reagents for all its crafts, had and needed, where from. Click a task to craft it,"
+        .. " right-click it to set its quantity or remove it. The auction house's Tasks tab and a vendor's (Tasks,"
+        .. " under its window) buy what is missing.",
 }, OnOff(function() return S().tasksTracker end, function(on)
     S().tasksTracker = on
     IF.Tasks.RenderTracker()
@@ -177,5 +189,19 @@ local GROUPS = {
     { key = "upgrades", label = "Upgrades" },
     { key = "tasks", label = "Tasks" },
 }
+
+-- The tips for the input in hand (IF.Input): the mouse's where it has its own
+local function Tips()
+    local pad = IF.Input.Pad()
+    for _, item in ipairs(ITEMS) do
+        if item.mouseTip then
+            item.padTip = item.padTip or item.tip
+            item.tip = pad and item.padTip or item.mouseTip
+        end
+    end
+    if menu.IsOpen() then menu.Render() end
+end
+IF.OnLogin(Tips)
+IF.Input.OnChange(Tips)
 
 IF.AuctionEditor = IF.SettingsPage({ key = "auction", label = "Auction", module = "auction", order = 60 }, GROUPS, ITEMS)

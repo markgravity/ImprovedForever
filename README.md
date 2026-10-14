@@ -1,7 +1,9 @@
 # Improved Forever
 
 Quality-of-life tweaks for playing **WoW Forever** with a gamepad. Everything is set up and used
-from the controller: no keyboard step needed.
+from the controller: no keyboard step needed. Every module but Controller and Wheel works with the
+mouse and keyboard too: the windows follow what you used last (the pad's legend and cursor with
+the pad; buttons to click, the wheel to scroll, tooltips on hover and Esc with the mouse).
 
 Each feature is its own addon (enable only the ones you want in the AddOns list); all of them need
 the core, **Improved Forever**:
@@ -44,6 +46,11 @@ the core, **Improved Forever**:
   finished, your fights and falls, what you looted, earned and made, written in your own words. Read it in
   the Library's book (`/if journal`, a key binding or a wheel); with the Library, a quest, creature or item
   in it opens its page.
+
+**With the mouse**: Alt + click an item (bags, loot window, chat links) to open it in the Library;
+Alt + right-click a bag item to mark it junk or not junk. The Destroy panel, the peek map and the
+Library on the item under the mouse have key bindings (Key Bindings > AddOns). `/if input pad` or
+`/if input mouse` keeps the windows on one (`/if input auto`: the one used last).
 
 Double-tap **Menu** (or `/if`) to open the configuration: a tab per loaded module down the right
 (L1 / R1, or the right stick), the module's sections down the left (the left stick, or L2 / R2), its

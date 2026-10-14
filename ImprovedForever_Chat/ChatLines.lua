@@ -366,8 +366,9 @@ if overlay.EnableGamePadButton then
 end
 
 overlay:SetScript("OnUpdate", function()
-    -- Gone from under us: the chat closed, lost the pad, or combat
-    if FocusedChat() ~= chat or IF.InCombat() then return Close() end
+    -- Gone from under us: the chat closed, lost the pad, or combat (or the
+    -- mouse taken up: its own links are clicked)
+    if FocusedChat() ~= chat or IF.InCombat() or not IF.Input.Pad() then return Close() end
     if pendingMove then
         local step = pendingMove
         pendingMove = nil
@@ -395,7 +396,8 @@ local wasDown, shown = false, false
 local watch = CreateFrame("Frame")
 watch:SetScript("OnUpdate", function()
     if not IF.db then return end
-    local window = not overlay:IsShown() and not IF.InCombat() and CL.Settings().enabled and FocusedChat()
+    local window = not overlay:IsShown() and not IF.InCombat() and CL.Settings().enabled and IF.Input.Pad()
+        and FocusedChat()
     local down = IsKeyDown and IsKeyDown(OPEN_KEY) or false
     -- (a press counts if the prompt was up just before it)
     if window and down and not wasDown and shown then

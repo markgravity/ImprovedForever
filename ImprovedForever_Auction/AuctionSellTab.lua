@@ -148,6 +148,182 @@ local P                       -- the picked item's sale: { entry, price, preset,
                               -- picked, touched, duration, qty, listings, lowestNow, searching,
                               -- searched, warn, pending, message }
 local listingsCache = {}      -- entry key -> listings, this visit
+local freeTop = false         -- the wheel scrolled the list (the pick out of view, kept)
+
+---------------------------------------------------------------------------
+-- A price typed with the keyboard (with the mouse): gold, silver and
+-- copper boxes, each its coin after it; box:Set(copper), onSet: ST.Typed
+---------------------------------------------------------------------------
+local COINS = {
+    { "Interface\\MoneyFrame\\UI-GoldIcon", 10000, 5 },
+    { "Interface\\MoneyFrame\\UI-SilverIcon", 100, 2 },
+    { "Interface\\MoneyFrame\\UI-CopperIcon", 1, 2 },
+}
+
+function ST.MoneyBox(parent)
+    local m = K.NewFrame("Frame", nil, parent)
+    m:SetSize(220, 30)
+    m.boxes = {}
+    local x = 0
+    for i, coin in ipairs(COINS) do
+        local e = K.NewFrame("EditBox", nil, m, "InputBoxTemplate")
+        local w = coin[3] == 5 and 56 or 30
+        e:SetSize(w, 24)
+        e:SetPoint("LEFT", m, "LEFT", x + 6, 0)
+        e:SetAutoFocus(false)
+        e:SetNumeric(true)
+        e:SetMaxLetters(coin[3])
+        e:SetJustifyH("RIGHT")
+        local icon = m:CreateTexture(nil, "ARTWORK")
+        icon:SetSize(14, 14)
+        icon:SetTexture(coin[1])
+        icon:SetPoint("LEFT", e, "RIGHT", 2, 0)
+        x = x + 6 + w + 18
+        local function Typed()
+            local copper = 0
+            for j, b in ipairs(m.boxes) do copper = copper + (tonumber(b:GetText()) or 0) * COINS[j][2] end
+            ST.Typed(copper)
+        end
+        e:SetScript("OnEnterPressed", function(self)
+            Typed()
+            self:ClearFocus()
+        end)
+        e:SetScript("OnTabPressed", function()
+            local nextBox = m.boxes[i % #COINS + 1]
+            Typed()
+            nextBox:SetFocus()
+        end)
+        e:SetScript("OnEditFocusLost", Typed)
+        m.boxes[i] = e
+    end
+    m:SetWidth(x)
+    function m:Set(copper)
+        for _, b in ipairs(self.boxes) do
+            if b:HasFocus() then return end
+        end
+        copper = math.max(0, math.floor(copper or 0))
+        self.boxes[1]:SetText(math.floor(copper / 10000))
+        self.boxes[2]:SetText(math.floor(copper / 100) % 100)
+        self.boxes[3]:SetText(copper % 100)
+    end
+    m:Hide()
+    return m
+end
+
+-- The suggestions as a list, for the mouse (Triangle steps through them on
+-- the pad): a button with the picked one's name and the game's dropdown
+-- arrow, its list under it (the game's dropdown look: each suggestion, its
+-- price, the picked one ticked); a click on one picks it. onPick(preset)
+local PICK_ROW = 22
+
+local function Atlas(tex, name)
+    if IF.HasAtlas(name) then
+        tex:SetAtlas(name)
+        return true
+    end
+end
+
+function ST.PresetPicker(parent, onPick)
+    local b = K.NewFrame("Button", nil, parent)
+    b:SetHeight(24)
+    b.box = K.Box(b, 4, 1, "ARTWORK")
+    b.box:SetPoints(b)
+    b.box:SetColors(KC.controlBg, 0.95, KC.control, 1)
+    b.text = b:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    b.text:SetPoint("LEFT", 10, 0)
+    b.text:SetPoint("RIGHT", -24, 0)
+    b.text:SetJustifyH("LEFT")
+    b.text:SetWordWrap(false)
+    b.arrow = b:CreateTexture(nil, "OVERLAY")
+    b.arrow:SetSize(10, 10)
+    b.arrow:SetPoint("RIGHT", -9, 0)
+    b.arrow:SetTexture(IF.TEX .. "ic_tri")
+    b.arrow:SetVertexColor(1, 0.82, 0.3)
+    b:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight", "ADD")
+
+    local list = K.NewFrame("Frame", nil, parent)
+    list:SetFrameLevel(parent:GetFrameLevel() + 30)
+    list:SetPoint("TOPLEFT", b, "BOTTOMLEFT", 0, -2)
+    list:SetPoint("TOPRIGHT", b, "BOTTOMRIGHT", 0, -2)
+    list:EnableMouse(true)
+    local bg = list:CreateTexture(nil, "BACKGROUND", nil, -8)
+    if not Atlas(bg, "common-dropdown-bg") then bg:SetColorTexture(0.05, 0.04, 0.03, 0.95) end
+    bg:SetPoint("TOPLEFT", -10, 3)
+    bg:SetPoint("BOTTOMRIGHT", 10, -3)
+    list:Hide()
+    list.rows = {}
+
+    local presets, current = {}, nil
+
+    local function Row(i)
+        local r = list.rows[i]
+        if r then return r end
+        r = K.NewFrame("Button", nil, list)
+        r:SetHeight(PICK_ROW)
+        r:SetPoint("TOPLEFT", 8, -6 - (i - 1) * PICK_ROW)
+        r:SetPoint("RIGHT", list, "RIGHT", -8, 0)
+        r:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
+        r.tick = r:CreateTexture(nil, "ARTWORK")
+        r.tick:SetSize(16, 16)
+        r.tick:SetPoint("LEFT", -3, 0)
+        if not Atlas(r.tick, "common-dropdown-tickradial") then r.tick:SetColorTexture(0.3, 0.3, 0.3, 0.8) end
+        r.check = r:CreateTexture(nil, "OVERLAY")
+        r.check:SetSize(16, 16)
+        r.check:SetPoint("TOPLEFT", r.tick, "TOPLEFT")
+        if not Atlas(r.check, "common-dropdown-icon-radialtick-yellow") then r.check:SetColorTexture(1, 0.82, 0, 1) end
+        r.text = r:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+        r.text:SetPoint("LEFT", r.tick, "RIGHT", 4, 0)
+        r.text:SetJustifyH("LEFT")
+        r.price = r:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+        r.price:SetPoint("RIGHT", 0, 0)
+        r.price:SetJustifyH("RIGHT")
+        r.text:SetPoint("RIGHT", r.price, "LEFT", -8, 0)
+        r.text:SetWordWrap(false)
+        r:SetScript("OnClick", function(self)
+            list:Hide()
+            local p = presets[self.index]
+            if p then onPick(p) end
+        end)
+        list.rows[i] = r
+        return r
+    end
+
+    function b:Open()
+        for i, p in ipairs(presets) do
+            local r = Row(i)
+            r.index = i
+            r.text:SetText(p.label)
+            r.price:SetText(A.Money(p.price))
+            r.check:SetShown(p.key == current)
+            r:Show()
+        end
+        for i = #presets + 1, #list.rows do list.rows[i]:Hide() end
+        list:SetHeight(12 + #presets * PICK_ROW)
+        list:Show()
+    end
+
+    b:SetScript("OnClick", function()
+        if list:IsShown() then list:Hide() else b:Open() end
+    end)
+    b:SetScript("OnHide", function() list:Hide() end)
+    -- (a click elsewhere closes it, as the game's)
+    list:RegisterEvent("GLOBAL_MOUSE_DOWN")
+    list:SetScript("OnEvent", function()
+        if list:IsShown() and not list:IsMouseOver() and not b:IsMouseOver() then list:Hide() end
+    end)
+
+    -- list: the suggestions ({ key, label, price }); key: the picked one's;
+    -- label: what the button says
+    function b:Set(list_, key, label)
+        presets, current = list_ or {}, key
+        self.text:SetText(label or "")
+        self:SetEnabled(#presets > 0)
+        self.arrow:SetShown(#presets > 0)
+        if list:IsShown() then self:Open() end
+    end
+    b.list = list
+    return b
+end
 
 local function Entry()
     local line = lines[sel]
@@ -205,8 +381,21 @@ function ST.Build(parent)
                 ST.Pick()
             end
         end)
+        BY.Hover(r, function(self)
+            local e = self.line and self.line.entry
+            if not e then return false end
+            GameTooltip:SetBagItem(e.bag, e.slot)
+        end)
         rows[i] = r
     end
+    -- (the wheel scrolls the list, the pick left where it is)
+    local wheel = { listBox }
+    for _, r in ipairs(rows) do wheel[#wheel + 1] = r end
+    BY.Wheel(wheel, function(dir)
+        freeTop = true
+        top = math.max(1, math.min(math.max(1, #lines - #rows + 1), top + dir))
+        BY.Render()
+    end)
     f.empty = K.ChatText(listBox, 13, KC.grey)
     f.empty:SetPoint("CENTER")
     f.empty:SetText("Nothing in the bags to sell")
@@ -257,6 +446,17 @@ function ST.Build(parent)
     left.rightArrow:SetText("›")
     left.preset = K.ChatText(left.group, 16, KC.dimGold)
     left.preset:SetPoint("TOP", left.price, "BOTTOM", 0, -8)
+    -- With the mouse: the price typed (gold, silver, copper), its arrows
+    -- and the suggestion clicked, the wheel over it
+    left.money = ST.MoneyBox(left.group)
+    left.money:SetPoint("CENTER", left.price, "CENTER", 0, 0)
+    left.leftButton = BY.ArrowButton(left.group, left.leftArrow, function(fast) ST.Press("LEFT", fast) end)
+    left.rightButton = BY.ArrowButton(left.group, left.rightArrow, function(fast) ST.Press("RIGHT", fast) end)
+    -- (the suggestions a dropdown, its list under it)
+    left.presetButton = ST.PresetPicker(left.group, function(p) ST.PickPreset(p) end)
+    left.presetButton:SetPoint("TOP", left.price, "BOTTOM", 0, -4)
+    left.presetButton:SetWidth(240)
+    BY.Wheel({ left.group }, function(dir) ST.Press(dir < 0 and "RIGHT" or "LEFT", IsShiftKeyDown()) end)
     left.warn = K.ChatText(left.group, 14, KC.warn)
     left.warn:SetPoint("TOP", left.preset, "BOTTOM", 0, -10)
     left.warn:SetWidth(LEFT_W - 28)
@@ -272,6 +472,9 @@ function ST.Build(parent)
     hold:SetPoint("BOTTOMLEFT", 14, 12)
     hold:SetPoint("BOTTOMRIGHT", -14, 12)
     left.hold = hold
+    -- (held down with the mouse: as Cross held)
+    hold.onDown = function() BY.MouseDown("A") end
+    hold.onUp = function() BY.MouseUp("A") end
     local receipt = K.NewFrame("Frame", nil, left)
     receipt:SetPoint("BOTTOMLEFT", hold, "TOPLEFT", 8, 10)
     receipt:SetPoint("BOTTOMRIGHT", hold, "TOPRIGHT", -8, 10)
@@ -288,6 +491,22 @@ function ST.Build(parent)
         value:SetPoint("TOPRIGHT", 0, y)
         left.lines[i] = { label = label, value = value }
     end
+    -- (the duration clicked: the next, a right-click the one before)
+    local duration = K.NewFrame("Button", nil, receipt)
+    duration:SetPoint("TOPLEFT", 0, 2)
+    duration:SetPoint("TOPRIGHT", 0, 2)
+    duration:SetHeight(18)
+    duration:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    duration:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
+    duration:SetScript("OnClick", function(_, button)
+        if not (P and P.entry and P.entry.auction) then return end
+        local n = #DURATIONS
+        P.duration = (P.duration - 1 + (button == "RightButton" and -1 or 1)) % n + 1
+        S().duration = P.duration
+        P.message = nil
+        BY.Render()
+    end)
+    left.duration = duration
     local rule = receipt:CreateTexture(nil, "ARTWORK")
     rule:SetHeight(1)
     rule:SetPoint("TOPLEFT", 0, -37)
@@ -451,10 +670,12 @@ end
 local function RenderList()
     local shown = #rows
     sel = math.max(1, math.min(sel, #lines))
-    if sel < top then top = sel end
-    if sel > top + shown - 1 then top = sel - shown + 1 end
-    -- (a section's name kept in view above its first item)
-    if top > 1 and lines[top - 1] and lines[top - 1].header and sel == top then top = top - 1 end
+    if not freeTop then
+        if sel < top then top = sel end
+        if sel > top + shown - 1 then top = sel - shown + 1 end
+        -- (a section's name kept in view above its first item)
+        if top > 1 and lines[top - 1] and lines[top - 1].header and sel == top then top = top - 1 end
+    end
     top = math.max(1, math.min(top, math.max(1, #lines - shown + 1)))
     f.empty:SetShown(#lines == 0)
     local fr, fg, fb = BY.FocusColor()
@@ -528,6 +749,10 @@ local function RenderLeft()
     end
     left.vendorOnly:SetShown(not sale)
     if not sale then
+        -- (nor the mouse's: the price's boxes, the suggestions, the duration)
+        left.money:Hide()
+        left.presetButton:Hide()
+        left.duration:Hide()
         left.vendorOnly:SetText("Can't be auctioned (bound).|nA vendor pays " .. A.Money(e.vendor * e.count)
             .. (e.count > 1 and (" for all " .. e.count) or "") .. ".")
         left.warn:SetText("")
@@ -535,6 +760,28 @@ local function RenderLeft()
     end
     left.price:SetText(A.Money(P.price) .. (P.qty > 1 and "|cff9d917a/each|r" or ""))
     left.preset:SetText(P.presetLabel or "Your own price")
+    -- (with the mouse: typed; the arrows, the suggestion and the
+    -- duration clicked)
+    local mouse = BY.Mouse()
+    left.price:SetAlpha(mouse and 0 or 1)
+    left.money:SetShown(mouse)
+    if mouse then left.money:Set(P.price) end
+    -- (no arrows with the mouse: typed, or a suggestion picked from its list)
+    left.leftArrow:SetShown(not mouse)
+    left.rightArrow:SetShown(not mouse)
+    left.leftButton:SetShown(false)
+    left.rightButton:SetShown(false)
+    local picker = mouse and P.presets ~= nil and #P.presets > 0
+    left.presetButton:SetShown(picker)
+    left.preset:SetShown(not picker)
+    if picker then
+        left.presetButton:Set(P.presets, P.preset, (P.presetLabel or "Your own price")
+            .. (P.qty > 1 and "  |cff9d917a(each)|r" or ""))
+    end
+    left.duration:SetShown(mouse)
+    if mouse and not picker and P.qty > 1 then
+        left.preset:SetText((P.presetLabel or "Your own price") .. "  |cff9d917a(each)|r")
+    end
     local fr, fg, fb = BY.FocusColor()
     left.leftArrow:SetTextColor(fr, fg, fb)
     left.rightArrow:SetTextColor(fr, fg, fb)
@@ -569,6 +816,7 @@ local function RenderLeft()
 end
 
 local function RenderTip()
+    if BY.Hovering() then return end
     local e = P and P.entry
     if not e or BY.TipsOff() then
         if GameTooltip:GetOwner() == BY.window then GameTooltip:Hide() end
@@ -632,6 +880,8 @@ end
 function ST.Press(name, fast)
     -- (anything else pressed while holding: the hold dropped)
     if P and P.holdStart and name ~= "A" then P.holdStart = nil end
+    -- (the pad's moves: the pick in view again)
+    if name == "UP" or name == "DOWN" or name == "LT" or name == "RT" then freeTop = false end
     if name == "UP" or name == "DOWN" then
         Move(name == "UP" and -1 or 1)
         ST.Pick()
@@ -676,6 +926,33 @@ function ST.Press(name, fast)
     P.message = nil
     BY.Render()
     return true
+end
+
+-- The mouse's buttons in the window's bottom band: none (the hold box
+-- posts, the suggestions are a dropdown)
+function ST.MouseHints()
+    return {}
+end
+
+-- A suggestion picked from the mouse's list: as Triangle landing on it
+function ST.PickPreset(p)
+    if not (P and p) then return end
+    P.preset, P.presetLabel, P.price, P.picked = p.key, p.label, p.price, p.key
+    P.message = nil
+    BY.Render()
+end
+
+-- A price typed (the mouse's boxes): set as the D-pad sets one
+function ST.Typed(copper)
+    local e = P and P.entry
+    if not (e and e.auction) or copper <= 0 then return BY.Render() end
+    copper = A.Round(copper)
+    if copper == P.price then return end
+    P.price = copper
+    P.preset, P.presetLabel, P.picked, P.touched = nil, nil, nil, true
+    A.SetMyPrice(e.itemID, P.price)
+    P.message = nil
+    BY.Render()
 end
 
 -- Cross let go: full, posted (the release: a hardware event); short of it,
@@ -723,7 +1000,7 @@ end
 
 function ST.Show()
     f:Show()
-    sel, top = 1, 1
+    sel, top, freeTop = 1, 1, false
     ST.Refresh()
     if not Entry() then Move(1) end
     P = nil

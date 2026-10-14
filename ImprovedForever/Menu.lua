@@ -137,6 +137,7 @@ local function Build()
     IF.Focus.Dock(f)
     -- (its own focus glow, as the game's windows: it has the pad while up)
     IF.Focus.Glow(f, true)
+    f.onClose = function() menu.Close() end
     frame = f
 
     -- The stage: the window under its title; the body in its middle
@@ -216,6 +217,11 @@ function menu.Render()
     local hints = page:Help() or {}
     if menu.armed then hints = { K.H({ "A" }, "Confirm", "A"), K.H({ "B" }, "Cancel", "B") } end
     if IF.Recorder and IF.Recorder.IsActive() then hints = IF.Recorder.Hints() end
+    -- (with the mouse: none on a page whose presses all have a click, as
+    -- the game's mouse windows have none)
+    local mouseless = not IF.Input.Pad() and page.mouseLegend == false
+    f.legend:SetShown(not mouseless)
+    if mouseless then hints = {} end
     local x = 0
     for i, hint in ipairs(hints) do
         local h = f.hints[i]
@@ -230,7 +236,6 @@ function menu.Render()
     end
     for i = #hints + 1, #f.hints do f.hints[i]:Hide() end
     local rowW = math.max(1, x - 16)
-    f.hintRow:SetWidth(rowW)
     f.legend:SetWidth(math.max(500, rowW + 40))
 
     -- (a page showing the message itself, ShowsToast: none over the legend)
@@ -262,6 +267,8 @@ function menu.Press(name)
         if page.OnTouch then page:OnTouch() end
         return
     end
+    -- (recording a press: Circle, or the legend's cancel clicked, stops it)
+    if name == "B" and IF.Recorder and IF.Recorder.IsActive() then return IF.Recorder.Finish(true) end
     -- A destructive button armed: Cross does it, Circle cancels, a move lets it go
     if menu.armed then
         if name == "B" then
@@ -390,6 +397,13 @@ end
 ---------------------------------------------------------------------------
 -- Open / close: back on the last tab
 ---------------------------------------------------------------------------
+-- (the pad or the mouse taken up: the legend and the cursor for it; a
+-- key binding changed: the fields that show one)
+IF.Input.OnChange(function() menu.Render() end)
+local rebind = CreateFrame("Frame")
+rebind:RegisterEvent("UPDATE_BINDINGS")
+rebind:SetScript("OnEvent", function() menu.Render() end)
+
 function menu.Open(tab)
     if InCombatLockdown() then
         IF.Print("the panel opens after combat.")

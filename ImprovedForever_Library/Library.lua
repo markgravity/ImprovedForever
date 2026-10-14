@@ -991,6 +991,39 @@ watcher:SetScript("OnUpdate", function()
 end)
 
 ---------------------------------------------------------------------------
+-- The mouse: Alt + click on an item (the bags, the loot window, a chat
+-- link: anywhere the game's modified clicks reach; the core's Input.lua)
+-- opens its page; so does a key binding, on the item under the mouse
+---------------------------------------------------------------------------
+-- Where an item clicked or under the mouse is: "bags", "loot", "chat", else
+-- "ui" (another window of the game's: LB.originFrame)
+local function MouseOrigin(item)
+    if item.bag then return "bags" end
+    local f = item.owner
+    for _ = 1, 3 do
+        if not f then break end
+        if f.GetSlotIndex and LootOpen() then return "loot" end
+        if f.editBox and f.AddMessage then return "chat" end
+        f = f.GetParent and f:GetParent()
+    end
+    LB.originFrame = WindowOf(item.owner)
+    return "ui"
+end
+
+local function OpenFromMouse(item)
+    if not (item and item.link and LB.Settings().enabled) or IF.InCombat() then return end
+    LB.Open(item.link, MouseOrigin(item))
+end
+
+IF.Input.AddItemClick({
+    id = "library", button = "LeftButton", label = "Open in the Library",
+    when = function(item) return LB.Settings().enabled and ItemID(item.link) ~= nil end,
+    fn = OpenFromMouse,
+})
+IF.Actions.PressButton("ImprovedForeverLibraryHovered", function() OpenFromMouse(IF.Input.Hovered()) end)
+_G["BINDING_NAME_CLICK ImprovedForeverLibraryHovered:LeftButton"] = "Open the item under the mouse"
+
+---------------------------------------------------------------------------
 -- Events
 ---------------------------------------------------------------------------
 local pendingRender, pendingLearn = false, false

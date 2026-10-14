@@ -2,7 +2,8 @@
 -- panel, which holds every module's settings. Also /if.
 local _, IF = ...
 
-local HELP = "All settings live in the controller panel: D-pad to move, {A} to choose, {B} to go back. "
+local HELP = "All settings live in the controller panel: D-pad to move, {A} to choose, {B} to go back; "
+    .. "or click, the wheel to scroll, Esc to close. "
     .. "Open it with /if, or bind \"Toggle Improved Forever panel\" in Key Bindings > AddOns."
 
 local function OpenPanel()

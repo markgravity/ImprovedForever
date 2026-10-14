@@ -26,6 +26,13 @@ local ITEMS = {
             .. " It reads as a traveller's notes: Cross on an entry under them opens that list, then another"
             .. " item's page or a waypoint; L2 / R2 turn the page, Circle goes back."
             .. " A short R3 press still shows or hides the tooltip.",
+        -- (the mouse's way, while it's the one in hand)
+        note = function()
+            if IF.Input.Pad() then return nil end
+            return "Alt + click an item (in the bags, the loot window, a chat link...) to open its page, or bind"
+                .. " a key to the item under the mouse (Key Bindings > AddOns). In it: click an entry to open it,"
+                .. " right-click to show it on the map, the wheel or the arrows turn the page, Esc goes back."
+        end,
     }, OnOff(function() return S().enabled end, function(on) S().enabled = on end, "Library")),
     Item({
         key = "questie", group = "sources", label = "QuestieDB",

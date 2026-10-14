@@ -227,8 +227,10 @@ end
 BK.Count = Count
 
 -- The tooltip shows as everywhere else: the game's own setting (CVar
--- GamepadDisableTooltips), which R3 turns on and off here as in the bags
+-- GamepadDisableTooltips), which R3 turns on and off here as in the bags;
+-- always with the mouse (on hover, as the game's own)
 local function TipsOn()
+    if not IF.Input.Pad() then return true end
     local get = C_CVar and C_CVar.GetCVarBool or GetCVarBool
     return not (get and get("GamepadDisableTooltips"))
 end
@@ -443,6 +445,29 @@ function BK.New(opts)
     local pageNo = Text(page, "SystemFont_Med3", "GameFontNormalLarge")
     pageNo:SetPoint("BOTTOMRIGHT", -RIGHT - 6, 30)
 
+    -- With the mouse: the spellbook's page arrows beside it (and the wheel
+    -- over the page), set to turn below
+    local turn
+    local function Arrow(dir, tex)
+        local b = K.NewFrame("Button", nil, page)
+        b:SetSize(32, 32)
+        b:SetNormalTexture("Interface\\Buttons\\UI-SpellbookIcon-" .. tex .. "Page-Up")
+        b:SetPushedTexture("Interface\\Buttons\\UI-SpellbookIcon-" .. tex .. "Page-Down")
+        b:SetDisabledTexture("Interface\\Buttons\\UI-SpellbookIcon-" .. tex .. "Page-Disabled")
+        b:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight", "ADD")
+        b:SetScript("OnClick", function() if turn then turn(dir) end end)
+        b:Hide()
+        return b
+    end
+    local nextPage = Arrow(1, "Next")
+    nextPage:SetPoint("LEFT", pageNo, "RIGHT", 2, 0)
+    local prevPage = Arrow(-1, "Prev")
+    prevPage:SetPoint("RIGHT", pageNo, "LEFT", -2, 0)
+    page:EnableMouseWheel(true)
+    page:SetScript("OnMouseWheel", function(_, delta)
+        if turn and not IF.Input.Pad() then turn(delta > 0 and -1 or 1) end
+    end)
+
     local emptyText = Text(page, "SystemFont_Med3", "GameFontNormalLarge")
     emptyText:SetPoint("TOP", page, "TOP", 0, -TOP - 60)
     emptyText:SetAlpha(0.7)
@@ -472,8 +497,20 @@ function BK.New(opts)
         -- (the game's gamepad cursor left of the focus: Focus.lua)
         c.pointer = IF.Focus.Cursor(c)
         c.pointer:SetPoint("RIGHT", c.icon, "LEFT", 2, 0)
-        c:SetScript("OnClick", function(self)
-            if self.index then book:Pick(self.index, true) end
+        -- (the mouse: over one picks it, its tooltip shown; a click opens
+        -- it, a right-click does what Square does)
+        c:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+        c:SetScript("OnClick", function(self, button)
+            if not self.index then return end
+            if button == "RightButton" then
+                book:Pick(self.index)
+                book:Alt()
+            else
+                book:Pick(self.index, true)
+            end
+        end)
+        c:SetScript("OnEnter", function(self)
+            if self.index and not IF.Input.Pad() then book:Pick(self.index) end
         end)
         cells[i] = c
     end
@@ -509,6 +546,11 @@ function BK.New(opts)
 
     local legend = IF.InputLegend(window)
     legend:SetPoint("TOP", window, "BOTTOM", 0, -4)
+    book.legend = legend
+    -- (with the mouse its buttons, Back / Close, on the page: bottom left,
+    -- level with the page number)
+    legend.row:ClearAllPoints()
+    legend.row:SetPoint("LEFT", page, "BOTTOMLEFT", LEFT - 8, 38)
 
     -- A page laid out: its paragraphs (and who wrote them), then its lines
     local function PageLayout(texts, signed, lines)
@@ -583,7 +625,7 @@ function BK.New(opts)
             view.page = c.page
             Sound("IG_ABILITY_PAGE_TURN")
         end
-        if activate then return self:Activate() end
+        if activate then self:Activate() end
         self:Render()
     end
 
@@ -631,6 +673,7 @@ function BK.New(opts)
         Sound("IG_ABILITY_PAGE_TURN")
         book:Render()
     end
+    turn = Turn
 
     -- Cross on the picked entry: its list, else what the page does with it
     function book:Activate()
@@ -640,11 +683,13 @@ function BK.New(opts)
         if p.activate then p:activate(line, self) end
     end
 
-    -- Square on the picked entry: what the page does with it
+    -- Square on the picked entry (a right-click on it): what the page does
+    -- with it
     local function Alt()
         local line, p = Picked()
         if line and p.alt then p:alt(line, book) end
     end
+    function book:Alt() Alt() end
 
     -- A page on top (Circle: back to the one under it)
     function book:Push(p)
@@ -708,9 +753,10 @@ function BK.New(opts)
             defs[#defs + 1] = { { "PADLSHOULDER", "PADRSHOULDER" }, { "LB", "RB" }, "Turn Page" }
         end
         local verb = line and (line.go and "Read" or p.verb and p:verb(line))
-        if verb then defs[#defs + 1] = { "PAD1", "A", verb } end
+        -- (with the mouse a click on the entry, a right-click for Square's)
+        if verb then defs[#defs + 1] = { "PAD1", "A", verb, pad = true } end
         local alt = line and p.altVerb and p:altVerb(line)
-        if alt then defs[#defs + 1] = { "PAD3", "X", alt } end
+        if alt then defs[#defs + 1] = { "PAD3", "X", alt, pad = true } end
         if line and not line.go then defs[#defs + 1] = { "PADRSTICK", "RS", TipsOn() and "Hide Tooltip" or "Tooltip" } end
         local hint = switch:Hint()
         if hint then defs[#defs + 1] = hint end
@@ -819,6 +865,11 @@ function BK.New(opts)
         emptyText:SetText(opts.empty or "Nothing is written here yet.")
         pageNo:SetShown(#view.pages > 1)
         pageNo:SetText("Page " .. view.page .. "/" .. #view.pages)
+        local arrows = #view.pages > 1 and not IF.Input.Pad()
+        prevPage:SetShown(arrows)
+        nextPage:SetShown(arrows)
+        prevPage:SetEnabled(view.page > 1)
+        nextPage:SetEnabled(view.page < #view.pages)
         local line = focused and picked and picked.page == view.page and picked.line or nil
         RenderTip(p, line)
         if focused then
@@ -878,6 +929,9 @@ function BK.New(opts)
         -- pad from login)
         catcher:EnableGamePadButton(false)
     end
+
+    -- (the mouse: the legend's buttons pressed as the pad's)
+    legend:SetPress(catcher)
 
     local function TakePad(on)
         if catcher.EnableGamePadButton and not IF.InCombat() then catcher:EnableGamePadButton(on and true or false) end
@@ -947,6 +1001,9 @@ function BK.New(opts)
     window:SetScript("OnUpdate", function()
         switch:Update()
     end)
+
+    -- (the pad or the mouse taken up: the cursor, tooltip and legend for it)
+    IF.Input.OnChange(function() book:Render() end)
 
     -- Opened on a page. how: { dim (false: over a window of ours, the game's
     -- focus left as it is), extra (the game's window it's opened from) }

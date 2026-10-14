@@ -15,6 +15,10 @@
 -- (Junk.lua, remembered); Circle closes, R3 shows / hides the tooltip. From
 -- the loot window Cross swaps and Triangle destroys only (both held); at a
 -- vendor Triangle sells.
+-- With the mouse: a key binding or /if destroy opens it (with the bags full,
+-- a Destroy button under the loot window); a click picks a card, the wheel
+-- scrolls, a card under the mouse shows its tooltip, and the game's buttons
+-- under it do what the pad's do (held as they are held).
 -- Never in combat.
 local IF = ImprovedForever
 
@@ -125,6 +129,15 @@ panel:EnableMouse(true)
 panel:SetClampedToScreen(true)
 panel:Hide()
 DS.panel = panel
+
+-- The game's close button in its corner, for the mouse (where its own
+-- goes: UIPanelCloseButtonDefaultAnchors)
+local madeClose, close = pcall(K.NewFrame, "Button", nil, panel, "UIPanelCloseButton")
+if madeClose and close then
+    close:SetPoint("TOPRIGHT", panel, "TOPRIGHT", 1, 0)
+    close:SetFrameLevel(panel:GetFrameLevel() + 10)
+    close:SetScript("OnClick", function() DS.Close() end)
+end
 -- Where it sits: beside the window it was opened from (the loot window, else
 -- the bags), again as they come and go (ImprovedForever's Focus.lua)
 local function OpenedFrom()
@@ -229,10 +242,29 @@ for i = 1, ROWS do
     r.value:SetPoint("BOTTOMLEFT", r.icon, "BOTTOMRIGHT", 8, 3)
     -- The game's own focus cursor at its left (ImprovedForever's Focus.lua)
     r.cursor = IF.Focus.Cursor(r)
-    r:SetScript("OnClick", function()
+    -- (a right-click, with the mouse: marks it junk / not junk, as R1)
+    r:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    r:SetScript("OnClick", function(_, button)
         DS.index = DS.top + i - 1
         DS.CancelPress()
+        if button == "RightButton" and IF.Junk then
+            DS.Press("MARK", true)
+            DS.Press("MARK", false)
+        end
         DS.Render()
+    end)
+    -- (the mouse over a card: its tooltip, the picked one's again after;
+    -- never the pick itself, which the buttons act on)
+    r:SetScript("OnEnter", function()
+        if IF.Input.Pad() then return end
+        DS.hover = DS.top + i - 1
+        DS.Render()
+    end)
+    r:SetScript("OnLeave", function()
+        if DS.hover == DS.top + i - 1 then
+            DS.hover = nil
+            DS.Render()
+        end
     end)
     rows[i] = r
 end
@@ -255,6 +287,70 @@ local holdBar = legend:CreateTexture(nil, "OVERLAY")
 holdBar:SetHeight(3)
 holdBar:SetPoint("BOTTOMLEFT", 5, 4)
 holdBar:Hide()
+
+-- With the mouse: no legend (the game's mouse windows have none); the
+-- game's buttons in the panel instead, over its summary (the panel taller
+-- by their rows), pressed and let go as the pad's (a hold: held down);
+-- made as they're needed
+local MOUSE_ROW = 28
+local mouseArea = K.NewFrame("Frame", nil, panel)
+mouseArea:SetPoint("BOTTOMLEFT", panel, "BOTTOMLEFT", 10, 28)
+mouseArea:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -8, 28)
+mouseArea:SetHeight(1)
+local mouseButtons = {}
+local function MouseButton(i)
+    local b = mouseButtons[i]
+    if b then return b end
+    b = K.NewFrame("Button", nil, mouseArea, "UIPanelButtonTemplate")
+    b:SetHeight(24)
+    -- (the press it began as, whatever the legend shows by its release)
+    b:HookScript("OnMouseDown", function(self, button)
+        if button ~= "LeftButton" or not self.press then return end
+        self.down = self.press
+        DS.Press(self.down, true)
+    end)
+    b:HookScript("OnMouseUp", function(self, button)
+        if button ~= "LeftButton" or not self.down then return end
+        local name = self.down
+        self.down = nil
+        DS.Press(name, false)
+    end)
+    mouseButtons[i] = b
+    return b
+end
+
+-- list: { { press, text } }; laid out left to right, onto a new row where
+-- they don't fit; the panel as tall as its rows need
+local PANEL_H = 52 + ROWS * ROW_H
+local function MouseLegend(list)
+    local width = PANEL_W - 18
+    local x, rowsUsed = 0, #list > 0 and 1 or 0
+    local placed = {}
+    for i, def in ipairs(list) do
+        local b = MouseButton(i)
+        b.press = def[1]
+        b:SetText(def[2])
+        b:SetWidth(math.min(width, math.max(64, b:GetFontString():GetStringWidth() + 24)))
+        if x > 0 and x + b:GetWidth() > width then
+            rowsUsed, x = rowsUsed + 1, 0
+        end
+        placed[i] = { b = b, x = x, row = rowsUsed }
+        x = x + b:GetWidth() + 6
+        b:Show()
+    end
+    -- (rows from the top one down, the last over the summary)
+    for _, p in ipairs(placed) do
+        p.b:ClearAllPoints()
+        p.b:SetPoint("BOTTOMLEFT", mouseArea, "BOTTOMLEFT", p.x, (rowsUsed - p.row) * MOUSE_ROW)
+    end
+    for i = #list + 1, #mouseButtons do
+        mouseButtons[i]:Hide()
+        mouseButtons[i].down = nil
+    end
+    local extra = rowsUsed * MOUSE_ROW
+    panel:SetHeight(PANEL_H + extra)
+    more.down:SetPoint("BOTTOM", panel, "BOTTOM", 0, 24 + extra)
+end
 
 DS.items, DS.index, DS.top = {}, 1, 1
 
@@ -332,11 +428,13 @@ function DS.Render()
     -- From the loot window a destroy loots in the junk's place: a swap
     local swap = DS.origin == "loot"
     titleText:SetText("Destroy")
-    local focused = DS.focus ~= "bags"
+    local pad = IF.Input.Pad()
+    -- (the mouse acts on the panel wherever the pad is)
+    local focused = DS.focus ~= "bags" or not pad
     -- (the panel's own focus glow, as the game's windows; its legend only
     -- while it has the pad)
     IF.Focus.Glow(panel, focused)
-    legend:SetShown(focused)
+    legend:SetShown(focused and pad)
     summary:SetText(n == 0 and "Nothing to throw away" or
         (n .. (n == 1 and " item" or " items") .. " · worth " .. Money(total)))
     more.up:SetShown(DS.top > 1)
@@ -368,7 +466,8 @@ function DS.Render()
             r.stroke:SetAlpha(selected and 0 or 1)
         end
     end
-    local e = focused and not TipsOff() and items[DS.index]
+    -- (with the mouse always, the card under it first)
+    local e = focused and (not pad or not TipsOff()) and items[(not pad and DS.hover) or DS.index]
     if e then
         -- Over the bag side (the panel sits left of the bags, with little room
         -- further left); no "equipped" comparison beside it
@@ -381,6 +480,26 @@ function DS.Render()
     elseif GameTooltip:GetOwner() == panel then
         GameTooltip:Hide()
     end
+    if not pad then
+        hints:Hide()
+        local list = {}
+        local picked = items[DS.index]
+        if n > 0 then
+            list[#list + 1] = { "A", swap and "Hold to Swap" or "Hold to Destroy" }
+            if DS.AtVendor() then
+                if picked and picked.sellable then list[#list + 1] = { "Y", "Sell" } end
+            elseif swap then
+                list[#list + 1] = { "Y", "Hold to Destroy" }
+            end
+            list[#list + 1] = { "X", swap and "Hold to Swap All" or DS.AtVendor() and "Hold to Sell All"
+                or "Hold to Destroy All" }
+        end
+        -- (closed by the corner's button or Esc; marked by a right-click)
+        MouseLegend(list)
+        return
+    end
+    hints:Show()
+    MouseLegend({})
     -- From the loot window: Cross swaps, Triangle destroys only (held)
     local press = Glyph("A") .. " " .. (swap and "Hold to Swap" or "Hold to Destroy")
     -- Triangle: at a vendor it sells what can be sold; from the loot window
@@ -437,6 +556,20 @@ local function Move(step)
     DS.Render()
 end
 
+-- The wheel: the cards scrolled a row, the pick kept in view
+local function Scroll(step)
+    local n = #DS.items
+    local top = math.max(1, math.min(math.max(1, n - ROWS + 1), DS.top + step))
+    if top == DS.top then return end
+    DS.top = top
+    DS.index = math.max(top, math.min(top + ROWS - 1, DS.index))
+    DS.hover = nil
+    DS.CancelPress()
+    DS.Render()
+end
+panel:EnableMouseWheel(true)
+panel:SetScript("OnMouseWheel", function(_, delta) Scroll(delta > 0 and -1 or 1) end)
+
 function DS.Press(name, down)
     -- L2 / R2 (L2 is the game's Shift: a quick tap): the pad to the window
     -- it was opened from, by the side it's on (bound only on a client
@@ -447,7 +580,8 @@ function DS.Press(name, down)
         DS.switch:Press(name)
         return
     end
-    if DS.focus == "bags" then return end
+    -- (the mouse's buttons work wherever the pad is)
+    if DS.focus == "bags" and IF.Input.Pad() then return end
     -- R3: the tooltip shown or not, as in the bag window
     if name == "TIP" then
         if down then
@@ -579,7 +713,17 @@ panel:SetScript("OnUpdate", function()
     if DS.holdStart then
         local p = math.min(1, (GetTime() - DS.holdStart) / HOLD_ALL)
         feel = p
-        holdBar:SetWidth(math.max(1, (legend:GetWidth() - 10) * p))
+        -- (along the legend; with the mouse, along the button held)
+        local along = legend
+        for _, b in ipairs(mouseButtons) do
+            if b.down == "X" then along = b end
+        end
+        if holdBar:GetParent() ~= along then
+            holdBar:SetParent(along)
+            holdBar:ClearAllPoints()
+            holdBar:SetPoint("BOTTOMLEFT", along, "BOTTOMLEFT", 5, 4)
+        end
+        holdBar:SetWidth(math.max(1, (along:GetWidth() - 10) * p))
         holdBar:SetColorTexture(p >= 1 and 1 or 0.85, p >= 1 and 0.35 or 0.2, 0.1, 0.9)
     end
     if DS.pressStart then
@@ -678,7 +822,7 @@ end
 -- origin: "bags" (default) or "loot", the window it is opened from
 function DS.Open(origin)
     if IF.InCombat() or panel:IsShown() then return end
-    DS.items, DS.index, DS.top = DS.Scan(), 1, 1
+    DS.items, DS.index, DS.top, DS.hover = DS.Scan(), 1, 1, nil
     DS.CancelPress()
     DS.focus = "panel"
     DS.switch.focus = "ours"
@@ -714,6 +858,8 @@ panel:SetScript("OnHide", function()
 end)
 
 IV.OnChange(function() DS.Refresh() end)
+-- (the pad or the mouse taken up: its legend, its tooltip)
+IF.Input.OnChange(function() if panel:IsShown() then DS.Render() end end)
 
 local events = CreateFrame("Frame")
 events:RegisterEvent("BAG_UPDATE_DELAYED")
@@ -981,11 +1127,30 @@ local function LootNow()
     end
 end
 
+-- With the mouse: a button of ours under the loot window instead (the
+-- game's window itself left as it is)
+local lootButton
+local function LootButton()
+    local loot = _G.LootFrame
+    if not lootButton and loot then
+        lootButton = K.NewFrame("Button", nil, loot, "UIPanelButtonTemplate")
+        lootButton:SetSize(120, 24)
+        lootButton:SetPoint("TOP", loot, "BOTTOM", 0, -4)
+        lootButton:SetText("Destroy Junk")
+        lootButton:SetScript("OnClick", function() DS.Open("loot") end)
+        lootButton:Hide()
+    end
+    return lootButton
+end
+
 local lootWatch = CreateFrame("Frame")
 lootWatch:Hide()
 lootWatch:SetScript("OnUpdate", function()
-    local box = DS.Enabled() and not panel:IsShown() and not IF.InCombat()
-        and (lootFull or FreeSlots() == 0) and LootLegendBox()
+    local room = DS.Enabled() and not panel:IsShown() and not IF.InCombat()
+        and (lootFull or FreeSlots() == 0)
+    local mouse = room and not IF.Input.Pad() and LootButton()
+    if mouse then mouse:Show() elseif lootButton then lootButton:Hide() end
+    local box = room and IF.Input.Pad() and LootLegendBox()
     local holder = box and LootPrompt()
     if holder then
         PlaceLootPrompt(holder, box)
@@ -1014,6 +1179,7 @@ lootEvents:SetScript("OnEvent", function(_, event, ...)
         lootFull, failedSlot, lootAfter = false, nil, nil
         lootWatch:Hide()
         HideLootPrompt()
+        if lootButton then lootButton:Hide() end
         -- Nothing left to swap for
         if DS.origin == "loot" then DS.Close() end
     elseif event == "UI_ERROR_MESSAGE" then
@@ -1033,6 +1199,23 @@ lootEvents:SetScript("OnEvent", function(_, event, ...)
         LootNow()
     end
 end)
+
+---------------------------------------------------------------------------
+-- Opened without the pad: a key binding, /if destroy (from the loot window
+-- while the bags are full, else the bags)
+---------------------------------------------------------------------------
+local function OpenByHand()
+    if panel:IsShown() then return DS.Close() end
+    if not DS.Enabled() then return IF.Print("the Destroy panel is off (the Junk tab).") end
+    if IF.InCombat() then return IF.Print("the Destroy panel opens after combat.") end
+    local loot = _G.LootFrame
+    local fromLoot = loot and loot:IsShown() and (lootFull or FreeSlots() == 0)
+    DS.Open(fromLoot and "loot" or "bags")
+end
+
+IF.Actions.PressButton("ImprovedForeverDestroyOpen", OpenByHand)
+_G["BINDING_NAME_CLICK ImprovedForeverDestroyOpen:LeftButton"] = "Open / close the Destroy panel"
+IF.AddCommand("destroy", OpenByHand, ": open or close the Destroy panel")
 
 -- Its binding, on the Controller tab (Binds.lua)
 local B = IF.Binds

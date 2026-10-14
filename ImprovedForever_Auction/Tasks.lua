@@ -490,6 +490,7 @@ end
 -- lines under it
 local focus = { on = false, index = 1 }
 local blocks = {}
+local OpenMenu
 local function Block(i)
     local b = blocks[i]
     if b then return b end
@@ -498,9 +499,28 @@ local function Block(i)
     -- in; else the cursor lands on it, a reload in, as on any button)
     b.smartNavigationIgnored = true
     b:SetParent(panel)
-    b:RegisterForClicks("LeftButtonUp")
-    b:SetScript("OnClick", function(self)
-        if self.task then TK.Act(self.task) end
+    b.index = i
+    -- (a right-click: its menu, as Triangle)
+    b:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    b:SetScript("OnClick", function(self, button)
+        if not self.task then return end
+        if button == "RightButton" then
+            focus.index = self.index
+            return OpenMenu(self.index)
+        end
+        TK.Act(self.task)
+    end)
+    -- (with the mouse: what a click does)
+    b:SetScript("OnEnter", function(self)
+        if IF.Input.Pad() or not self.task then return end
+        GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+        GameTooltip:SetText(self.task.name)
+        GameTooltip:AddLine(TK.Done(self.task) and "Click: open its recipe" or "Click: craft", 1, 1, 1)
+        GameTooltip:AddLine("Right-click: quantity, remove", 1, 1, 1)
+        GameTooltip:Show()
+    end)
+    b:SetScript("OnLeave", function(self)
+        if GameTooltip:GetOwner() == self then GameTooltip:Hide() end
     end)
     b.title = b:CreateFontString(nil, "ARTWORK")
     Font(b.title, "ObjectiveTrackerLineFont", GameFontNormal)
@@ -648,8 +668,10 @@ do
     line:SetPoint("BOTTOMRIGHT", 6, -6)
     -- (the scroll arrows: the right one as drawn, the left one mirrored)
     local afile, al, ar, at, ab = AtlasPart("gamepad-smartnavcursor-arrowscroll")
+    qtyBox.arrows = {}
     for side = -1, 1, 2 do
         local arrow = line:CreateTexture(nil, "OVERLAY", nil, 1)
+        qtyBox.arrows[side] = arrow
         arrow:SetSize(20, 20)
         if afile then
             arrow:SetTexture(afile)
@@ -666,10 +688,65 @@ qtyBox.label = qtyBox:CreateFontString(nil, "ARTWORK", "GameFontDisableSmall")
 qtyBox.label:SetPoint("TOP", qtyBox.input, "BOTTOM", 0, -10)
 local qty = {}                  -- { task, value, held }
 
+-- With the mouse: the number typed, its arrows clicked, the wheel over it,
+-- a Set button under it
+local QtyPress, StepQty
+do
+    local edit = CreateFrame("EditBox", nil, nil, "InputBoxTemplate")
+    edit:SetParent(qtyBox.input)
+    edit:SetAllPoints(qtyBox.input)
+    edit:SetAutoFocus(false)
+    edit:SetNumeric(true)
+    edit:SetMaxLetters(3)
+    edit:SetJustifyH("CENTER")
+    local function Typed(self)
+        local n = tonumber(self:GetText())
+        if n and qty.task then qty.value = math.max(1, math.min(999, n)) end
+    end
+    edit:SetScript("OnEditFocusLost", Typed)
+    edit:SetScript("OnEnterPressed", function(self)
+        Typed(self)
+        self:ClearFocus()
+        QtyPress("A")
+    end)
+    edit:Hide()
+    qtyBox.edit = edit
+    for side, arrow in pairs(qtyBox.arrows) do
+        local b = CreateFrame("Button", nil, nil)
+        b:SetParent(qtyBox)
+        b:SetSize(22, 22)
+        b:SetPoint("CENTER", arrow, "CENTER")
+        b:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight", "ADD")
+        b:SetScript("OnClick", function() StepQty(side > 0 and (IsShiftKeyDown() and "UP" or "RIGHT")
+            or (IsShiftKeyDown() and "DOWN" or "LEFT")) end)
+        b:Hide()
+        arrow.button = b
+    end
+    local set = CreateFrame("Button", nil, nil, "UIPanelButtonTemplate")
+    set:SetParent(qtyBox)
+    set:SetSize(80, 22)
+    set:SetText("Set")
+    set:SetPoint("TOP", qtyBox.label, "BOTTOM", 0, -8)
+    set:SetScript("OnClick", function()
+        Typed(edit)
+        QtyPress("A")
+    end)
+    set:Hide()
+    qtyBox.set = set
+    qtyBox:EnableMouseWheel(true)
+    qtyBox:SetScript("OnMouseWheel", function(_, delta) StepQty(delta > 0 and "RIGHT" or "LEFT") end)
+end
+
 local OpenQty
 -- An entry: its label, what it does (sub: opens a submenu, the menu kept)
 local MENU = {
     { "Quantity", function(task) OpenQty(task) end, sub = true },
+    -- (Square held on the task does it too)
+    { "Remove", function(task)
+        PlaySound(SOUNDKIT and SOUNDKIT.IG_QUEST_LOG_ABANDON_QUEST or 846)
+        IF.Print("task removed: " .. task.name .. ".")
+        TK.Remove(task)
+    end },
 }
 
 local function RenderMenu()
@@ -727,13 +804,18 @@ end
 local function RenderQty()
     local task = qty.task
     if not task then return end
-    qtyBox.input.text:SetText(qty.value)
+    local mouse = not IF.Input.Pad()
+    qtyBox.input.text:SetText(mouse and "" or qty.value)
+    qtyBox.edit:SetShown(mouse)
+    if mouse and not qtyBox.edit:HasFocus() then qtyBox.edit:SetText(qty.value) end
+    for _, arrow in pairs(qtyBox.arrows) do arrow.button:SetShown(mouse) end
+    qtyBox.set:SetShown(mouse)
     local made = task.made or 0
     qtyBox.label:SetText("left to craft" .. (made > 0 and (" (" .. made .. " made)") or ""))
     -- (wrapping what it shows: 12 each side, the menu's 15 under it; the
-    -- input with its arrows is 108 wide)
+    -- input with its arrows is 108 wide; the mouse's Set button under it)
     local width = math.max(108, qtyBox.title:GetStringWidth(), qtyBox.label:GetStringWidth())
-    qtyBox:SetSize(width + 24, 46 + 20 + 10 + qtyBox.label:GetStringHeight() + 15)
+    qtyBox:SetSize(width + 24, 46 + 20 + 10 + qtyBox.label:GetStringHeight() + 15 + (mouse and 30 or 0))
 end
 
 function OpenQty(task)
@@ -761,7 +843,7 @@ local STEPS = { LEFT = 1, RIGHT = 1, UP = 5, DOWN = 5 }
 local UP = { RIGHT = true, UP = true }
 
 -- As Add Task's: 1 at a time, or to the next / last multiple of 5 or 20
-local function StepQty(name)
+function StepQty(name)
     local step, value = STEPS[name], qty.value
     if step == 1 then
         value = value + (UP[name] and 1 or -1)
@@ -774,7 +856,7 @@ local function StepQty(name)
     RenderQty()
 end
 
-local function QtyPress(name)
+function QtyPress(name)
     if STEPS[name] then return StepQty(name) end
     if name == "A" then
         local task, value = qty.task, qty.value
@@ -811,8 +893,33 @@ local function CloseMenu()
     TK.RenderTracker()
 end
 
+-- With the mouse: Escape, or a click away from them, closes the menu
+tinsert(UISpecialFrames, menu:GetName())
+tinsert(UISpecialFrames, qtyBox:GetName())
+local closing = false
+menu:SetScript("OnHide", function()
+    if closing then return end
+    closing = true
+    qtyBox:Hide()
+    qty.task, qty.held = nil, nil
+    menu.task = nil
+    TK.RenderTracker()
+    closing = false
+end)
+qtyBox:SetScript("OnHide", function()
+    qty.task, qty.held = nil, nil
+    if menu:IsShown() then RenderMenu() end
+end)
+local away = CreateFrame("Frame")
+away:RegisterEvent("GLOBAL_MOUSE_DOWN")
+away:SetScript("OnEvent", function()
+    if menu:IsShown() and not IF.Input.Pad() and not menu:IsMouseOver() and not qtyBox:IsMouseOver() then
+        CloseMenu()
+    end
+end)
+
 -- Opened at the picked task's left (the panel is at the screen's right)
-local function OpenMenu(index)
+function OpenMenu(index)
     local task, b = TK.Tasks()[index], blocks[index]
     if not (task and b) then return end
     menu.task, menu.sel = task, 1

@@ -295,7 +295,9 @@ local function FieldRow(parent, width, onClick, onStep, onSlide)
     c.text:SetPoint("RIGHT", -10, 0)
     c.text:SetWordWrap(false)
     r.control = c
-    r:SetScript("OnClick", function(self) if self.slot then onClick(self.slot) end end)
+    -- (a right-click: the field's second press, Square's or Triangle's)
+    r:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+    r:SetScript("OnClick", function(self, button) if self.slot then onClick(self.slot, button) end end)
 
     -- kind: which control; on: the row has the focus; open: its list is open
     function r:SetControl(item, kind, on, open)
@@ -391,7 +393,8 @@ local function Dropdown(parent, onClick)
         r.title = r:CreateFontString(nil, "ARTWORK", "GameFontNormal")
         r.title:SetPoint("LEFT", 0, 0)
         r.title:SetJustifyH("LEFT")
-        r:SetScript("OnClick", function(self) if self.index then onClick(self.index) end end)
+        r:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+        r:SetScript("OnClick", function(self, button) if self.index then onClick(self.index, button) end end)
         d.rows[i] = r
     end
     d.moreUp, d.moreDown = K.MoreArrows(d)
@@ -438,7 +441,8 @@ end
 function IF.SettingsPage(tab, GROUPS, ITEMS, hooks)
     hooks = hooks or {}
     -- zone: "fields", "dropdown" (the focused field's list)
-    local G = { zone = "fields", group = 1, index = {} }
+    -- (mouseLegend false: no legend with the mouse, every press has a click)
+    local G = { zone = "fields", group = 1, index = {}, mouseLegend = false }
 
     -- The current category's fields
     function G:Fields()
@@ -490,11 +494,67 @@ function IF.SettingsPage(tab, GROUPS, ITEMS, hooks)
         f.moreDown:SetPoint("TOP", f.list, "BOTTOM", 0, -1)
         f.rows = {}
 
-        f.drop = Dropdown(f, function(index)
+        f.drop = Dropdown(f, function(index, button)
             G.cursor = index
-            G:Choose()
+            -- (a right-click tries it, as Triangle)
+            local item = G:Item()
+            if button == "RightButton" then
+                if item and item.try then item.try() end
+            else
+                G:Choose()
+            end
             menu.Render()
         end)
+
+        -- The mouse: the wheel scrolls the fields (or the open list), a
+        -- list's choice under it lit
+        f.list:EnableMouseWheel(true)
+        f.list:SetScript("OnMouseWheel", function(_, delta) G:Wheel(delta) end)
+        f.drop:EnableMouseWheel(true)
+        f.drop:SetScript("OnMouseWheel", function(_, delta) G:Wheel(delta) end)
+        for _, r in ipairs(f.drop.rows) do
+            r:SetScript("OnEnter", function(self)
+                if self.index and not IF.Input.Pad() and G.zone == "dropdown" then
+                    G.cursor = self.index
+                    menu.Render()
+                end
+            end)
+        end
+    end
+
+    -- The wheel: the open list's choice moved, else the fields scrolled a
+    -- line (the focus kept in view)
+    function G:Wheel(delta)
+        local dir = delta > 0 and -1 or 1
+        if self.zone == "dropdown" then
+            self:MoveCursor(dir)
+            return menu.Render()
+        end
+        local lines, drawn = self.lines, self.drawn or 0
+        if not lines or #lines == 0 then return end
+        self.top = self.top or {}
+        local top = self.top[self.group] or 1
+        if dir > 0 and top + drawn - 1 >= #lines then return end
+        top = math.max(1, math.min(#lines, top + dir))
+        local _, index = self:Item()
+        local at
+        for n, line in ipairs(lines) do
+            if line.slot == index then at = n end
+        end
+        -- (the focus scrolled off: the nearest field still in view)
+        local last = top + math.max(1, drawn - 1) - 1
+        if at and at < top then
+            for n = top, #lines do
+                if lines[n].slot then self.index[self.group] = lines[n].slot break end
+            end
+        elseif at and at > last then
+            for n = last, top, -1 do
+                if lines[n].slot then self.index[self.group] = lines[n].slot break end
+            end
+        end
+        self.top[self.group] = top
+        menu.Disarm()
+        menu.Render()
     end
 
     function G:Row(i)
@@ -506,9 +566,15 @@ function IF.SettingsPage(tab, GROUPS, ITEMS, hooks)
             G.index[G.group], G.zone = slot, "fields"
             return (G:Item())
         end
-        local r = FieldRow(f.list, w, function(slot)
-            Focus(slot)
-            G:Act()
+        local r = FieldRow(f.list, w, function(slot, button)
+            local item = Focus(slot)
+            -- (as Cross, so a press waiting for it to confirm gets it; a
+            -- right-click records the field's press, else tries it)
+            if button == "RightButton" then
+                if item and (item.bindable or item.try) then G:Press(item.bindable and "X" or "Y") end
+            else
+                G:Press("A")
+            end
             menu.Render()
         end, function(slot, dir)
             G:Step(Focus(slot), dir)
@@ -519,6 +585,14 @@ function IF.SettingsPage(tab, GROUPS, ITEMS, hooks)
             value = math.floor(value / (sl.step or 1) + 0.5) * (sl.step or 1)
             if sl and value ~= sl.get() and not Resolve(item.disabled) then sl.set(value) end
             menu.Render()
+        end)
+        -- (the mouse over a field: the focus, its help on the right)
+        r:HookScript("OnEnter", function(self)
+            if self.slot and not IF.Input.Pad() and G.zone == "fields"
+                and self.slot ~= G.index[G.group] then
+                Focus(self.slot)
+                menu.Render()
+            end
         end)
         f.rows[i] = r
         return r
@@ -629,7 +703,8 @@ function IF.SettingsPage(tab, GROUPS, ITEMS, hooks)
             local id = "field:" .. tab.key .. ":" .. item.key
             if item.confirm and not menu.IsArmed(id) then
                 menu.Arm(id)
-                menu.Toast(IF.PadText((item.confirmText or (item.label .. "?")) .. " {A} again to confirm"), true, 4)
+                menu.Toast(IF.PadText((item.confirmText or (item.label .. "?"))
+                    .. (IF.Input.Pad() and " {A} again to confirm" or " Click again to confirm")), true, 4)
             else
                 menu.Disarm()
                 item.run()
@@ -673,7 +748,7 @@ function IF.SettingsPage(tab, GROUPS, ITEMS, hooks)
             self.pending = { item = item, spec = spec }
             menu.Arm("record:" .. item.bindId)
             return menu.Toast(IF.PadText(B.Text(spec) .. " runs " .. B.Names(gone)
-                .. ": {A} replaces it, {B} keeps it"), true, 4)
+                .. (IF.Input.Pad() and ": {A} replaces it, {B} keeps it" or ": click it again to replace it")), true, 4)
         end
         self:Commit(item, spec)
     end
@@ -775,6 +850,14 @@ function IF.SettingsPage(tab, GROUPS, ITEMS, hooks)
     ---------------------------------------------------------------------------
     -- The line under a field's name: its clash, its note, the rest of
     -- what it shows (info), else what it does
+    -- (with the mouse: what a right-click on it does, the pad's second press)
+    local function MouseNote(item)
+        if IF.Input.Pad() then return "" end
+        if item.bindable then return "  |cff9d917aRight-click: record a controller press.|r" end
+        if item.try then return "  |cff9d917aRight-click: try it.|r" end
+        return ""
+    end
+
     function G:Line(item)
         if item.bindable then
             local clashes = B.ClashesOf(item.bindId)
@@ -784,7 +867,7 @@ function IF.SettingsPage(tab, GROUPS, ITEMS, hooks)
         if note then return note end
         local rest = item.text and (item.text():match("^.-|n(.*)$"))
         if rest and Kind(item) == "info" then return (rest:gsub("|n", "  ·  ")) end
-        return item.tip or ""
+        return (Resolve(item.tip) or "") .. MouseNote(item)
     end
 
     -- A field's row's height: its description wrapped to the row's width
@@ -803,7 +886,8 @@ function IF.SettingsPage(tab, GROUPS, ITEMS, hooks)
         if not f or #GROUPS == 0 then return end
         local entries = {}
         for i, g in ipairs(GROUPS) do entries[i] = { label = g.label } end
-        f.side:Render(IF.GlyphText("LS", 18) .. " Category", entries, self.group, self.zone ~= "dropdown")
+        f.side:Render((IF.Input.Pad() and (IF.GlyphText("LS", 18) .. " ") or "") .. "Category", entries,
+            self.group, self.zone ~= "dropdown")
 
         local item, index, fields = self:Item()
         local group = GROUPS[self.group]
@@ -880,6 +964,7 @@ function IF.SettingsPage(tab, GROUPS, ITEMS, hooks)
         end
         for i = shown + 1, #f.rows do f.rows[i]:Hide() end
         for i = heads + 1, #(f.heads or {}) do f.heads[i]:Hide() end
+        self.lines, self.drawn = lines, drawn
         f.moreUp:SetShown(top > 1)
         f.moreDown:SetShown(top + drawn - 1 < #lines)
         local placed = 0

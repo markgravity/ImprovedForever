@@ -73,6 +73,12 @@ function IF.TaskList(parent, width, rowsFit, onClick)
         row.header:SetPoint("TOPLEFT", 8, -30 - (i - 1) * ROW_H)
         rows[i] = row
     end
+    -- (the mouse's wheel: the task above / below, as a click on it)
+    local wheel = { box }
+    for _, row in ipairs(rows) do wheel[#wheel + 1] = row end
+    BY.Wheel(wheel, function(dir)
+        if list:Step(dir) and onClick then onClick() end
+    end)
 
     function list:Picked()
         local line = self.lines[self.sel]
@@ -117,7 +123,7 @@ function IF.TaskList(parent, width, rowsFit, onClick)
         if self.sel > self.top + shown - 1 then self.top = self.sel - shown + 1 end
         self.top = math.max(1, math.min(self.top, math.max(1, n - shown + 1)))
         local count = #TK.Tasks()
-        title:SetText((focused and Glyph(self.glyph or "LS", 18) .. " " or "") .. count
+        title:SetText((focused and not BY.Mouse() and Glyph(self.glyph or "LS", 18) .. " " or "") .. count
             .. (count == 1 and " task" or " tasks"))
         local fr, fg, fb = BY.FocusColor()
         for i, row in ipairs(rows) do
@@ -220,8 +226,23 @@ function TT.Build(parent)
                 BY.Render()
             end
         end)
+        BY.Hover(row, function(self)
+            local e = self.index and items[self.index]
+            if not e then return false end
+            GameTooltip:SetItemByID(e.itemID)
+        end)
         itemRows[i] = row
     end
+    -- (the wheel: the item above / below)
+    local wheel = { itemsBox }
+    for _, row in ipairs(itemRows) do wheel[#wheel + 1] = row end
+    BY.Wheel(wheel, function(dir)
+        local was = itemSel
+        column = "items"
+        itemSel = math.max(1, math.min(#items, itemSel + dir))
+        if itemSel ~= was then pickedAt = GetTime() end
+        BY.Render()
+    end)
 
     -- Right: the item's screen (moved in on Show); nothing picked: a note
     blank = BY.Panel(f, 0.4)
@@ -236,7 +257,7 @@ end
 
 local function RenderItems()
     local n = #items
-    itemsBox.title:SetText((column == "items" and Glyph("LS", 18) .. " " or "") .. "To buy here")
+    itemsBox.title:SetText((column == "items" and not BY.Mouse() and Glyph("LS", 18) .. " " or "") .. "To buy here")
     itemsBox.note:SetText(vendorCount > 0 and (vendorCount .. " more from a vendor") or "")
     itemSel = math.max(1, math.min(itemSel, math.max(1, n)))
     local shown = #itemRows
@@ -277,14 +298,15 @@ local function RenderRight()
         BY.Tip()
         return
     end
-    if GameTooltip:GetOwner() == BY.window then GameTooltip:Hide() end
+    if GameTooltip:GetOwner() == BY.window and not BY.Hovering() then GameTooltip:Hide() end
+    local mouse = BY.Mouse()
     if #TK.Tasks() == 0 then
-        blank.text:SetText("No tasks. In a profession window, on a recipe press " .. IF.ButtonName("Y")
-            .. " (More options) and choose Add Task.")
+        blank.text:SetText(mouse and "No tasks. In a profession window, pick a recipe and click Add Task under the window."
+            or ("No tasks. In a profession window, hold " .. IF.ButtonName("A") .. " on a recipe of its list (Add Task)."))
     elseif not e then
         blank.text:SetText("Nothing to buy at the auction house" .. (vendorCount > 0
-            and (".|n|cffb9ab8cThe rest is sold by vendors: at one, press " .. IF.ButtonName("Y")
-                .. " in its window (Tasks).|r") or ": the bags hold it all."))
+            and (".|n|cffb9ab8cThe rest is sold by vendors: at one, " .. (mouse and "click Tasks under its window"
+                or ("press " .. IF.ButtonName("Y") .. " in its window (Tasks)")) .. ".|r") or ": the bags hold it all."))
     else
         blank.text:SetText("Looking it up...")
     end

@@ -40,7 +40,10 @@ local GLYPHS = {
 	Reverse = { dpad = "gamepad-switch-128x-dpad-all-normal", select = "gamepad-switch-128x-face-b-normal", close = "gamepad-switch-128x-face-a-normal" },
 }
 
+-- The pad in hand (the core's IF.Input: the one used last), not merely
+-- gamepad mode on: a mouse player gets the mouse's menu
 local function GamepadActive()
+	if IF and IF.Input then return IF.Input.Pad() end
 	return C_GamePad and C_GamePad.IsEnabled and C_GamePad.IsEnabled()
 end
 
@@ -48,8 +51,9 @@ local function Style()
 	local m = InputDeviceIconSetManager
 	local s = m and m.GetActiveInputDeviceIconSet and m:GetActiveInputDeviceIconSet()
 	if not s and C_GamePad and C_GamePad.GetDeviceMappedState then
-		local st = C_GamePad.GetDeviceMappedState(C_GamePad.GetActiveDeviceID())
-		s = st and st.labelStyle
+		local ok, st = pcall(C_GamePad.GetDeviceMappedState,
+			C_GamePad.GetActiveDeviceID and C_GamePad.GetActiveDeviceID() or nil)
+		s = ok and type(st) == "table" and st.labelStyle or nil
 	end
 	return (s == "Shapes" or s == "Reverse") and s or "Letters"
 end

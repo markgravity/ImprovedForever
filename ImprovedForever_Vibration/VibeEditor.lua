@@ -157,7 +157,8 @@ for _, rail in ipairs(RAIL) do
                     menu.Toast(event.label .. " is off", true)
                 elseif event.loop then
                     if V.SimulateLoop(event.key, 6) then
-                        menu.Toast(event.label .. ": playing (" .. IF.ButtonName("Y") .. " stops)")
+                        menu.Toast(event.label .. ": playing ("
+                            .. (IF.Input.Pad() and IF.ButtonName("Y") or "Try it again") .. " stops)")
                     else
                         menu.Toast(event.label .. ": stopped")
                     end
