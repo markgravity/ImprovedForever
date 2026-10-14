@@ -1,4 +1,6 @@
-"""The modules' icons (each addon's TOC icon and its tab in the configuration
+"""SUPERSEDED by tools/import_icons.py (the designed icons); this draws the old ones.
+
+The modules' icons (each addon's TOC icon and its tab in the configuration
 panel), in the addon logo's colours, solid (line_icon.py's render_solid: cream
 shapes, green accents, holes cut; shapes drawn with radial_icon's helpers):
   ic_mod_controller   a gamepad, its face buttons in green

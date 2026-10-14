@@ -1,4 +1,6 @@
-"""The addon's own icon (the AddOns list, ## IconTexture in the core's toc),
+"""SUPERSEDED by tools/import_icons.py (the designed icons); this draws the old ones.
+
+The addon's own icon (the AddOns list, ## IconTexture in the core's toc),
 solid as the modules' (line_icon.py's render_solid: cream shapes, green
 accents): Forever, an infinity loop (its strands over and under where they
 cross), Improved, a green double arrow rising out of its right lobe; on the
