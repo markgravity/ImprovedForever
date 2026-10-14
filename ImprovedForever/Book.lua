@@ -1,4 +1,4 @@
--- A book: the Library's window, for any module to write in (the Library's
+-- A book: the Wiki's window, for any module to write in (the Wiki's
 -- pages of items, creatures and quests; the Journal's days). Forever's
 -- spellbook window (its frame, its page): the page's title (its icon in the
 -- spellbook's frame), under the rule its notes (paragraphs, who wrote them),

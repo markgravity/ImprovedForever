@@ -1,15 +1,15 @@
--- The Library on the world map: a creature, a node, a chest, a place
+-- The Wiki on the world map: a creature, a node, a chest, a place
 -- (Cross on a zone, Square on an entry) opens the game's map and quest panel
 -- at its zone, its areas drawn as the quest areas are (a soft blue fill, a
 -- lit rim: its spawns, near ones together), the game's own waypoint at the
 -- nearest spawn (its pin, the arrow in the world). The book it's shown from
--- (the Library's, the Journal's) steps aside while the map is up and comes
+-- (the Wiki's, the Journal's) steps aside while the map is up and comes
 -- back, on the same page, once it's closed.
 -- The areas are drawn on the map's canvas by a data provider of ours (no pin
 -- templates or the map's own pin pools: HereBeDragons' way).
 local IF = ImprovedForever
 
-local LB = IF.Library
+local LB = IF.Wiki
 
 local AREA = "Interface\\AddOns\\ImprovedForever\\textures\\ic_area"
 local AREA_COLOR = { 0.35, 0.6, 1, 0.85 }
@@ -135,7 +135,7 @@ local function Zone(line)
     return area, points
 end
 
--- book: the one it's shown from (nil: the Library's). -> true: shown (false:
+-- book: the one it's shown from (nil: the Wiki's). -> true: shown (false:
 -- nowhere to show it: an instance, a zone the map doesn't have)
 function LB.ShowOnMap(line, book)
     if IF.InCombat() or not line then return false end

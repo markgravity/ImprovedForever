@@ -2,7 +2,7 @@
 
 ## Window focus: look and behave like the game's own windows
 
-Every window of ours that takes the gamepad (Library, Destroy (Junk), Add Task, vendor
+Every window of ours that takes the gamepad (Wiki, Destroy (Junk), Add Task, vendor
 Tasks, the auction window, its confirmation, the config window) shows and passes
 focus the way Forever's native windows do. The shared code is
 `ImprovedForever/Focus.lua` (`IF.Focus`). Use it, don't hand-roll a copy.
@@ -142,7 +142,7 @@ focus the way Forever's native windows do. The shared code is
   match WoW Forever (client 1.60.x), not Classic Era: Forever changed recipes,
   spells and items.
 - Sync and check with `/sync-forever-data` (`python3 tools/sync_forever_data.py`).
-  It pulls QuestieDB, rebuilds the Library's data from Forever's own client tables
+  It pulls QuestieDB, rebuilds the Wiki's data from Forever's own client tables
   and QuestieDB's corrected data, and checks the IDs written in the code.
 - When adding a hardcoded ID or name, check it against Forever's data, then rerun
   `python3 tools/sync_forever_data.py --check`.

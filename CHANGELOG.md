@@ -1,5 +1,47 @@
 # Changelog
 
+## Core 0.8.0
+
+- **Mouse and keyboard**: every window and action now also works with the mouse and keyboard
+  (mouse + Esc). The look follows what you used last, pad or mouse.
+- **Bag sorting**: sort your bags from a controller press or a key binding.
+- **New icons**: the addon and every module have a new icon, in the game's own style.
+- The Library became the **Wiki**: your settings and key binding move over by themselves.
+
+## Wiki 0.7.0
+
+- The Library is now the **Wiki**, your in-game encyclopedia for any item: who drops it, sells it,
+  its recipes and quests. Open it with a key or Alt + click on an item as well as hold R3.
+  `/if wiki <item>` replaces `/if library`.
+
+## Auction 0.7.0
+
+- The auction window and its tasks work with the mouse and keyboard too.
+
+## Junk 0.7.0
+
+- The Destroy panel is reworked and works with the mouse and keyboard too.
+
+## Map 0.6.2
+
+- Peek Map: new options in its tab.
+
+## Gather 0.6.2
+
+- Minimap labels: new options in its tab and a few fixes.
+
+## Wheel 0.7.1
+
+- Small fixes to the wheels, the bind panel and the recent slot.
+
+## QuestTracker 0.6.1
+
+- Fixes to the sort menu and the quest items.
+
+## Vibration 0.6.1
+
+- Small fixes to the Vibration tab.
+
 ## Core 0.7.0
 
 - **Controller bindings**: every action in the crossbar and binding lists now has its own

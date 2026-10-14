@@ -45,7 +45,7 @@ local ITEMS = {
         tip = "Keeps a diary of each day you play, for this character: where you went, the quests you finished,"
             .. " your fights and falls, what you found, earned and made. Read it as a book: /if journal, its key"
             .. " binding, or a wheel (the windows of Improved Forever). Cross (or a click) on a day opens it,"
-            .. " then its lists; with the Library, a quest, a creature or an item opens its page.",
+            .. " then its lists; with the Wiki, a quest, a creature or an item opens its page.",
     }, OnOff(function() return S().enabled end, function(on) S().enabled = on end, "Journal")),
     Item({
         key = "open", group = "journal", label = "Read it",

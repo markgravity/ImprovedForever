@@ -8,7 +8,7 @@
 ## IconTexture: Interface\AddOns\ImprovedForever\textures\ic_mod_journal
 ## Group: ImprovedForever
 ## Dependencies: ImprovedForever
-## OptionalDeps: QuestieDB, ImprovedForever_Library
+## OptionalDeps: QuestieDB, ImprovedForever_Wiki
 
 Module.lua
 Journal.lua

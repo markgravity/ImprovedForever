@@ -1,6 +1,6 @@
 ---
 name: sync-forever-data
-description: Re-sync the addon's game data with WoW Forever. It pulls the latest QuestieDB (drops, vendors, quests, NPCs, objects, with QuestieDB's corrections) and rebuilds the Library's recipes from Forever's own client tables. It then rebuilds WorldData.lua and checks the IDs and names hardcoded in the code (Tasks, Vibration, Gather) against Forever. Use when the user asks to sync, update or refresh the data, says a Library entry is missing or doesn't match the game, mentions a new Forever patch or QuestieDB update, or asks "is our data up to date".
+description: Re-sync the addon's game data with WoW Forever. It pulls the latest QuestieDB (drops, vendors, quests, NPCs, objects, with QuestieDB's corrections) and rebuilds the Wiki's recipes from Forever's own client tables. It then rebuilds WorldData.lua and checks the IDs and names hardcoded in the code (Tasks, Vibration, Gather) against Forever. Use when the user asks to sync, update or refresh the data, says a Wiki entry is missing or doesn't match the game, mentions a new Forever patch or QuestieDB update, or asks "is our data up to date".
 ---
 
 # Sync Forever data

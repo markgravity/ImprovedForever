@@ -13,9 +13,9 @@ local TK = {}
 IF.Tasks = TK
 
 -- Reagents vendors sell (the trade supply vendors'), known before any is
--- seen at a vendor, without the Library's data: thread, dyes, vials, flux,
+-- seen at a vendor, without the Wiki's data: thread, dyes, vials, flux,
 -- spices, salt, water, bleach, parchment, rods... (Forever's items, checked
--- against QuestieDB's Forever vendors; with the Library loaded its data
+-- against QuestieDB's Forever vendors; with the Wiki loaded its data
 -- answers for any item)
 local SEED_VENDOR = {
     2320, 2321, 4291, 8343, 14341,                  -- coarse, fine, silken, heavy silken, rune thread
@@ -36,11 +36,11 @@ local function Vendors()
     return IF.db.vendorItems
 end
 
--- Sold by vendors (seen at one, well known, or in the Library's Forever data)
+-- Sold by vendors (seen at one, well known, or in the Wiki's Forever data)
 function TK.FromVendor(itemID)
     if seed[itemID] or Vendors()[itemID] ~= nil then return true end
-    local library = IF.Library
-    return library and library.Sold and library.Sold(itemID) or false
+    local wiki = IF.Wiki
+    return wiki and wiki.Sold and wiki.Sold(itemID) or false
 end
 
 -- What a vendor sells, kept (account-wide) as its window opens

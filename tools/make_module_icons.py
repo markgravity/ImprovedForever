@@ -11,7 +11,7 @@ shapes, green accents, holes cut; shapes drawn with radial_icon's helpers):
   ic_mod_auction      a stack of coins, a green tag
   ic_mod_destroy      a bin, a green cross over it (the Junk module's Destroy panel)
   ic_mod_junk         a sack, a green junk coin in front
-  ic_mod_library      an open book, a green bookmark
+  ic_mod_wiki      an open book, a green bookmark
   ic_mod_journal      a closed diary (its lines cut), a green quill
   ic_mod_quests       a quest list (its "!" and lines cut), green sort arrows
   ic_mod_chat         a speech bubble (a scribble cut in it), a green stylus
@@ -194,7 +194,7 @@ def make():
     coin = icon.cut(coin, ring)
     save("ic_mod_junk", [(sack, GOLD), (coin, GREEN)])
 
-    # Library: an open book, a bookmark (green) hanging from its spine
+    # Wiki: an open book, a bookmark (green) hanging from its spine
     book, db = new()
     icon.polygon(db, [(12, 34), (40, 26), (64, 36), (88, 26), (116, 34), (116, 100), (88, 92), (64, 102),
                       (40, 92), (12, 100)])
@@ -203,7 +203,7 @@ def make():
     book = icon.cut(book, spine)
     mark, dm = new()
     icon.polygon(dm, [(84, 20), (100, 20), (100, 60), (92, 52), (84, 60)])
-    save("ic_mod_library", [(book, GOLD), (mark, GREEN)])
+    save("ic_mod_wiki", [(book, GOLD), (mark, GREEN)])
 
     # Journal: a closed diary, its spine and two lines cut in the cover, a
     # quill (green) across it

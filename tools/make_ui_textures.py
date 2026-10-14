@@ -8,7 +8,7 @@ the controller button glyphs used when the client has no atlas for one.
   ic_diamond, ic_tri, ic_dot, ic_chip              marks
   ic_slot, ic_disc, ic_hatch, ic_ring_dash, ic_slot_glow   the round slot
   ic_g_<a|b|x|y|lb|rb|lt|rt|ls|rs|dpad|dpad_lr|dpad_up>    button glyphs
-  ic_area                      a map area (the Library's): a soft fill, a lit rim
+  ic_area                      a map area (the Wiki's): a soft fill, a lit rim
 
 Run: python3 tools/make_ui_textures.py   (needs Pillow)
 """

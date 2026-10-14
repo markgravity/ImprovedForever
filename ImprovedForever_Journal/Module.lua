@@ -1,6 +1,6 @@
 -- Improved Forever: Journal. What the character does, kept a day at a time
 -- (Journal.lua), written as a diary (JournalWriter.lua) and read in the
--- core's book, as the Library is (JournalBook.lua); set up in its tab
+-- core's book, as the Wiki is (JournalBook.lua); set up in its tab
 -- (JournalEditor.lua).
 local IF = ImprovedForever
 

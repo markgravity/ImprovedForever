@@ -18,7 +18,7 @@ the core, **Improved Forever**:
 | `ImprovedForever_Chat` | The chat with the controller: pick a line, then an item or other link in it. |
 | `ImprovedForever_Auction` | The controller auction window, prices over time, tasks. |
 | `ImprovedForever_Junk` | Finds and marks junk, sells it with the vendor's Sell All Junk, destroys it from the bags or the loot window. Formerly Destroy. |
-| `ImprovedForever_Library` | Everything about an item. |
+| `ImprovedForever_Wiki` | Everything about an item. |
 | `ImprovedForever_Journal` | A diary of your days, read as a book. |
 | `ImprovedForever_QuestTracker` | The objective tracker, rebuilt as the game's own: sorted quests (zone, level, title, distance, completed), an objective complete sound, full controller support. Formerly Improved Quest Tracker. |
 
@@ -29,7 +29,7 @@ the core, **Improved Forever**:
 - **Recent action slot** on R3, placed in Edit Mode.
 - **Touchpad** corner actions.
 - **Chat lines**: with the chat open on the controller, D-pad Up picks its lines, left / right the links in a line
-  (their tooltips); Cross opens an item in the Library, Square puts the link in your message.
+  (their tooltips); Cross opens an item in the Wiki, Square puts the link in your message.
 - **Button overrides** for L3 click and double-click.
 - **Vibration** on game events and spell casts, with per-action patterns.
 - **Junk**: what the bags no longer need is marked junk (the game's coin on its slot), from quests (QuestieDB's
@@ -37,20 +37,20 @@ the core, **Improved Forever**:
   marks it junk or not junk, remembered per character. A vendor's Sell All Junk sells it all. Its **Destroy**
   panel throws junk away from the controller; from the loot window when the bags are full, it destroys junk
   and loots in its place. The auction window's Sell tab sorts the bags by the same verdict.
-- **Library**: hold R3 on an item (bags, loot window, auction house) for everything about it: what drops
+- **Wiki**: hold R3 on an item (bags, loot window, auction house) for everything about it: what drops
   it, who sells it, the recipes that make or use it, its quests and auction prices. Drops, vendors and
   quests come from [QuestieDB](https://github.com/Questie/QuestieDB)'s data: the addon when installed, else
   a copy that ships with this one.
 - **Journal**: a diary of each day you play, per character: the lands you passed through, the quests you
   finished, your fights and falls, what you looted, earned and made, written in your own words. Read it in
-  the Library's book (`/if journal`, a key binding or a wheel); with the Library, a quest, creature or item
+  the Wiki's book (`/if journal`, a key binding or a wheel); with the Wiki, a quest, creature or item
   in it opens its page.
 
 **Bindings**: every binding has a controller press and a keyboard / mouse press, both working, set
 on the Bindings tab (or the module's own tab): record either, it goes on the press of the input you
 used. A keyboard / mouse press is a key (Alt / Ctrl / Shift held too, if you like) or, for an item's
 binding, a modified click on an item. By default Alt + click an item (bags, loot window, chat links)
-opens it in the Library and Alt + right-click a bag item marks it junk or not junk; a key on those acts
+opens it in the Wiki and Alt + right-click a bag item marks it junk or not junk; a key on those acts
 on the item under the mouse. `/if input pad` or `/if input mouse` keeps the windows on one
 (`/if input auto`: the one used last).
 
@@ -83,10 +83,10 @@ one that isn't loaded.
 
 `vendor/QuestieDB` is a git submodule of [QuestieDB](https://github.com/Questie/QuestieDB), for its API
 types and data (`git submodule update --init`). `python tools/make_library_data.py` copies what the
-Library shows from it into `ImprovedForever_Library/LibraryData.lua`, which ships; the submodule itself isn't packaged.
+Wiki shows from it into `ImprovedForever_Wiki/WikiData.lua`, which ships; the submodule itself isn't packaged.
 
 - `tools/make_*.py` regenerate the TGA textures.
-- `python tools/make_library.py` regenerates `ImprovedForever_Library/LibraryRecipes.lua` from the game's recipe tables (wago.tools).
+- `python tools/make_library.py` regenerates `ImprovedForever_Wiki/WikiRecipes.lua` from the game's recipe tables (wago.tools).
 - `python tools/package.py` builds a zip per addon in `dist/` and `ImprovedForever-All.zip` with every addon; `python tools/package.py Wheel` builds only that one.
 - `python tools/make_module_icons.py --logos` also writes each module's CurseForge logo to `dist/logos/`.
 
@@ -115,7 +115,7 @@ say thanks, you can buy me a coffee:
 
 ## Credits
 
-The Library's drop, vendor and quest data comes from [QuestieDB](https://github.com/Questie/QuestieDB)
+The Wiki's drop, vendor and quest data comes from [QuestieDB](https://github.com/Questie/QuestieDB)
 by the Questie team; creatures' display ids (their portraits) from
 [cMaNGOS classic-db](https://github.com/cmangos/classic-db) (GPL-3.0).
 

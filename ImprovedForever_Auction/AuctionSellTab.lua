@@ -556,7 +556,7 @@ local function Search()
     end)
 end
 
--- The picked item (R3 held: its Library page)
+-- The picked item (R3 held: its Wiki page)
 function ST.FocusedItem()
     local e = P and P.entry
     return e and (e.link or e.itemID)

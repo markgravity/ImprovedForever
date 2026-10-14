@@ -24,7 +24,7 @@ ICONS = {
     "Icon Gather": ("ic_mod_gather", "Gather"),
     "Icon Journal": ("ic_mod_journal", "Journal"),
     "Icon Junk": ("ic_mod_junk", "Junk"),
-    "Icon Library": ("ic_mod_library", "Library"),
+    "Icon Wiki": ("ic_mod_wiki", "Wiki"),
     "Icon Map": ("ic_mod_map", "Map"),
     "Icon Quest Tracker": ("ic_mod_quests", "QuestTracker"),
     "Icon Vibration": ("ic_mod_vibration", "Vibration"),

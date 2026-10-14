@@ -143,7 +143,7 @@ function BY.Hover(row, fn)
         BY.Render()
     end)
     -- (a modified click: its item's binding, as an item's anywhere else:
-    -- Alt + click, the Library; Binds.lua)
+    -- Alt + click, the Wiki; Binds.lua)
     row:HookScript("OnClick", function(self, button)
         if not (Mouse() and BY.hover == self) then return end
         local _, link = GameTooltip:GetItem()
@@ -1812,7 +1812,7 @@ end
 
 -- The legend: a page's buttons, then the right stick for the tabs (with
 -- the mouse: no legend, as the game's mouse windows; the buttons, mouse,
--- in the window's bottom band instead, at its right; the Library by Alt +
+-- in the window's bottom band instead, at its right; the Wiki by Alt +
 -- click, as everywhere)
 local mouseBar = K.NewFrame("Frame", nil, win)
 mouseBar:SetPoint("BOTTOMRIGHT", win, "BOTTOMRIGHT", -16, 6)
@@ -1847,7 +1847,7 @@ local function SetHints(text, mouseList)
     mouseBar:SetShown(mouse)
     if mouse then return SetMouseBar(mouseList or {}) end
     legend:SetText(text .. "   " .. Glyph("RS") .. " Tabs (tilt) / " .. (BY.TipsOff() and "Tooltip (click)" or "No tooltip (click)")
-        .. ((IF.Library and IF.Library.Settings().enabled) and " / Hold to Open Library" or ""))
+        .. ((IF.Wiki and IF.Wiki.Settings().enabled) and " / Hold to Open Wiki" or ""))
 end
 
 function BY.SetTab(key)
@@ -1936,7 +1936,7 @@ function BY.DetailRender()
     if D then RenderDetail() end
 end
 
--- The item in front (R3 held: its Library page, Library.lua): a page's own
+-- The item in front (R3 held: its Wiki page, Wiki.lua): a page's own
 -- (its FocusedItem), else the item's screen open, else the picked result
 function BY.FocusedItem()
     local page = CurrentPage()
@@ -2198,34 +2198,34 @@ local function Stick(now)
 end
 
 -- R3: a click turns the tooltip over (on its release), held the item in
--- front opens the Library (Library.lua)
+-- front opens the Wiki (Wiki.lua)
 local rsHold                   -- { start, item, done }
-local libraryPress = {}        -- buttons pressed while the Library was up
-local function LibraryHold(now)
+local wikiPress = {}        -- buttons pressed while the Wiki was up
+local function WikiHold(now)
     if not rsHold or rsHold.done then return end
-    local p = IF.Library.HoldProgress(rsHold.start)
+    local p = IF.Wiki.HoldProgress(rsHold.start)
     if not p then return end
-    if p < 1 then return IF.Library.HoldShow(p, win) end
+    if p < 1 then return IF.Wiki.HoldShow(p, win) end
     rsHold.done = true
-    IF.Library.HoldHide(true)
-    IF.Library.Open(rsHold.item, "auction")
+    IF.Wiki.HoldHide(true)
+    IF.Wiki.Open(rsHold.item, "auction")
 end
 
 if catcher.EnableGamePadButton then
     catcher:SetScript("OnGamePadButtonDown", function(_, button)
         local name = KEYS[button]
-        -- (the Library with the pad: the press is its, the release too; the
-        -- Library up at all: L2 / R2 are its, the pad's way back to it)
-        local library = IF.Library and IF.Library.HasFocus
-        if library and (IF.Library.HasFocus()
-            or IF.Library.IsShown() and (button == "PADLTRIGGER" or button == "PADRTRIGGER")) then
-            libraryPress[button] = true
+        -- (the Wiki with the pad: the press is its, the release too; the
+        -- Wiki up at all: L2 / R2 are its, the pad's way back to it)
+        local wiki = IF.Wiki and IF.Wiki.HasFocus
+        if wiki and (IF.Wiki.HasFocus()
+            or IF.Wiki.IsShown() and (button == "PADLTRIGGER" or button == "PADRTRIGGER")) then
+            wikiPress[button] = true
             return
         end
         -- Circle on its release: on the press the release reaches the game's
         -- own window, which closes
         if not name or name == "B" then return end
-        if name == "RS" and IF.Library and IF.Library.Settings().enabled and not IF.AuctionConfirm.IsShown() then
+        if name == "RS" and IF.Wiki and IF.Wiki.Settings().enabled and not IF.AuctionConfirm.IsShown() then
             local item = BY.FocusedItem()
             rsHold = { start = GetTime(), item = item, done = item == nil }
             if item then return end
@@ -2236,18 +2236,18 @@ if catcher.EnableGamePadButton then
     catcher:SetScript("OnGamePadButtonUp", function(_, button)
         local name = KEYS[button]
         if name == "RS" and rsHold then
-            -- (let go before the Library: the click's)
+            -- (let go before the Wiki: the click's)
             local short = not rsHold.done
             rsHold = nil
             if short then
-                IF.Library.HoldHide()
+                IF.Wiki.HoldHide()
                 BY.Press("RS")
             end
             return
         end
-        -- (a press the Library had: its release too, though it has closed)
-        if libraryPress[button] or (IF.Library and IF.Library.HasFocus and IF.Library.HasFocus()) then
-            libraryPress[button] = nil
+        -- (a press the Wiki had: its release too, though it has closed)
+        if wikiPress[button] or (IF.Wiki and IF.Wiki.HasFocus and IF.Wiki.HasFocus()) then
+            wikiPress[button] = nil
             return
         end
         if name == "B" then return BY.Press("B") end
@@ -2272,12 +2272,12 @@ end
 win:SetScript("OnUpdate", function()
     local now = GetTime()
     -- (its own focus glow while it has the pad, as the game's windows: not
-    -- while the Library or the confirmation over it has it)
-    local library = IF.Library and IF.Library.HasFocus and IF.Library.HasFocus()
-    IF.Focus.Glow(win, not (library or IF.AuctionConfirm.IsShown()))
-    LibraryHold(now)
-    -- (the Library with the pad: its sticks too)
-    if IF.Library and IF.Library.HasFocus and IF.Library.HasFocus() then return end
+    -- while the Wiki or the confirmation over it has it)
+    local wiki = IF.Wiki and IF.Wiki.HasFocus and IF.Wiki.HasFocus()
+    IF.Focus.Glow(win, not (wiki or IF.AuctionConfirm.IsShown()))
+    WikiHold(now)
+    -- (the Wiki with the pad: its sticks too)
+    if IF.Wiki and IF.Wiki.HasFocus and IF.Wiki.HasFocus() then return end
     if not rightHeld and math.abs(rightY) > STICK_ON then
         rightHeld = true
         BY.StepTab(rightY > 0 and -1 or 1)

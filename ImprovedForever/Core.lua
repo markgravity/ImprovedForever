@@ -130,6 +130,20 @@ loader:SetScript("OnEvent", function()
     IF.db = ImprovedForeverDB
     ImprovedForeverCharDB = ImprovedForeverCharDB or {}
     IF.charDB = ImprovedForeverCharDB
+    -- The Library module became the Wiki: its settings and key binding, and the
+    -- places a binding is kept (wheels, combos), move over
+    local db = IF.db
+    if db.library ~= nil and db.wiki == nil then db.wiki, db.library = db.library, nil end
+    local function Rename(t, seen)
+        if type(t) ~= "table" or seen[t] then return end
+        seen[t] = true
+        if t.library ~= nil and t.wiki == nil then t.wiki, t.library = t.library, nil end
+        for k, v in pairs(t) do
+            if v == "library" then t[k] = "wiki" else Rename(v, seen) end
+        end
+    end
+    Rename(db.keyBinds, {}); Rename(db.combos, {}); Rename(db.wheelKeys, {})
+    Rename(IF.charDB.wheels, {}); Rename(IF.charDB.recent, {})
     for _, fn in ipairs(loginCallbacks) do
         fn()
     end

@@ -1,10 +1,10 @@
--- The Library tab, a tab of settings (IF.SettingsPage, SettingsPage.lua): R3
+-- The Wiki tab, a tab of settings (IF.SettingsPage, SettingsPage.lua): R3
 -- held on an item opens its page, and where its data comes from (QuestieDB,
--- the recipes known). Library.lua does the work.
+-- the recipes known). Wiki.lua does the work.
 local IF = ImprovedForever
 
 local menu = IF.Menu
-local LB = IF.Library
+local LB = IF.Wiki
 local Item, OnOff = IF.SettingsItem, IF.SettingsOnOff
 
 
@@ -20,7 +20,7 @@ local QUESTIE = {
 
 local ITEMS = {
     Item({
-        key = "enabled", group = "library", label = "Library",
+        key = "enabled", group = "wiki", label = "Wiki",
         tip = "R3 held on an item (in the bags, the loot window or the auction window) opens its page: what it is,"
             .. " what drops it, who sells it, the recipes that make it or use it, its quests and auction prices."
             .. " It reads as a traveller's notes: Cross on an entry under them opens that list, then another"
@@ -29,13 +29,13 @@ local ITEMS = {
         -- (the mouse's way, while it's the one in hand)
         note = function()
             if IF.Input.Pad() then return nil end
-            local key = IF.Binds.KeyBind(IF.Binds.Get("library"))
+            local key = IF.Binds.KeyBind(IF.Binds.Get("wiki"))
             return (key and (IF.Binds.KeyText(key) .. " an item (in the bags, the loot window, a chat link...) to open"
                 .. " its page") or "Bind a click or a key to open an item's page") .. " (the Bindings tab: Misc)."
                 .. " In it: click an entry to open it, right-click to show it on the map, the wheel or the arrows"
                 .. " turn the page, Esc goes back."
         end,
-    }, OnOff(function() return S().enabled end, function(on) S().enabled = on end, "Library")),
+    }, OnOff(function() return S().enabled end, function(on) S().enabled = on end, "Wiki")),
     Item({
         key = "questie", group = "sources", label = "QuestieDB",
         tip = "Drops, vendors and quests come from QuestieDB's data (by the Questie team): the QuestieDB addon when"
@@ -59,8 +59,8 @@ local ITEMS = {
 }
 
 local GROUPS = {
-    { key = "library", label = "Library" },
+    { key = "wiki", label = "Wiki" },
     { key = "sources", label = "Sources" },
 }
 
-IF.LibraryEditor = IF.SettingsPage({ key = "library", label = "Library", module = "library", order = 70 }, GROUPS, ITEMS)
+IF.WikiEditor = IF.SettingsPage({ key = "wiki", label = "Wiki", module = "wiki", order = 70 }, GROUPS, ITEMS)

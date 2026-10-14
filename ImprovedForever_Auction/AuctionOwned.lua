@@ -241,7 +241,7 @@ function OW.RenderHold()
     end
 end
 
--- The picked auction's item (R3 held: its Library page)
+-- The picked auction's item (R3 held: its Wiki page)
 function OW.FocusedItem()
     local a = auctions[sel]
     return a and (a.itemLink or (a.itemKey and a.itemKey.itemID))

@@ -1,10 +1,10 @@
-"""Build RecipeData.lua (core): the profession recipe index the Library and the item verdict (ItemValue.lua) read.
+"""Build RecipeData.lua (core): the profession recipe index the Wiki and the item verdict (ItemValue.lua) read.
 
 Blizzard's DB2 tables (SkillLineAbility, SpellReagents, SpellEffect, ItemEffect)
 come from wago.tools as CSV, from Forever's own build: the client reports itself
 as 1.60.x (product wow_classic_beta; wago lists it under another product name,
 so it's found by its version). Recipes newer than that build are learned in
-game when a profession window opens (Library.lua LB.Learn).
+game when a profession window opens (Wiki.lua LB.Learn).
 
 Each recipe spell becomes one row:
     [spellID] = { skillLine, makesItemID, makesCount, taughtByItemID, reagentID, count, ... }

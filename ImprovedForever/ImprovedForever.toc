@@ -2,7 +2,7 @@
 ## Title: Improved Forever
 ## Notes: Quality-of-life for playing WoW Forever with a controller: the core every Improved Forever module needs.
 ## Author: markg
-## Version: 0.7.0
+## Version: 0.8.0
 ## X-Website: https://github.com/markgravity/ImprovedForever
 ## X-License: MIT
 ## IconTexture: Interface\AddOns\ImprovedForever\textures\ic_addon

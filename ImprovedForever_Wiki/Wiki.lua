@@ -1,6 +1,6 @@
--- Library: everything known about an item, as a page of a book. R3 held on
+-- Wiki: everything known about an item, as a page of a book. R3 held on
 -- an item (the bags, the loot window: watched, never bound; the auction
--- window: its own R3, AuctionBuy.lua) opens its page (LibraryPage.lua).
+-- window: its own R3, AuctionBuy.lua) opens its page (WikiPage.lua).
 -- This file: what is known (the sources below), what is focused, the hold.
 -- Drops, vendors, quests and recipes come from the core (GameData.lua:
 -- QuestieDB when installed, else our copy of its Forever data; the game's
@@ -13,9 +13,9 @@ local K = IF.ConfigKit
 local KC = K.C
 
 local LB = {}
-IF.Library = LB
+IF.Wiki = LB
 
-LB.HOLD = 0.7                  -- R3 held this long: the Library
+LB.HOLD = 0.7                  -- R3 held this long: the Wiki
 local SHOW_AFTER = 0.15        -- (a shorter press: the game's own R3, the ring not shown)
 local TIP_KEPT = 1.5           -- an item's tooltip this recent still says what is focused
 local MAX_LINES = 200          -- shown per source: creatures dropping cloth run to a thousand
@@ -36,12 +36,12 @@ local RANKS = { [1] = "Elite", [2] = "Rare Elite", [3] = "Boss", [4] = "Rare" }
 local ROLES = { reward = "Reward", starts = "Starts the quest", objective = "Needed for it" }
 
 ---------------------------------------------------------------------------
--- Settings: IF.db.library = { enabled } (the recipes seen in a profession
+-- Settings: IF.db.wiki = { enabled } (the recipes seen in a profession
 -- window: the core's, GameData.lua)
 ---------------------------------------------------------------------------
 function LB.Settings()
-    local s = IF.db.library or {}
-    IF.db.library = s
+    local s = IF.db.wiki or {}
+    IF.db.wiki = s
     if s.enabled == nil then s.enabled = true end
     return s
 end
@@ -494,7 +494,7 @@ function LB.Faction(e)
     return e
 end
 
--- The trainers who teach a recipe, by zone (LibraryData.lua's, from
+-- The trainers who teach a recipe, by zone (WikiData.lua's, from
 -- cMaNGOS); a recipe that comes with its profession: any of the profession's
 -- trainers (second return: true then)
 function LB.Trainers(spell, skill)
@@ -740,7 +740,7 @@ end
 LB.Portrait = IF.Book.Portrait
 
 ---------------------------------------------------------------------------
--- For the page (LibraryPage.lua): the helpers it shares, the waypoint
+-- For the page (WikiPage.lua): the helpers it shares, the waypoint
 ---------------------------------------------------------------------------
 LB.ItemInfo, LB.ItemIcon, LB.ItemID, LB.ZoneName, LB.PlayerArea = ItemInfo, ItemIcon, ItemID, ZoneName, PlayerArea
 LB.SkillName, LB.SpellName, LB.Join, LB.ICONS = SkillName, SpellName, Join, ICONS
@@ -893,7 +893,7 @@ holdIcon:SetKey("RS")
 holdIcon:Hide()
 local holdLabel = K.ChatText(holdIcon, 12, KC.focusText)
 holdLabel:SetPoint("LEFT", holdIcon, "RIGHT", 2, 0)
-holdLabel:SetText("Hold to Open Library")
+holdLabel:SetText("Hold to Open Wiki")
 
 -- p: 0 to 1; anchor: the frame it sits by (nil: the screen's middle)
 function LB.HoldShow(p, anchor)
@@ -926,7 +926,7 @@ end
 ---------------------------------------------------------------------------
 -- The bags and the loot window: R3 (alone: R2 + R3 is the Destroy panel's) watched,
 -- never bound. The game's own R3 there turns its tooltips over on the
--- press: a hold that opens the Library turns them back.
+-- press: a hold that opens the Wiki turns them back.
 ---------------------------------------------------------------------------
 local function AnyBagOpen()
     local combined = _G.ContainerFrameCombinedBags
@@ -962,7 +962,7 @@ local wasDown = false
 local tipsBefore
 watcher:SetScript("OnUpdate", function()
     if not IF.db or not IsKeyDown then return end
-    -- (any window of the game's with the pad, the Library up too: another
+    -- (any window of the game's with the pad, the Wiki up too: another
     -- item into it; the Destroy panel, the auction window: their own R3)
     local uiFocus = IF.Binds and IF.Binds.InGame and not IF.Binds.InGame()
     local active = LB.Settings().enabled and not (LB.HasFocus and LB.HasFocus()) and not IF.InCombat()
@@ -1029,11 +1029,11 @@ end
 -- click on one (Alt + left click) or a key on the item under the mouse
 local B = IF.Binds
 B.Add({
-    id = "library", label = "Library", group = "Other", tab = "library",
-    icon = IF.TEX .. "ic_mod_library", context = "bags", order = 35,
+    id = "wiki", label = "Wiki", group = "Other", tab = "wiki",
+    icon = IF.TEX .. "ic_mod_wiki", context = "bags", order = 35,
     desc = "Held on an item: everything about it",
     tip = "Held on an item in the bags, the loot window or another window with the controller: its"
-        .. " Library page. With the mouse: a click on an item (Alt + left click), or a key on the item"
+        .. " Wiki page. With the mouse: a click on an item (Alt + left click), or a key on the item"
         .. " under the mouse. Watched, not taken: the button keeps its own action.",
     accepts = B.Single,
     specs = function() return B.One(LB.Key()) end,

@@ -3,8 +3,8 @@
 -- it's installed, else from our copy of its Forever data (WorldData.lua,
 -- made by tools/make_library_data.py); recipes from RecipeData.lua (made by
 -- tools/make_library.py from the game's own tables) and from the recipes
--- seen whenever a profession window opens (the Library's LB.Learn).
--- The Library shows it as pages; the item verdict (ItemValue.lua) asks it
+-- seen whenever a profession window opens (the Wiki's LB.Learn).
+-- The Wiki shows it as pages; the item verdict (ItemValue.lua) asks it
 -- what an item is for. Every read guarded (its Forever data is new).
 local _, IF = ...
 
@@ -289,7 +289,7 @@ function GD.BaseSkill(skill, parent)
 end
 
 -- The recipes seen in the profession windows: { [spellID] = row } (kept in
--- the Library's settings before 0.5.0: moved over)
+-- the Wiki's settings before 0.5.0: moved over)
 function GD.SeenRecipes()
     local db = IF.db
     if not db then return {} end

@@ -1,18 +1,18 @@
 ## Interface: 16001, 16002, 16003, 16100, 16101, 16200
-## Title: Improved Forever: Library
+## Title: Improved Forever: Wiki
 ## Notes: Everything about an item: drops, vendors, recipes, quests and prices.
 ## Author: markg
-## Version: 0.6.0
+## Version: 0.7.0
 ## X-Website: https://github.com/markgravity/ImprovedForever
 ## X-License: MIT
 ## X-Curse-Project-ID: 1736880
-## IconTexture: Interface\AddOns\ImprovedForever\textures\ic_mod_library
+## IconTexture: Interface\AddOns\ImprovedForever\textures\ic_mod_wiki
 ## Group: ImprovedForever
 ## Dependencies: ImprovedForever
 ## OptionalDeps: QuestieDB, ImprovedForever_Auction, ImprovedForever_Junk, ImprovedForever_Gather, ImprovedForever_Vibration
 
 Module.lua
-Library.lua
-LibraryPage.lua
-LibraryMap.lua
-LibraryEditor.lua
+Wiki.lua
+WikiPage.lua
+WikiMap.lua
+WikiEditor.lua

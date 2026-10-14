@@ -4,10 +4,10 @@ git submodule update --init) with its corrections applied: QuestieDB's own
 exporter (tools/export-forever.lua, needs a Lua 5.1: LUA51=path) merges its
 raw data with its Classic and Forever fixes.
 
-Only what the Library shows is kept: for each item its sources (creatures,
+Only what the Wiki shows is kept: for each item its sources (creatures,
 objects and containers that drop it, vendors, quests); for each creature,
 object and quest those name, its name, level, zone and a few spawn points.
-Rows are strings, decoded in game only when an item's page opens (Library.lua),
+Rows are strings, decoded in game only when an item's page opens (Wiki.lua),
 so the data costs little memory until then. An installed QuestieDB is read
 instead when there is one (newer data).
 

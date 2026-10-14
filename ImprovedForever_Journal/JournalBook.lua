@@ -1,10 +1,10 @@
 -- The Journal read: the core's book (ImprovedForever's Book.lua), as the
--- Library's. Its first page is the journal so far and a line a day (the
+-- Wiki's. Its first page is the journal so far and a line a day (the
 -- newest first, under their month); Cross opens a day: what I wrote of it
 -- (JournalWriter.lua), then an entry a subject (quests, places, foes,
 -- spoils, crafting), each opening its list. In a list Cross opens a quest's,
--- a creature's or an item's Library page in the same book (with the
--- Library), or a place on the map; Circle goes back.
+-- a creature's or an item's Wiki page in the same book (with the
+-- Wiki), or a place on the map; Circle goes back.
 -- Opened with /if journal, its key binding, or a wheel / the touchpad (the
 -- core's windows of ours: ImprovedForeverJournalToggle).
 -- Never in combat.
@@ -247,9 +247,9 @@ end
 ---------------------------------------------------------------------------
 -- Pages: the journal's first, a day's
 ---------------------------------------------------------------------------
--- Cross on a day's entry: its Library page (in this book), a place on the map
+-- Cross on a day's entry: its Wiki page (in this book), a place on the map
 local function Open(line, bk)
-    local LB = IF.Library
+    local LB = IF.Wiki
     if line.kind == "zone" or line.kind == "death" then return ShowMap(line.map, line.x, line.y) end
     if not (LB and LB.Page) then return end
     if line.kind == "quest" then return bk:Push(LB.Page("quest", line.id)) end
@@ -259,7 +259,7 @@ end
 
 local function Verb(line)
     if (line.kind == "zone" or line.kind == "death") and line.map then return "Show on Map" end
-    if IF.Library and IF.Library.Page and (line.kind == "quest" or line.kind == "npc" or line.item) then
+    if IF.Wiki and IF.Wiki.Page and (line.kind == "quest" or line.kind == "npc" or line.item) then
         return "Open"
     end
 end

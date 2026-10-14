@@ -183,7 +183,7 @@ def main():
             pull_questiedb()
         step("Recipes: Forever's client tables")
         run([sys.executable, "tools/make_library.py"], env=env)
-        step("Library data: QuestieDB with its corrections, trainers, portraits")
+        step("Wiki data: QuestieDB with its corrections, trainers, portraits")
         run([sys.executable, "tools/make_library_data.py"], env=env)
     step("Hardcoded data against Forever's")
     problems = check_code()

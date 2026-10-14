@@ -1,4 +1,4 @@
--- The Library's page (Library.lua knows what is shown): a page of the core's
+-- The Wiki's page (Wiki.lua knows what is shown): a page of the core's
 -- book (ImprovedForever's Book.lua: Forever's spellbook window). The item is
 -- the page's title (its icon in the spellbook's frame), under the rule its
 -- notes: what a traveller wrote about it, then an entry a subject (where it
@@ -14,7 +14,7 @@ local IF = ImprovedForever
 
 local A = IF.Auction
 local BY = IF.AuctionBuy
-local LB = IF.Library
+local LB = IF.Wiki
 local BK = IF.Book
 
 ---------------------------------------------------------------------------
@@ -793,7 +793,7 @@ function Page:activate(line, book)
 end
 
 -- Square: the entry on the map (a creature, a person, a chest, a node, a
--- place: LibraryMap.lua)
+-- place: WikiMap.lua)
 function Page:alt(line, book)
     if line.spot then LB.ShowOnMap(line, book) end
 end
@@ -822,7 +822,7 @@ function Page:tip(line, book)
     return true
 end
 
--- A page of the Library, for its own book or another's (the Journal's):
+-- A page of the Wiki, for its own book or another's (the Journal's):
 -- kind "item" (an id or a link), "npc", "object" or "quest"; nil: nothing
 -- known of it
 function LB.Page(kind, id)
@@ -845,18 +845,18 @@ function LB.Page(kind, id)
 end
 
 ---------------------------------------------------------------------------
--- The Library's book: opened from the bags, the loot window, any window of
+-- The Wiki's book: opened from the bags, the loot window, any window of
 -- the game's, the auction window (L2 / R2 between them: Book.lua)
 ---------------------------------------------------------------------------
 -- (the auction window: ours, not in the game's row; it leaves L2 / R2 to
--- the Library while it's up)
+-- the Wiki while it's up)
 local function AuctionBehind()
     local w = LB.origin == "auction" and IF.AuctionBuy and IF.AuctionBuy.window
     return w and w:IsShown() and w or nil
 end
 
 local book = BK.New({
-    name = "ImprovedForeverLibrary", title = "Library", portrait = "Interface\\Icons\\INV_Misc_Book_09",
+    name = "ImprovedForeverWiki", title = "Wiki", portrait = "Interface\\Icons\\INV_Misc_Book_09",
     other = AuctionBehind,
     label = function(f) return f == AuctionBehind() and "Auction House" or nil end,
     onHide = function()
@@ -864,7 +864,7 @@ local book = BK.New({
     end,
 })
 LB.book = book
--- (whose tooltips are the Library's: Library.lua's focus leaves them out)
+-- (whose tooltips are the Wiki's: Wiki.lua's focus leaves them out)
 LB.panel = book.panel
 
 function LB.HasFocus() return book:HasFocus() end
@@ -879,18 +879,18 @@ function LB.PushQuest(questID) book:Push(LB.Page("quest", questID)) end
 -- kind: "npc" (a creature, a person) or "object" (a chest, a node)
 function LB.PushCreature(kind, id) book:Push(LB.Page(kind, id)) end
 
--- focus: "library" or "window"
+-- focus: "wiki" or "window"
 function LB.SetFocus(focus)
-    book:SetFocus(focus == "library" and "ours" or "window")
+    book:SetFocus(focus == "wiki" and "ours" or "window")
 end
 
--- Out of the way while the map is up (LibraryMap.lua), its pages kept; back
+-- Out of the way while the map is up (WikiMap.lua), its pages kept; back
 -- once it's closed (in combat: gone)
 function LB.Suspend() book:Suspend() end
 function LB.Resume() book:Resume() end
 
 -- item: an id or a link; origin: "bags", "loot", "ui", "auction" (where it's
--- opened from; "ui": LB.originFrame, Library.lua's)
+-- opened from; "ui": LB.originFrame, Wiki.lua's)
 function LB.Open(item, origin)
     if IF.InCombat() or not LB.ItemID(item) then return end
     LB.origin = origin

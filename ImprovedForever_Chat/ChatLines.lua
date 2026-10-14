@@ -4,7 +4,7 @@
 -- lines: the D-pad moves from line to line (past the top or the bottom
 -- one, the chat scrolls), left / right through the links in the line (an
 -- item, a spell, a quest, a player...), the link's tooltip beside the
--- chat. Cross on an item opens it in the Library; Square puts the link in
+-- chat. Cross on an item opens it in the Wiki; Square puts the link in
 -- the chat's edit box; Circle, or Down past the newest line, goes back to
 -- the edit box.
 --
@@ -138,8 +138,8 @@ local legend = IF.InputLegend(overlay)
 local function Prompts(link)
     local list = { { glyph = "DPAD_UD", text = "Lines" } }
     list[#list + 1] = { glyph = "DPAD_LR", text = "Links" }
-    if link and link.kind == "item" and IF.Library and IF.Library.Open then
-        list[#list + 1] = { "PAD1", "A", "Library" }
+    if link and link.kind == "item" and IF.Wiki and IF.Wiki.Open then
+        list[#list + 1] = { "PAD1", "A", "Wiki" }
     end
     if link then list[#list + 1] = { "PAD3", "X", "Link in Chat" } end
     list[#list + 1] = { "PAD2", "B", _G.BACK or "Back" }
@@ -331,9 +331,9 @@ local function Press(button)
                 linkIndex = 1
                 Render()
             end
-        elseif link.kind == "item" and IF.Library and IF.Library.Open then
+        elseif link.kind == "item" and IF.Wiki and IF.Wiki.Open then
             Close()
-            IF.Library.Open(link.link, "chat")
+            IF.Wiki.Open(link.link, "chat")
         end
     elseif button == "PAD3" then
         local link = Current()
