@@ -1,5 +1,10 @@
 # Changelog
 
+## Core 0.8.1
+
+- Fixed: the **Open** button in Options > AddOns > Improved Forever no longer gets a forbidden
+  action error. It no longer closes Options itself: close Options and the controller panel opens.
+
 ## Core 0.8.0
 
 - **Mouse and keyboard**: every window and action now also works with the mouse and keyboard

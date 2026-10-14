@@ -103,7 +103,7 @@ local ITEMS = {
     }, Choice(function() return S().keepDays end, function(v) S().keepDays = v end, KEEP, "Keep days")),
     Item({
         key = "clear", group = "days", label = "Forget",
-        tip = "Throws away every day of this character's journal.",
+        tip = "Throws away every day of this character's journal, and the people met with what they said.",
         note = function()
             local days = #J.Days()
             return days == 0 and "Nothing written yet" or (days .. (days == 1 and " day, " or " days, ")

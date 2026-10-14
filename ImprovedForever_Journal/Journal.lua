@@ -240,8 +240,12 @@ local function Prune()
     end
 end
 
+-- Every day and everyone met (their logs hold what they said)
 function J.Clear()
-    wipe(Store().days)
+    local db = Store()
+    wipe(db.days)
+    db.people = nil
+    if J.People then J.People.Clear() end
     Changed()
 end
 

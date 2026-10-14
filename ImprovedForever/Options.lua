@@ -6,13 +6,30 @@ local HELP = "All settings live in the controller panel: D-pad to move, {A} to c
     .. "or click, the wheel to scroll, Esc to close. "
     .. "Open it with /if, or bind \"Toggle Improved Forever panel\" in Key Bindings > AddOns."
 
-local function OpenPanel()
-    if SettingsPanel and SettingsPanel:IsShown() then
-        HideUIPanel(SettingsPanel)
-    elseif InterfaceOptionsFrame and InterfaceOptionsFrame:IsShown() then
-        HideUIPanel(InterfaceOptionsFrame)
-    end
+-- The game's options window, if shown
+local function OptionsShown()
+    return (SettingsPanel and SettingsPanel:IsShown())
+        or (InterfaceOptionsFrame and InterfaceOptionsFrame:IsShown())
+end
+
+-- Never close the options window from here (HideUIPanel): addon code
+-- closing a gamepad-focused window gets SetPreferredGamepadInteractTarget
+-- forbidden. Wait for the player to close it, then open ours.
+local waiter = CreateFrame("Frame")
+waiter:Hide()
+waiter:SetScript("OnUpdate", function(self)
+    if OptionsShown() then return end
+    self:Hide()
     IF.Menu.Open()
+end)
+
+local function OpenPanel()
+    if not OptionsShown() then
+        IF.Menu.Open()
+        return
+    end
+    waiter:Show()
+    IF.Print("Close Options and the controller panel opens.")
 end
 
 -- A canvas page of our own: only for a client without the settings list.

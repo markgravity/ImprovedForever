@@ -242,6 +242,9 @@ end
 ---------------------------------------------------------------------------
 local talks = {}               -- [name] = { event, last, channel }: the talk going on
 
+-- Forgotten (J.Clear): the talks going on belonged to a day thrown away
+function PE.Clear() wipe(talks) end
+
 local function Snip(text)
     if not text or I.Secret(text) then return nil end
     text = text:gsub("|H.-|h(.-)|h", "%1"):gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")
