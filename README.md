@@ -1,9 +1,25 @@
-# Improved Forever
+# Improved Forever - Controller & Gamepad
 
-Quality-of-life tweaks for playing **WoW Forever** with a gamepad. Everything is set up and used
-from the controller: no keyboard step needed. Every module but Controller and Wheel works with the
-mouse and keyboard too: the windows follow what you used last (the pad's legend and cursor with
-the pad; buttons to click, the wheel to scroll, tooltips on hover and Esc with the mouse).
+The **controller / gamepad** addon for **WoW Forever**: quality-of-life tweaks that make playing
+with a controller even better. Works with Xbox, PlayStation (DualSense) and Switch Pro controllers.
+Everything is set up and used from the controller, no keyboard step needed. Every module but
+Controller and Wheel works with the mouse and keyboard too: the windows follow what you used last
+(the pad's legend and cursor with the pad; buttons to click, the wheel to scroll, tooltips on hover
+and Esc with the mouse).
+
+Free on [CurseForge](https://www.curseforge.com/wow/addons/improved-forever).
+
+<p align="center">
+  <img src="media/wheel.webp" width="200" alt="Radial wheels">
+  <img src="media/vibration.webp" width="200" alt="Vibration">
+  <img src="media/auction-house.webp" width="200" alt="Auction house">
+  <img src="media/wiki.webp" width="200" alt="Item wiki">
+  <br>
+  <img src="media/junk.webp" width="200" alt="Junk">
+  <img src="media/quest-tracker.webp" width="200" alt="Quest tracker">
+  <img src="media/peek-map.webp" width="200" alt="Peek map">
+  <img src="media/gathering-labels.webp" width="200" alt="Gathering labels">
+</p>
 
 Each feature is its own addon (enable only the ones you want in the AddOns list); all of them need
 the core, **Improved Forever**:
