@@ -11,7 +11,7 @@
 -- stick 4) and runs "/click <the game's own button for that window>", as
 -- Controller Forever's wheel does. Inside a real press that is a real click,
 -- so the window opens untainted, without a prompt, in combat too.
-local IF = ImprovedForever
+local _, IF = ...
 
 local touch = {}
 IF.Touch = touch
@@ -389,10 +389,10 @@ end)
 -- Another controller in hand: the touchpad click only on a PlayStation pad
 IF.OnPadStyleChanged(function() touch.Apply() end)
 
--- Its binding, on the Controller tab (Binds.lua)
+-- Its binding, on the Bindings tab (Binds.lua)
 local B = IF.Binds
 B.Add({
-    id = "touch", label = "Touchpad corners", group = "Other", tab = "controller",
+    id = "touch", label = "Touchpad corners", group = "Other", tab = "bindings",
     icon = "gamepad-ps-touchpad-normal", context = "world", order = 32,
     tip = "Clicking the touchpad runs what its corner holds (set on its corners here). PlayStation controllers only.",
     accepts = function(spec) return spec == "PADBACK" and IF.PadStyle() == "Shapes" end,

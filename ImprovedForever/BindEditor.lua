@@ -1,4 +1,4 @@
--- The Controller tab: down the left what can be bound, in lists (L1 / R1,
+-- The Bindings tab: down the left what can be bound, in lists (L1 / R1,
 -- L2 / R2 too): the wheels, the addon's other things (Misc), spells,
 -- items, macros, emotes and the game's windows, a card each with its press;
 -- beside it a drawing of the controller (each button marked when something
@@ -14,7 +14,14 @@
 -- the corner off.
 -- The other tabs still bind their own things, through Binds.lua, so they
 -- warn the same way.
-local IF = ImprovedForever
+-- Each card also has a keyboard / mouse press (Binds.lua: a key, or a
+-- modified click on an item; an action's: a key, Override.lua): recording
+-- takes a key or a click as well as a controller press, and it goes on the
+-- press of the input used. A click on a card records, a right-click clears
+-- its keyboard / mouse press (else its controller one). The game's Gamepad
+-- UI off: no drawing, the list alone, only what takes a key, its key on the
+-- right.
+local _, IF = ...
 
 local K = IF.ConfigKit
 local KC = K.C
@@ -62,7 +69,8 @@ for _, s in ipairs(SPOTS) do SPOT[s.key] = s end
 -- ({ onAccept })
 local P = { list = 1 }
 B.Editor = P
--- (its messages under the drawing, not over the legend: Menu.lua)
+-- (its messages under the drawing, not over the legend: Menu.lua; keys
+-- alone, no legend: P:Arrange)
 P.ShowsToast = true
 
 -- A touchpad (its corners) only on a PlayStation controller; elsewhere the
@@ -152,6 +160,32 @@ local function PressesOf(e, map)
     return (map or ActionPresses())[e.action] or {}
 end
 
+-- A card's keyboard / mouse press: a binding's, an action's key; or nil
+local function KeyOf(e)
+    if not e then return nil end
+    if e.def then return B.KeyBind(e.def) end
+    for key, action in pairs(IF.Override.KeySettings()) do
+        if action == e.action then return key end
+    end
+end
+
+-- Does a card take one at all (a binding with a run, a button or a click;
+-- any action)
+local function TakesKey(e)
+    if not e then return false end
+    if e.def then return B.TakesKey(e.def) end
+    return e.action ~= nil
+end
+
+local function Mouse()
+    return not IF.Input.Pad()
+end
+
+-- The game's Gamepad UI off: no controller presses, the keyboard's alone
+local function KeysOnly()
+    return not IF.Input.PadEnabled()
+end
+
 ---------------------------------------------------------------------------
 -- The lists: what can be bound, a card each: what it does under its name,
 -- its press on its right (bound: the card washed)
@@ -170,22 +204,34 @@ local function Ours(wheels)
     return entries
 end
 
--- Each card's press
+-- Each card's presses
 local function WithPresses(entries)
     local map = ActionPresses()
     for _, e in ipairs(entries) do
         local press = not e.header and PressesOf(e, map)[1]
         if press then e.press = PressText(press, 14) end
+        local key = not e.header and KeyOf(e)
+        e.key = key and B.KeyText(key) or nil
+        e.takesKey = TakesKey(e)
     end
     return entries
 end
 
 local function Lists()
     local lists = {}
+    -- (keys only: the cards that take one)
     local function add(key, label, fn)
-        lists[#lists + 1] = { key = key, label = label, entries = function() return WithPresses(fn()) end }
+        lists[#lists + 1] = { key = key, label = label, entries = function()
+            local entries = WithPresses(fn())
+            if not KeysOnly() then return entries end
+            local list = {}
+            for _, e in ipairs(entries) do
+                if e.header or e.takesKey then list[#list + 1] = e end
+            end
+            return list
+        end }
     end
-    if #Ours(true) > 0 then add("wheels", "Wheels", function() return Ours(true) end) end
+    if #Ours(true) > 0 and not KeysOnly() then add("wheels", "Wheels", function() return Ours(true) end) end
     for _, list in ipairs(IF.Actions.CATALOG) do add(list.key, list.label, list.entries) end
     add("interface", "Interface", function() return touch.InterfaceEntries() end)
     -- Last, Misc: our other bindings, then our windows (Reload too) not
@@ -214,15 +260,25 @@ function P:OpenPicker()
         chooseVerb = "Bind",
         -- (the card picked kept through a change)
         current = function() return P.selAction end,
-        right = function(e) return e.press end,
-        bound = function(e) return e.press ~= nil end,
+        -- (the Gamepad UI off: its keyboard / mouse press)
+        right = function(e)
+            if not P.arranged then return e.press end
+            return e.key or "|cff6f6452—|r"
+        end,
+        bound = function(e) return e.press ~= nil or e.key ~= nil end,
         status = function()
             local e = P:Entry()
             if not e then return "" end
             local press = PressesOf(e)[1]
-            return "|cffffffff" .. (e.name or "") .. "|r:  " .. (press and PressText(press, 14) or "not bound")
+            local key = KeyOf(e)
+            if KeysOnly() then return "|cffffffff" .. (e.name or "") .. "|r:  " .. (key and B.KeyText(key) or "no key") end
+            return "|cffffffff" .. (e.name or "") .. "|r:  " .. (press and PressText(press, 14) or "no controller press")
+                .. (TakesKey(e) and ("  ·  " .. (key and B.KeyText(key) or "no key")) or "")
         end,
-        onChoose = function() P:Bind() end,
+        -- (a card picked binds it only with keys alone: with the Gamepad UI
+        -- Square does, a pick only picks)
+        onChoose = function() if KeysOnly() then P:Bind() end end,
+        onAlt = function() P:Unbind((Mouse() or KeysOnly()) and "key") end,
     })
 end
 
@@ -504,6 +560,15 @@ function P:Bind()
     local def = e.def
     IF.Recorder.Start({
         title = "Bind " .. (e.name or ""), chord = true, double = true,
+        -- (a key, a click on an item: its keyboard / mouse press)
+        keys = TakesKey(e), clicks = def ~= nil and def.click ~= nil,
+        acceptKey = function(spec)
+            if def then return B.KeyFits(def, spec) end
+            if B.IsClick(spec) then return false, (e.name or "It") .. " takes a key, not a click" end
+            if spec == "ESCAPE" then return false, "Escape is the game's" end
+            return true
+        end,
+        onKey = function(spec) P:BindKey(e, spec) end,
         accept = function(spec)
             if def then return def.accepts(spec) end
             local _, pressed = B.Parse(spec)
@@ -523,11 +588,50 @@ function P:Bind()
     })
 end
 
--- Triangle: the card picked off its presses
-function P:Unbind()
+-- A card onto a key / a click (moved from where it was; taking it from
+-- another asks first)
+function P:BindKey(e, spec, confirmed)
+    if IF.InCombat() then return menu.Toast("Not in combat", true) end
+    local O = IF.Override
+    local text = B.KeyText(spec)
+    if KeyOf(e) == spec then return menu.Toast((e.name or "") .. " is on " .. text .. " already") end
+    local names = {}
+    for _, def in ipairs(B.KeyBound(spec)) do
+        if not (e.def and def.id == e.def.id) then names[#names + 1] = def.label end
+    end
+    local there = not B.IsClick(spec) and O.KeyAction(spec)
+    if there and there ~= e.action then names[#names + 1] = O.ActionLabel(there) or there end
+    if #names > 0 and not confirmed then
+        return self:Confirm(text .. " runs |cffffffff" .. table.concat(names, ", ") .. "|r.\nReplace it with |cffffffff"
+            .. (e.name or "") .. "|r?", function() P:BindKey(e, spec, true) end)
+    end
+    local from = KeyOf(e)
+    if e.def then
+        B.SetKey(e.def.id, spec)
+    else
+        if from then O.SetKey(from, nil) end
+        O.SetKey(spec, e.action)
+    end
+    -- (the game's own binding there gives way while ours is on it)
+    local game = not B.IsClick(spec) and GetBindingAction and GetBindingAction(spec)
+    local over = game and game ~= "" and (_G["BINDING_NAME_" .. game] or game)
+    Done((e.name or "") .. ": " .. text .. (from and (" (was " .. B.KeyText(from) .. ")") or "")
+        .. (#names > 0 and (", " .. table.concat(names, ", ") .. " unbound") or "")
+        .. (over and (" (over the game's " .. over .. ")") or ""), #names > 0)
+end
+
+-- Triangle: the card picked off its presses; which "key": off its
+-- keyboard / mouse press (none: off its controller one)
+function P:Unbind(which)
     if IF.InCombat() then return menu.Toast("Not in combat", true) end
     local e = self:Entry()
+    local key = KeyOf(e)
     local presses = PressesOf(e)
+    -- (asked for, or the only one it has)
+    if key and (which == "key" or not presses[1]) then
+        if e.def then B.SetKey(e.def.id, nil) else IF.Override.SetKey(key, nil) end
+        return Done((e.name or "") .. ": " .. B.KeyText(key) .. " unbound")
+    end
     if not presses[1] then return menu.Toast((e and e.name or "It") .. " isn't bound") end
     if e.def then
         B.Assign(e.def.id, nil)
@@ -581,10 +685,12 @@ function P:Press(name)
     end
     -- (Circle closes: the panel's)
     if name == "B" then return false end
-    if name == "X" or name == "A" then
+    if name == "X" then
         self:Bind()
         return true
     end
+    -- (Cross on a card: picked already, nothing to start)
+    if name == "A" then return true end
     if name == "Y" then
         if Region() then self:CornerTriangle(Region()) else self:Unbind() end
         return true
@@ -640,9 +746,35 @@ local function RenderCorners(f)
     end
 end
 
+-- The drawing beside the list while the game's Gamepad UI is on; off, the
+-- list alone, the whole page wide, keys only, and the panel's messages
+-- over the legend's place
+function P:Arrange()
+    local mouse = KeysOnly()
+    if self.arranged == mouse then return end
+    self.arranged = mouse
+    -- (the cards and their lists again for it)
+    if self.picker.def then self:OpenPicker() end
+    local f = self.frame
+    f.mid:SetShown(not mouse)
+    self.picker:ClearAllPoints()
+    self.picker:SetPoint("TOPLEFT", 8, -8)
+    if mouse then
+        self.picker:SetPoint("BOTTOMRIGHT", -8, 8)
+    else
+        self.picker:SetPoint("BOTTOMLEFT", 8, 8)
+        self.picker:SetWidth(LIST_W)
+    end
+    self.ShowsToast = not mouse
+    -- (keys alone: a click on a card binds it, no legend; else its Square
+    -- in the legend, clicked too)
+    self.mouseLegend = not mouse
+end
+
 function P:Render()
     local f = self.frame
     if not f then return end
+    self:Arrange()
     if not self.picker.def then self:OpenPicker() end
     self.picker:Render()
     self.list = self.picker.list
@@ -728,9 +860,9 @@ function P:Render()
 end
 
 ---------------------------------------------------------------------------
--- The Controller tab, the first
+-- The Bindings tab, the first
 ---------------------------------------------------------------------------
-menu.AddTab({ key = "controller", label = "Controller", module = "controller", order = 10, page = P })
+menu.AddTab({ key = "bindings", label = "Bindings", icon = IF.TEX .. "ic_mod_controller", order = 10, page = P })
 
 -- The panel kept the touchpad click while it was open; give it back
 hooksecurefunc(menu, "Close", function()

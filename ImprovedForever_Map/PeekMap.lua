@@ -8,7 +8,7 @@
 -- so the hotkey is an override binding on a secure button that runs
 -- "/click <the map's micro button>" (press: opens, release: closes; on
 -- Forever the quest log's, which toggles the Map & Quest Log), in combat
--- too. Set in the Controller tab (Binds.lua); IF.db.peekMapKey. A
+-- too. Set in the Bindings tab (Binds.lua); IF.db.peekMapKey. A
 -- touchpad corner can hold it too (Touchpad.lua: its Interface list): it
 -- clicks the map's button itself, then PeekMap.Opened.
 -- While open, the map has the gamepad (its own buttons and sticks), as
@@ -250,8 +250,8 @@ end)
 ---------------------------------------------------------------------------
 -- The hotkey: a button, or one held + one pressed ("PADLSHOULDER+PADDUP"),
 -- taken over: an override binding on the hold button. Out of combat. A
--- keyboard key: the game's Key Bindings > AddOns (Bindings.xml: a click
--- of the hold button, pressed and released as the key is).
+-- key: its binding's keyboard / mouse press (Binds.lua: a click of the
+-- hold button, pressed and released as the key is).
 ---------------------------------------------------------------------------
 function PeekMap.IsPeeking()
     return peeking
@@ -317,10 +317,10 @@ events:SetScript("OnEvent", function()
     if pending then PeekMap.Apply() end
 end)
 
--- Its binding, on the Controller tab (Binds.lua)
+-- Its binding, on the Bindings tab (Binds.lua)
 local B = IF.Binds
 B.Add({
-    id = "peekmap", label = "Peek map", group = "Other", tab = "controller",
+    id = "peekmap", label = "Peek map", group = "Other", tab = "bindings",
     icon = IF.TEX .. "ic_fn_peekmap", context = "world", order = 31,
     desc = "Held: a see-through map; let go and it closes",
     tip = "Held: the game's Map & Quest Log shows with only its map, see-through (placed and sized in"
@@ -334,4 +334,6 @@ B.Add({
     end,
     specs = function() return B.One(IF.PeekMap.Key()) end,
     set = function(spec) IF.PeekMap.SetKey(spec) end,
+    -- (a key holds it too: the same secure button)
+    button = "ImprovedForeverPeekMapHold",
 })

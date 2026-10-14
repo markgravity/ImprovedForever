@@ -27,6 +27,9 @@ Book.lua
 Menu.lua
 Recorder.lua
 SettingsPage.lua
+Bags.lua
+Touchpad.lua
+BindEditor.lua
 RecipeData.lua
 WorldData.lua
 GameData.lua

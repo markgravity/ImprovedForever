@@ -4,10 +4,13 @@
 -- focus glow while it's the pad; buttons to click and tooltips on hover
 -- with the mouse. Both always work.
 --   IF.Input.Pad() -> true while the pad is the input
+--   IF.Input.PadEnabled() -> the game's Gamepad UI on (Options > Gamepad:
+--     Enable Gamepad UI); off, our windows are the mouse's whatever is used,
+--     and only keyboard / mouse presses are bound (Bindings tab)
 --   IF.Input.OnChange(fn): fn(pad) as it changes
---   IF.Input.AddItemClick{ id, button, label, when(item), fn(item) }: an
---     Alt + click (button "LeftButton" / "RightButton") on an item, wherever
---     the game's modified clicks reach (bags, loot window, chat links...);
+--   A modified click on an item, wherever the game's modified clicks reach
+--     (bags, loot window, chat links...), runs the binding on that click
+--     (Binds.lua: a binding's keyboard / mouse press, "ALT-BUTTON1"), with
 --     item = { link, bag, slot, owner } (owner: the frame clicked)
 --   IF.Input.Hovered() -> the item under the mouse, as above, or nil
 -- /if input [auto|pad|mouse]: which one (auto: the one used last)
@@ -27,8 +30,25 @@ local MOVED = 24        -- the mouse moved this far (px) between looks: it's in 
 local pad
 local listeners = {}
 
--- Gamepad mode on (Options > Controller), and a pad plugged in
+-- The game's Gamepad UI on (InputUtil, CVar InputDeviceInterfaceStyle)
+local function GamepadUI()
+    local util = _G.InputUtil
+    if util and util.IsGamepadUIEnabled then
+        local ok, on = pcall(util.IsGamepadUIEnabled)
+        if ok then return on and true or false end
+    end
+    local get = C_CVar and C_CVar.GetCVar or GetCVar
+    local style = get and get("InputDeviceInterfaceStyle")
+    local gamepad = Enum and Enum.InputDeviceInterfaceType and Enum.InputDeviceInterfaceType.Gamepad
+    if style == nil or gamepad == nil then return true end
+    return tostring(style) == tostring(gamepad)
+end
+
+I.PadEnabled = GamepadUI
+
+-- The Gamepad UI on, gamepad mode on (the pad's input), and a pad plugged in
 local function Enabled()
+    if not GamepadUI() then return false end
     if C_GamePad and C_GamePad.IsEnabled then return C_GamePad.IsEnabled() and true or false end
     local get = C_CVar and C_CVar.GetCVar or GetCVar
     return get ~= nil and get("GamePadEnable") == "1"
@@ -63,7 +83,8 @@ function I.Pad()
     local forced = Forced()
     if forced ~= nil then return forced end
     if pad == nil then pad = Enabled() and Connected() end
-    return pad
+    -- (the Gamepad UI off: the mouse's windows, whatever is in hand)
+    return (pad and GamepadUI()) and true or false
 end
 
 function I.OnChange(fn)
@@ -98,7 +119,9 @@ watch:SetScript("OnEvent", function(_, event, arg)
     elseif event == "GAME_PAD_DISCONNECTED" then
         if not Connected() then Set(false) end
     elseif event == "CVAR_UPDATE" then
-        if arg == "GamePadEnable" or arg == "GAMEPAD_ENABLE" then Set(pad) end
+        if arg == "GamePadEnable" or arg == "GAMEPAD_ENABLE" or arg == "InputDeviceInterfaceStyle" then
+            Set(pad or Connected())
+        end
     elseif event == "GLOBAL_MOUSE_DOWN" then
         -- (a click the pad made: its cursor control, or a button of it held)
         if not PadCursor() and not PadKeyDown() then Set(false) end
@@ -123,7 +146,7 @@ watch:SetScript("OnUpdate", function(_, elapsed)
 end)
 
 ---------------------------------------------------------------------------
--- Items under the mouse, and Alt + clicks on them
+-- Items under the mouse, and modified clicks on them
 ---------------------------------------------------------------------------
 local function Focus()
     if GetMouseFoci then
@@ -158,37 +181,12 @@ function I.Hovered()
     end
 end
 
-local clicks = {}
-
-function I.AddItemClick(def)
-    for i, other in ipairs(clicks) do
-        if other.id == def.id then
-            clicks[i] = def
-            return def
-        end
-    end
-    clicks[#clicks + 1] = def
-    return def
-end
-
--- The Alt + clicks there are, for a help text: { { button, label } }
-function I.ItemClicks()
-    return clicks
-end
-
 if HandleModifiedItemClick then
     hooksecurefunc("HandleModifiedItemClick", function(link, location)
-        if not (link and IsAltKeyDown() and not IsShiftKeyDown() and not IsControlKeyDown()) then return end
-        if IF.InCombat() then return end
+        if not link or IF.InCombat() or not IF.Binds then return end
         local button = GetMouseButtonClicked and GetMouseButtonClicked() or "LeftButton"
         local item = ItemOf(Focus(), link, location)
-        if not item then return end
-        for _, def in ipairs(clicks) do
-            if (def.button or "LeftButton") == button and (not def.when or def.when(item)) then
-                def.fn(item)
-                return
-            end
-        end
+        if item then IF.Binds.RunClick(button, item) end
     end)
 end
 

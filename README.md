@@ -10,9 +10,8 @@ the core, **Improved Forever**:
 
 | Addon | What it does |
 |---|---|
-| `ImprovedForever` | The core: button glyphs, bindings, the configuration panel, the game data (QuestieDB's, recipes) and the item verdict every module shares. Required. |
-| `ImprovedForever_Controller` | Bag clean-up, touchpad corners, the Controller tab: every press on one drawing of the controller. |
-| `ImprovedForever_Wheel` | Wheels on R3 combos, the recent action slot. Needs Controller. |
+| `ImprovedForever` | The core: button glyphs, the configuration panel, the Bindings tab (every press on one drawing of the controller, and its keyboard / mouse press), bag clean-up, touchpad corners, the game data (QuestieDB's, recipes) and the item verdict every module shares. Required. Holds the former Controller module. |
+| `ImprovedForever_Wheel` | Wheels on R3 combos, the recent action slot. |
 | `ImprovedForever_Vibration` | Vibration on game events and spell casts. |
 | `ImprovedForever_Gather` | Names beside the minimap's gathering dots, alerts. |
 | `ImprovedForever_Map` | The peek map. |
@@ -47,10 +46,13 @@ the core, **Improved Forever**:
   the Library's book (`/if journal`, a key binding or a wheel); with the Library, a quest, creature or item
   in it opens its page.
 
-**With the mouse**: Alt + click an item (bags, loot window, chat links) to open it in the Library;
-Alt + right-click a bag item to mark it junk or not junk. The Destroy panel, the peek map and the
-Library on the item under the mouse have key bindings (Key Bindings > AddOns). `/if input pad` or
-`/if input mouse` keeps the windows on one (`/if input auto`: the one used last).
+**Bindings**: every binding has a controller press and a keyboard / mouse press, both working, set
+on the Bindings tab (or the module's own tab): record either, it goes on the press of the input you
+used. A keyboard / mouse press is a key (Alt / Ctrl / Shift held too, if you like) or, for an item's
+binding, a modified click on an item. By default Alt + click an item (bags, loot window, chat links)
+opens it in the Library and Alt + right-click a bag item marks it junk or not junk; a key on those acts
+on the item under the mouse. `/if input pad` or `/if input mouse` keeps the windows on one
+(`/if input auto`: the one used last).
 
 Double-tap **Menu** (or `/if`) to open the configuration: a tab per loaded module down the right
 (L1 / R1, or the right stick), the module's sections down the left (the left stick, or L2 / R2), its

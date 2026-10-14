@@ -41,7 +41,19 @@ end
 IF.modules = {}
 local byKey = {}
 
+-- The Controller module is the core's since 0.8.0 (its tab: Bindings): an
+-- old copy still installed is turned off for the next login, said once;
+-- loaded meanwhile, its module and tab are left out (Menu.lua, Binds.lua)
+local OLD_CONTROLLER = "ImprovedForever_Controller"
+IF.OLD_CONTROLLER = OLD_CONTROLLER
+local addons = _G.C_AddOns
+if addons and addons.DoesAddOnExist and addons.DoesAddOnExist(OLD_CONTROLLER) and addons.DisableAddOn then
+    pcall(addons.DisableAddOn, OLD_CONTROLLER)
+    IF.oldController = true
+end
+
 function IF.AddModule(def)
+    if def.addon == OLD_CONTROLLER then return def end
     if byKey[def.key] then return byKey[def.key] end
     IF.modules[#IF.modules + 1] = def
     byKey[def.key] = def
@@ -120,5 +132,9 @@ loader:SetScript("OnEvent", function()
     IF.charDB = ImprovedForeverCharDB
     for _, fn in ipairs(loginCallbacks) do
         fn()
+    end
+    if IF.oldController then
+        IF.Print("Improved Forever: Controller is now part of the core (its tab: Bindings) and has been"
+            .. " turned off; remove it from your AddOns folder or CurseForge.")
     end
 end)

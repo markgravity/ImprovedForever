@@ -264,7 +264,7 @@ SecureHandlerWrapScript(trigger, "OnClick", trigger, [[
         self:SetAttribute("ic-recent-pending", actionType)
         return false
     end
-    -- An action put on this press (the Controller tab): its macro, on the
+    -- An action put on this press (the Bindings tab): its macro, on the
     -- press or the release, as the recent action's
     local macro = self:GetAttribute("ic-act-" .. chord)
     if macro then
@@ -1023,7 +1023,7 @@ function IF.ApplyRingBindings()
             if modifier then modifiers[#modifiers + 1] = modifier else plain = true end
         end
     end
-    -- Actions put on R3 presses (the Controller tab, Binds.SetAction: kept
+    -- Actions put on R3 presses (the Bindings tab, Binds.SetAction: kept
     -- with the overrides): each on its chord ("ic-act-L1R1"), R3 taken
     -- under the modifiers its buttons held make
     for chord in pairs(actChords) do trigger:SetAttribute("ic-act-" .. chord, nil) end

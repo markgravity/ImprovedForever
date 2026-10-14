@@ -54,8 +54,10 @@ local ITEMS = {
         -- (the mouse's way, while it's the one in hand)
         note = function()
             if IF.Input.Pad() then return nil end
-            return "With the mouse: Alt + right-click a bag item, or bind a key to the bag item under the mouse"
-                .. " (Key Bindings > AddOns). In the Destroy panel, its Mark Junk button."
+            local key = IF.Binds.KeyBind(IF.Binds.Get("junkmark"))
+            return "With the mouse: " .. (key and (IF.Binds.KeyText(key) .. " a bag item") or "no click or key yet")
+                .. "; right-click to record another (a key acts on the bag item under the mouse). In the Destroy"
+                .. " panel, right-click a card."
         end,
         bindable = true, chord = true, bindId = "junkmark",
         binding = function() return S().mark and J.MarkKey() or nil end,
@@ -90,8 +92,9 @@ local ITEMS = {
             .. " Watched, not taken: the button keeps its own action outside the bags.",
         note = function()
             if IF.Input.Pad() then return nil end
-            return "With the mouse: bind a key to it (Key Bindings > AddOns), or /if destroy. With the bags"
-                .. " full, the loot window shows a Destroy button."
+            local key = IF.Binds.KeyBind(IF.Binds.Get("destroy"))
+            return "With the mouse: " .. (key and IF.Binds.KeyText(key) or "a key (right-click to record one)")
+                .. ", or /if destroy. With the bags full, the loot window shows a Destroy button."
         end,
         bindable = true, chord = true, bindId = "destroy",
         binding = function() return DS.OpenKey() end,

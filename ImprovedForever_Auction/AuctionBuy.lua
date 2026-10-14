@@ -142,11 +142,12 @@ function BY.Hover(row, fn)
         if GameTooltip:GetOwner() == BY.window then GameTooltip:Hide() end
         BY.Render()
     end)
-    -- (Alt + click: its item in the Library, as an item's anywhere else)
-    row:HookScript("OnClick", function(self)
-        if not (Mouse() and IsAltKeyDown() and IF.Library and BY.hover == self) then return end
+    -- (a modified click: its item's binding, as an item's anywhere else:
+    -- Alt + click, the Library; Binds.lua)
+    row:HookScript("OnClick", function(self, button)
+        if not (Mouse() and BY.hover == self) then return end
         local _, link = GameTooltip:GetItem()
-        if link then IF.Library.Open(link, "auction") end
+        if link then IF.Binds.RunClick(button, { link = link, owner = self }) end
     end)
 end
 

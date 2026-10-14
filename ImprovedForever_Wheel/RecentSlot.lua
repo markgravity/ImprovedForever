@@ -223,8 +223,9 @@ end
 local shownCombo
 local function Refresh(force)
     if not IF.db then return end
-    -- (only with the pad in hand: R3 is the pad's; while being placed, still)
-    if not IF.Input.Pad() and not slot.editing then
+    -- (only with gamepad mode on in the game's options: R3 is the pad's;
+    -- while being placed, still)
+    if not IF.Input.PadEnabled() and not slot.editing then
         shownCombo = nil
         slot:Hide()
         return
@@ -300,6 +301,8 @@ end)
 local events = CreateFrame("Frame")
 events:RegisterEvent("BAG_UPDATE_DELAYED")
 events:RegisterEvent("PLAYER_ENTERING_WORLD")
+-- (gamepad mode turned on / off in the game's options)
+events:RegisterEvent("CVAR_UPDATE")
 events:SetScript("OnEvent", function() Refresh(true) end)
 IF.OnLogin(function() Refresh(true) end)
 IF.OnPadStyleChanged(function() Refresh(true) end)

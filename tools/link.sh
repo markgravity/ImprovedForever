@@ -17,6 +17,11 @@ if [ -L "$dest/ImprovedForever_Destroy" ]; then
     rm "$dest/ImprovedForever_Destroy"
     echo "removed the old ImprovedForever_Destroy link"
 fi
+# (Controller is the core's since 0.8.0)
+if [ -L "$dest/ImprovedForever_Controller" ]; then
+    rm "$dest/ImprovedForever_Controller"
+    echo "removed the old ImprovedForever_Controller link"
+fi
 # (the addon's name before it was split)
 if [ -L "$dest/ImprovedController" ]; then
     rm "$dest/ImprovedController"

@@ -5,6 +5,10 @@
 -- or 10 s without a press) cancels. The pad
 -- is the box's alone while it is up, and until every button is let go
 -- after, so no release leaks to the panel or the game.
+-- Asked for (opts.keys / opts.clicks), a key pressed (with Alt / Ctrl /
+-- Shift held: "ALT-F") or a click on the box with one held ("ALT-BUTTON1")
+-- is recorded instead: opts.onKey(spec), for the binding's keyboard /
+-- mouse press (Binds.lua). The game's Gamepad UI off: those only, no pad.
 local _, IF = ...
 
 local K = IF.ConfigKit
@@ -28,13 +32,13 @@ local function Build()
     if box then return end
     -- (the panel's own window look, its title in its bar, its focus glow:
     -- it has the pad; above the panel, FULLSCREEN_DIALOG, and its tabs)
-    local d = IF.UI.Window("ImprovedForeverRecorder", 460, 210, true)
+    local d = IF.UI.Window("ImprovedForeverRecorder", 480, 240, true)
     d:SetFrameStrata("TOOLTIP")
     IF.Focus.Glow(d, true)
     d.onClose = function() R.Finish(true) end
     d.hint = K.ChatText(d, 13, KC.cream2)
     d.hint:SetPoint("TOP", 0, -40)
-    d.hint:SetWidth(400)
+    d.hint:SetWidth(430)
     d.hint:SetJustifyH("CENTER")
     d.hint:SetSpacing(4)
     d.glyphs = K.GlyphRow(d, 40)
@@ -46,9 +50,8 @@ local function Build()
     d.status:SetPoint("BOTTOM", 0, 22)
     d.status:SetJustifyH("CENTER")
     d:Hide()
-    d:SetScript("OnKeyDown", function(_, key)
-        if key == "ESCAPE" then R.Finish(true) end
-    end)
+    d:SetScript("OnKeyDown", function(_, key) R.OnKey(key) end)
+    d:SetScript("OnMouseDown", function(_, button) R.OnClick(button) end)
     if d.EnableGamePadButton then
         d:SetScript("OnGamePadButtonDown", function(_, button) R.OnDown(button) end)
         d:SetScript("OnGamePadButtonUp", function(_, button) R.OnUp(button) end)
@@ -80,7 +83,8 @@ function R.Render()
     d.glyphs:SetShown(keys ~= nil)
     d.press:SetText(spec and IF.Binds.Text(spec) or "")
     if state == "wait" then
-        d.status:SetText(IF.PadText("Waiting for a press... {B} alone cancels."))
+        d.status:SetText(IF.PadText("Waiting for a press... " .. (IF.Input.Pad() and "{B} alone or Esc cancels."
+            or "Esc cancels.")))
     elseif state == "press" or state == "again" then
         d.status:SetText(state == "again" and "" or "Let go to bind it.")
     else
@@ -104,16 +108,71 @@ function R.Start(o)
     box:ClearAllPoints()
     local panel = menu.IsOpen() and _G.ImprovedForeverConfigFrame
     box:SetPoint("CENTER", panel or UIParent, "CENTER", 0, panel and 0 or 20)
-    box.hint:SetText(IF.PadText((o.hint or ("Press the button for it"
+    -- (the keyboard / mouse ways first with the mouse in hand)
+    local pad = IF.PadText((o.hint or ("Press the controller button for it"
         .. (o.chord ~= false and ", or hold one and press another" or "") .. "."))
-        .. "\nLetting go of a button binds it."))
+        .. " Letting go of a button binds it.")
+    local mouse = (o.keys and o.clicks) and "Press a key (Alt, Ctrl or Shift held too, if you like), or hold one of them and click here."
+        or o.keys and "Press a key (Alt, Ctrl or Shift held too, if you like)."
+        or o.clicks and "Hold Alt, Ctrl or Shift and click here."
+    local padOn = IF.Input.PadEnabled()
+    if not mouse then
+        box.hint:SetText(pad)
+    elseif not padOn then
+        box.hint:SetText(mouse)
+    elseif IF.Input.Pad() then
+        box.hint:SetText(pad .. "\n" .. mouse)
+    else
+        box.hint:SetText(mouse .. "\n" .. pad)
+    end
     box:Show()
     box:EnableKeyboard(true)
     box:SetPropagateKeyboardInput(false)
-    if box.EnableGamePadButton then box:EnableGamePadButton(true) end
+    if box.EnableGamePadButton then box:EnableGamePadButton(padOn or not mouse) end
     R.Render()
     if menu.IsOpen() then menu.Render() end
     return true
+end
+
+-- A key on the keyboard: Escape alone cancels; Alt / Ctrl / Shift wait for
+-- the key they go with; any other, asked for, is the press
+local MODIFIER_KEYS = { LSHIFT = true, RSHIFT = true, LCTRL = true, RCTRL = true, LALT = true, RALT = true,
+    LMETA = true, RMETA = true }
+
+local function FinishKey(s)
+    local o = opts
+    R.Stop()
+    if not o then return end
+    C_Timer.After(0, function()
+        local ok, why = true, nil
+        if o.acceptKey then ok, why = o.acceptKey(s) end
+        if not ok then
+            menu.Toast(why or (IF.Binds.KeyText(s) .. " can't be used for this"), true, 3)
+            if o.onCancel then o.onCancel() end
+        else
+            o.onKey(s)
+        end
+        if menu.IsOpen() then menu.Render() end
+    end)
+end
+
+function R.OnKey(key)
+    if state ~= "wait" then return end
+    if key == "ESCAPE" and IF.Binds.ModsNow() == "" then return R.Finish(true) end
+    if MODIFIER_KEYS[key] or not (opts and opts.keys and opts.onKey) then return end
+    FinishKey(IF.Binds.ModsNow() .. key)
+end
+
+-- A click on the box: with Alt / Ctrl / Shift held, asked for, the press
+function R.OnClick(button)
+    if state ~= "wait" or not (opts and opts.clicks and opts.onKey) then return end
+    local s = IF.Binds.ClickSpec(button)
+    if not s then return end
+    if not s:find("-", 1, true) then
+        box.status:SetText("Hold Alt, Ctrl or Shift as you click.")
+        return
+    end
+    FinishKey(s)
 end
 
 function R.IsActive()

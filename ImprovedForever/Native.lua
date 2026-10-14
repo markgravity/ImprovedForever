@@ -3,7 +3,7 @@
 -- slots there are the game's own: jump...), the left / right one while
 -- its modifier (GAMEPADLEFTMOD / GAMEPADRIGHTMOD, L2 / R2 by default) is
 -- held, the bottom one while both are. Those presses are the crossbar's: what they run is read from and
--- written to its slots (on the page shown), so the Controller tab and the
+-- written to its slots (on the page shown), so the Bindings tab and the
 -- game's own gamepad action bar editor always show the same thing, both
 -- ways. A spell, an item or a macro goes in as itself; what a slot can't
 -- hold (an emote, a window, a wheel) as a macro of ours ("IF:..."), made

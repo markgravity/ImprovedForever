@@ -6,5 +6,3 @@
 local IF = ImprovedForever
 
 IF.AddModule({ key = "junk", label = "Junk", icon = IF.TEX .. "ic_mod_junk", addon = ... })
-
-BINDING_HEADER_IMPROVEDFOREVER_JUNK = "Improved Forever: Junk"

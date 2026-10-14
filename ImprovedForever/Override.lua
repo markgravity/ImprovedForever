@@ -3,7 +3,7 @@
 -- Shift / Ctrl / Alt is held) runs a spell, an item, a macro, an emote or
 -- opens a window instead of its own game action. Each is an override
 -- binding to a secure button running a macro, so it works in combat (it can
--- only change out of it). Set in the Controller tab (BindEditor.lua);
+-- only change out of it). Set in the Bindings tab (BindEditor.lua);
 -- IF.db.overrides = { [spec] = action }, actions as the touchpad's
 -- (Touchpad.lua). Not on R3 (the wheels') nor a PlayStation touchpad (its
 -- corners').
@@ -174,6 +174,54 @@ function O.Apply()
     end
 end
 
+-- Actions on keyboard keys (the Bindings tab's keyboard / mouse press of
+-- a spell, item...): IF.db.keyActions = { [key] = action }, "ALT-F". Each
+-- an override binding to the same kind of secure button, whatever has the
+-- focus, out of combat (kept through it).
+local keyOwner = CreateFrame("Frame", "ImprovedForeverKeyActions")
+
+function O.KeySettings()
+    IF.db.keyActions = IF.db.keyActions or {}
+    return IF.db.keyActions
+end
+
+function O.KeyAction(key)
+    return IF.db and O.KeySettings()[key] or nil
+end
+
+function O.ApplyKeys()
+    if IF.InCombat() then
+        pending = true
+        return
+    end
+    ClearOverrideBindings(keyOwner)
+    local get = C_CVar and C_CVar.GetCVar or GetCVar
+    local onDown = get and get("ActionButtonUseKeyDown") ~= "0"
+    for key, action in pairs(O.KeySettings()) do
+        local macro = O.Macro(action)
+        if macro then
+            local b = SecureButton(key)
+            b:SetAttribute("ic-down", onDown)
+            b:SetAttribute("useOnKeyDown", onDown)
+            b:SetAttribute("ic-single", macro)
+            b:SetAttribute("ic-double", nil)
+            SetOverrideBindingClick(keyOwner, false, key, b:GetName(), "LeftButton")
+        end
+    end
+end
+
+-- An action on a key (nil / "none": off it), the key taken from any binding
+-- of ours on it
+function O.SetKey(key, action)
+    if not key then return end
+    action = (action and action ~= "none") and action or nil
+    if action then
+        for _, def in ipairs(IF.Binds.KeyBound(key)) do IF.Binds.SetKey(def.id, nil) end
+    end
+    O.KeySettings()[key] = action
+    O.ApplyKeys()
+end
+
 -- An action for a button (nil / "none": back to the game's own)
 function O.Set(button, action)
     O.Settings()[button] = (action and action ~= "none") and action or nil
@@ -247,5 +295,8 @@ owner:RegisterEvent("CVAR_UPDATE")
 owner:SetScript("OnEvent", function(_, event)
     if not IF.db then return end
     -- (CVAR_UPDATE: which buttons are Shift / Ctrl / Alt may have changed)
-    if pending or event == "CVAR_UPDATE" then O.Apply() end
+    if pending or event == "CVAR_UPDATE" then
+        O.Apply()
+        O.ApplyKeys()
+    end
 end)

@@ -8,10 +8,10 @@
 --     button lit while there is only ours to sell);
 --   an ordinary item a quest needs says so in its tooltip, in orange:
 --     "Needed for "Redridge Goulash"";
---   L2 + L3 on a bag item (watched, not taken; rebindable in the Controller
+--   L2 + L3 on a bag item (watched, not taken; rebindable in the Bindings
 --     tab) marks it junk, or not junk: remembered for the character, by item;
---     with the mouse Alt + right-click on it does (or a key binding, on the
---     bag item under the mouse).
+--     with the mouse its click does (Alt + right-click; or a key, on the bag
+--     item under the mouse).
 -- Never in combat.
 local IF = ImprovedForever
 
@@ -297,25 +297,18 @@ watcher:SetScript("OnUpdate", function()
     wasDown = down
 end)
 
--- The mouse: Alt + right-click on a bag item (the core's Input.lua), or a
--- key binding on the bag item under it
+-- The mouse: a click on a bag item (Alt + right-click, its binding's
+-- keyboard / mouse press; the core's Input.lua), or a key on the bag item
+-- under it
 local function MarkHovered(item)
-    if not (item and item.bag) or IF.InCombat() then return end
+    if not (item and item.bag) or IF.InCombat() or not SlotInfo(item.bag, item.slot) then return end
     J.Toggle(item.bag, item.slot)
 end
 
-IF.Input.AddItemClick({
-    id = "junkmark", button = "RightButton", label = "Mark junk / not junk",
-    when = function(item) return item.bag ~= nil and SlotInfo(item.bag, item.slot) ~= nil end,
-    fn = MarkHovered,
-})
-IF.Actions.PressButton("ImprovedForeverJunkMark", function() MarkHovered(IF.Input.Hovered()) end)
-_G["BINDING_NAME_CLICK ImprovedForeverJunkMark:LeftButton"] = "Mark the bag item under the mouse junk / not junk"
-
--- Its binding, on the Controller tab (Binds.lua)
+-- Its binding, on the Bindings tab (Binds.lua)
 local B = IF.Binds
 B.Add({
-    id = "junkmark", label = "Mark Junk", group = "Bags", tab = "controller",
+    id = "junkmark", label = "Mark Junk", group = "Bags", tab = "bindings",
     icon = IF.TEX .. "ic_fn_junkmark", context = "bags", order = 22,
     desc = "Marks the bag item under the cursor as junk, or not",
     tip = "Marks the bag item the cursor is on as junk, or no longer junk: sold with the vendor's Sell All"
@@ -327,6 +320,8 @@ B.Add({
         J.Settings().mark = spec ~= nil
         if spec then J.SetMarkKey(spec) end
     end,
+    click = MarkHovered,
+    defaultKey = "ALT-BUTTON2",
 })
 
 ---------------------------------------------------------------------------

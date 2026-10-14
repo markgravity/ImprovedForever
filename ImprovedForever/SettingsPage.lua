@@ -337,7 +337,11 @@ local function FieldRow(parent, width, onClick, onStep, onSlide)
             c.text:SetText(item.button or item.label)
         elseif kind == "binding" then
             c.box:SetColors(KC.controlBg, 0.95, edge, 1)
+            -- (with the mouse its keyboard / mouse press, when it takes one)
+            local def = B.Get(item.bindId)
+            local keyed = (not IF.Input.Pad() or not IF.Input.PadEnabled()) and B.TakesKey(def)
             c.text:SetText(IF.Recorder.IsActive() and on and "Press a button..."
+                or keyed and B.KeyText(B.KeyBind(def))
                 or (item.keyText and item.keyText(16) or B.Text(item.binding(), 16)))
         else
             c.box:SetColors(nil, nil, nil, nil)
@@ -723,10 +727,20 @@ function IF.SettingsPage(tab, GROUPS, ITEMS, hooks)
         local item = self:Item()
         if not item or not item.bindable or IF.InCombat() then return end
         local def = B.Get(item.bindId)
+        -- (the Gamepad UI off: keys and clicks only; none taken: nothing to do)
+        if not IF.Input.PadEnabled() and not B.TakesKey(def) then
+            return menu.Toast(item.label .. ": a controller press only (the Gamepad UI is off)", true)
+        end
+        -- (a key or a click too, when it takes one: its keyboard / mouse press)
+        local keyed = B.TakesKey(def)
         IF.Recorder.Start({
             title = "Bind " .. item.label, chord = item.chord and true or false,
             accept = def and def.accepts, reject = item.label .. " can't go on that press",
             onDone = function(spec) G:Offer(item, spec) end,
+            keys = keyed and (def.run ~= nil or def.button ~= nil or def.click ~= nil),
+            clicks = keyed and def.click ~= nil,
+            acceptKey = function(spec) return B.KeyFits(def, spec) end,
+            onKey = function(spec) G:CommitKey(item, def, spec) end,
             onCancel = function() menu.Toast(item.label .. ": unchanged") end,
         })
     end
@@ -751,6 +765,17 @@ function IF.SettingsPage(tab, GROUPS, ITEMS, hooks)
                 .. (IF.Input.Pad() and ": {A} replaces it, {B} keeps it" or ": click it again to replace it")), true, 4)
         end
         self:Commit(item, spec)
+    end
+
+    -- A recorded key / click: its keyboard / mouse press (the same again: off)
+    function G:CommitKey(item, def, spec)
+        if B.KeyBind(def) == spec then
+            B.SetKey(def.id, nil)
+            return menu.Toast(item.label .. ": " .. B.KeyText(spec) .. " unbound")
+        end
+        local gone = B.SetKey(def.id, spec)
+        menu.Toast(item.label .. ": " .. B.KeyText(spec)
+            .. (#gone > 0 and (" (" .. B.Names(gone) .. " unbound)") or ""), #gone > 0)
     end
 
     function G:Commit(item, spec)
@@ -853,21 +878,35 @@ function IF.SettingsPage(tab, GROUPS, ITEMS, hooks)
     -- (with the mouse: what a right-click on it does, the pad's second press)
     local function MouseNote(item)
         if IF.Input.Pad() then return "" end
-        if item.bindable then return "  |cff9d917aRight-click: record a controller press.|r" end
+        if item.bindable then
+            local keyed = B.TakesKey(B.Get(item.bindId))
+            if not IF.Input.PadEnabled() then
+                return keyed and "  |cff9d917aRight-click: record a key or a click.|r" or ""
+            end
+            return keyed and "  |cff9d917aRight-click: record a key, a click or a controller press.|r"
+                or "  |cff9d917aRight-click: record a controller press.|r"
+        end
         if item.try then return "  |cff9d917aRight-click: try it.|r" end
         return ""
+    end
+
+    -- (a binding that takes one: its keyboard / mouse press)
+    local function KeyNote(item)
+        local def = item.bindable and B.Get(item.bindId)
+        if not B.TakesKey(def) then return "" end
+        return "  |cffd8ccb0Keyboard / mouse: " .. B.KeyText(B.KeyBind(def)) .. ".|r"
     end
 
     function G:Line(item)
         if item.bindable then
             local clashes = B.ClashesOf(item.bindId)
-            if #clashes > 0 then return "|cffff7a5cClashes with " .. B.Names(clashes) .. " (Controller tab)|r" end
+            if #clashes > 0 then return "|cffff7a5cClashes with " .. B.Names(clashes) .. " (Bindings tab)|r" end
         end
         local note = Resolve(item.note)
         if note then return note end
         local rest = item.text and (item.text():match("^.-|n(.*)$"))
         if rest and Kind(item) == "info" then return (rest:gsub("|n", "  ·  ")) end
-        return (Resolve(item.tip) or "") .. MouseNote(item)
+        return (Resolve(item.tip) or "") .. KeyNote(item) .. MouseNote(item)
     end
 
     -- A field's row's height: its description wrapped to the row's width

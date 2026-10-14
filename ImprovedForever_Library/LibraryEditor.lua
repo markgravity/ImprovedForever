@@ -29,9 +29,11 @@ local ITEMS = {
         -- (the mouse's way, while it's the one in hand)
         note = function()
             if IF.Input.Pad() then return nil end
-            return "Alt + click an item (in the bags, the loot window, a chat link...) to open its page, or bind"
-                .. " a key to the item under the mouse (Key Bindings > AddOns). In it: click an entry to open it,"
-                .. " right-click to show it on the map, the wheel or the arrows turn the page, Esc goes back."
+            local key = IF.Binds.KeyBind(IF.Binds.Get("library"))
+            return (key and (IF.Binds.KeyText(key) .. " an item (in the bags, the loot window, a chat link...) to open"
+                .. " its page") or "Bind a click or a key to open an item's page") .. " (the Bindings tab: Misc)."
+                .. " In it: click an entry to open it, right-click to show it on the map, the wheel or the arrows"
+                .. " turn the page, Esc goes back."
         end,
     }, OnOff(function() return S().enabled end, function(on) S().enabled = on end, "Library")),
     Item({

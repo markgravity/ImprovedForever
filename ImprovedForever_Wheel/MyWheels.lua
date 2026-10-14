@@ -315,7 +315,7 @@ end
 -- Before the rings are built (Ring.lua's login runs after this file's)
 IF.OnLogin(MW.Register)
 
--- The wheels' bindings, on the Controller tab (Binds.lua): an R3 combo each
+-- The wheels' bindings, on the Bindings tab (Binds.lua): an R3 combo each
 -- (Ring.lua opens them), first in its list
 local B = IF.Binds
 B.AddSource(function()

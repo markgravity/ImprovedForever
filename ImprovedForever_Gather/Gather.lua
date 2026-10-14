@@ -421,7 +421,7 @@ function Gather.Command(option, value)
     IF.Print("Minimap nodes: step " .. N.step)
 end
 
--- Its binding, on the Controller tab (Binds.lua) and the Gather tab
+-- Its binding, on the Bindings tab (Binds.lua) and the Gather tab
 local B = IF.Binds
 B.Add({
     id = "gather", label = "Minimap labels", group = "Other", tab = "gather",
@@ -432,4 +432,5 @@ B.Add({
     accepts = B.NotDouble,
     specs = function() return B.One(IF.Gather.Key()) end,
     set = function(spec) IF.Gather.SetKey(spec) end,
+    run = function(down) if down then Gather.Toggle() end end,
 })

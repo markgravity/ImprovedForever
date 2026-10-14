@@ -5,7 +5,7 @@
 -- (SetPreferredGamepadInteractTarget blocked). So this is a copy of it,
 -- built from its own template and strings, the press caught with override
 -- bindings of ours, and the action written to the crossbar the way the
--- Controller tab writes it (IF.Native.Set). Out of combat only.
+-- Bindings tab writes it (IF.Native.Set). Out of combat only.
 --
 -- While it's up: a D-pad or face button (with L2 / R2 held for their bars)
 -- puts the action in that crossbar slot, on the page shown; Circle alone

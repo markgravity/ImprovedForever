@@ -417,6 +417,11 @@ function UI.CardRow(parent, width, height)
     r.right:SetPoint("RIGHT", -10, 0)
     r.right:SetJustifyH("RIGHT")
     r.right:SetWordWrap(false)
+    -- (columns: mid, a text left of right's; each colW wide)
+    r.mid = K.ChatText(r, 12, KC.cream)
+    r.mid:SetJustifyH("LEFT")
+    r.mid:SetWordWrap(false)
+    r.mid:Hide()
     local box = height - 16
     function r:Fill(o)
         K.SetIcon(self.icon, o.icon or 134400)
@@ -436,8 +441,22 @@ function UI.CardRow(parent, width, height)
         self.line:SetText(o.line or "")
         self.right:SetText(o.right or "")
         self.wash:SetShown(o.bound and true or false)
-        -- (no line: the name in the middle; a text on the right: up to it)
+        -- (no line: the name in the middle; a text on the right: up to it;
+        -- two columns, colW each: up to them)
         local inset = o.right and o.right ~= "" and -(self.right:GetStringWidth() + 18) or -28
+        self.mid:SetShown(o.colW ~= nil)
+        if o.colW then
+            self.right:SetWidth(o.colW)
+            self.right:SetJustifyH("LEFT")
+            self.mid:ClearAllPoints()
+            self.mid:SetPoint("RIGHT", self, "RIGHT", -(10 + o.colW + 12), 0)
+            self.mid:SetWidth(o.colW)
+            self.mid:SetText(o.mid or "")
+            inset = -(10 + 2 * o.colW + 24)
+        else
+            self.right:SetWidth(0)
+            self.right:SetJustifyH("RIGHT")
+        end
         self.name:ClearAllPoints()
         if o.line and o.line ~= "" then
             self.name:SetPoint("TOPLEFT", self, "TOPLEFT", textX, -9)
@@ -480,6 +499,13 @@ function UI.CardPicker(parent, cols, cardH, onRender, leftKey, rightKey)
     p.moreUp, p.moreDown = K.MoreArrows(p)
     p.moreUp:SetPoint("BOTTOM", p.grid, "TOP", 0, 2)
     p.moreDown:SetPoint("TOP", p.grid, "BOTTOM", 0, 2)
+    -- (the wheel: a row of cards up / down)
+    p.grid:EnableMouseWheel(true)
+    p.grid:SetScript("OnMouseWheel", function(_, delta)
+        if not p.def then return end
+        p:Move(delta > 0 and -p.cols or p.cols)
+        onRender()
+    end)
     p:Hide()
 
     function p:Open(def)
@@ -592,11 +618,24 @@ function UI.CardPicker(parent, cols, cardH, onRender, leftKey, rightKey)
                     c:SetPoint("TOPLEFT", self.grid, "TOPLEFT", col * (cardW + 8), -row * (cardH + 6))
                     c:Fill({ icon = e.icon, name = e.name, line = e.sub,
                         ticked = def.marked and def.marked(e),
-                        right = def.right and def.right(e), bound = def.bound and def.bound(e) })
+                        right = def.right and def.right(e), bound = def.bound and def.bound(e),
+                        mid = def.mid and def.mid(e), colW = def.colW and def.colW() })
                     c.focus:Light(first + slot == self.index)
-                    c:SetScript("OnClick", function()
+                    -- (the mouse: over one picks it; a click chooses it, a
+                    -- right-click does def.onAlt)
+                    c:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+                    c:SetScript("OnClick", function(_, button)
                         p.index = first + slot
-                        p:Choose()
+                        if button == "RightButton" then
+                            if def.onAlt then def.onAlt(e) end
+                        else
+                            p:Choose()
+                        end
+                        onRender()
+                    end)
+                    c:SetScript("OnEnter", function()
+                        if IF.Input.Pad() or p.index == first + slot then return end
+                        p.index = first + slot
                         onRender()
                     end)
                 end

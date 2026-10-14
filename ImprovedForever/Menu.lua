@@ -38,6 +38,8 @@ local STEP_DELAY, STEP_EVERY = 0.35, 0.2
 menu.TABS = {}
 
 function menu.AddTab(def)
+    -- (an old Controller module still loaded: its tab is the core's Bindings now)
+    if def.key == "controller" then return def end
     def.order = def.order or 50
     if not def.icon and def.module and IF.Module(def.module) then def.icon = IF.Module(def.module).icon end
     for i, other in ipairs(menu.TABS) do
@@ -474,7 +476,7 @@ IF.OnPadStyleChanged(function() menu.Render() end)
 -- The controller's Menu / Options button pressed twice quickly opens this
 -- panel (once still opens the game's own menu wheel: the button is only
 -- watched, never taken). The game's wheel, opened by the first press, is
--- closed. Out of combat; off with IF.db.menuDouble = false (Controller tab).
+-- closed. Out of combat; off with IF.db.menuDouble = false (Bindings tab).
 local DOUBLE = 0.35
 local menuKey = CreateFrame("Frame")
 local wasDown, lastPress = false, 0

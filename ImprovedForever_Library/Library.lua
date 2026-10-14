@@ -46,6 +46,14 @@ function LB.Settings()
     return s
 end
 
+-- The button held on an item for its page (the Bindings tab: Misc), or nil
+-- (unbound: s.holdKey false)
+function LB.Key()
+    local key = LB.Settings().holdKey
+    if key == false then return nil end
+    return key or "PADRSTICK"
+end
+
 local function ItemInfo(id)
     if C_Item and C_Item.GetItemInfo then return C_Item.GetItemInfo(id) end
     return GetItemInfo(id)
@@ -960,7 +968,8 @@ watcher:SetScript("OnUpdate", function()
     local active = LB.Settings().enabled and not (LB.HasFocus and LB.HasFocus()) and not IF.InCombat()
         and (uiFocus or AnyBagOpen() or LootOpen()) and not (IF.Destroy and IF.Destroy.panel:IsShown())
         and not (IF.AuctionBuy and IF.AuctionBuy.window and IF.AuctionBuy.window:IsShown())
-    local down = IsKeyDown("PADRSTICK")
+    local key = LB.Key()
+    local down = key ~= nil and IsKeyDown(key)
     if not active or not down then
         if hold then LB.HoldHide() end
         hold = nil
@@ -991,9 +1000,10 @@ watcher:SetScript("OnUpdate", function()
 end)
 
 ---------------------------------------------------------------------------
--- The mouse: Alt + click on an item (the bags, the loot window, a chat
--- link: anywhere the game's modified clicks reach; the core's Input.lua)
--- opens its page; so does a key binding, on the item under the mouse
+-- The mouse: a click on an item (Alt + left click, its binding's keyboard /
+-- mouse press: the bags, the loot window, a chat link, anywhere the game's
+-- modified clicks reach; the core's Input.lua) opens its page; so does a
+-- key, on the item under the mouse
 ---------------------------------------------------------------------------
 -- Where an item clicked or under the mouse is: "bags", "loot", "chat", else
 -- "ui" (another window of the game's: LB.originFrame)
@@ -1015,13 +1025,24 @@ local function OpenFromMouse(item)
     LB.Open(item.link, MouseOrigin(item))
 end
 
-IF.Input.AddItemClick({
-    id = "library", button = "LeftButton", label = "Open in the Library",
-    when = function(item) return LB.Settings().enabled and ItemID(item.link) ~= nil end,
-    fn = OpenFromMouse,
+-- Its binding, on the Bindings tab (Misc): a button held on an item, and a
+-- click on one (Alt + left click) or a key on the item under the mouse
+local B = IF.Binds
+B.Add({
+    id = "library", label = "Library", group = "Other", tab = "library",
+    icon = IF.TEX .. "ic_mod_library", context = "bags", order = 35,
+    desc = "Held on an item: everything about it",
+    tip = "Held on an item in the bags, the loot window or another window with the controller: its"
+        .. " Library page. With the mouse: a click on an item (Alt + left click), or a key on the item"
+        .. " under the mouse. Watched, not taken: the button keeps its own action.",
+    accepts = B.Single,
+    specs = function() return B.One(LB.Key()) end,
+    set = function(spec) LB.Settings().holdKey = spec or false end,
+    click = function(item)
+        if LB.Settings().enabled and ItemID(item.link) then OpenFromMouse(item) end
+    end,
+    defaultKey = "ALT-BUTTON1",
 })
-IF.Actions.PressButton("ImprovedForeverLibraryHovered", function() OpenFromMouse(IF.Input.Hovered()) end)
-_G["BINDING_NAME_CLICK ImprovedForeverLibraryHovered:LeftButton"] = "Open the item under the mouse"
 
 ---------------------------------------------------------------------------
 -- Events

@@ -1,8 +1,8 @@
 -- The Map tab, a tab of settings (IF.SettingsPage, SettingsPage.lua): how
 -- the peek map looks (opacity, size, place on the screen and an offset
 -- from it: a slider each way); seen the next time it opens. Its hotkey
--- (also on the Controller tab, Binds.lua) and its keyboard key (the game's
--- Key Bindings); its touchpad corner on the Controller tab. PeekMap.lua does
+-- (also on the Bindings tab, Binds.lua) and its key; its touchpad corner on
+-- the Bindings tab. PeekMap.lua does
 -- the work.
 local IF = ImprovedForever
 
@@ -91,20 +91,13 @@ local ITEMS = {
     },
 }
 
--- Its keys: the pad's press (recorded here as on the Controller tab, which
--- needs the Controller module), a keyboard key (the game's Key Bindings)
-local BINDING = "CLICK ImprovedForeverPeekMapHold:LeftButton"
-
-local function KeyboardKey()
-    local key = GetBindingKey and GetBindingKey(BINDING)
-    return key and (GetBindingText and GetBindingText(key) or key) or nil
-end
-
+-- Its presses: the pad's (recorded here as on the Bindings tab) and a key
+-- (its binding's keyboard / mouse press)
 table.insert(ITEMS, 1, {
     key = "hotkey", group = "look", label = "Hotkey",
     tip = "Held: the map shows, see-through; let go and it closes. Works in combat. Square records the"
-        .. " controller's press: one button, or hold one and press another (recording it again unbinds it)."
-        .. " A keyboard key: Key Bindings > AddOns (Peek map).",
+        .. " controller's press: one button, or hold one and press another (recording it again unbinds it);"
+        .. " or a key, held as the button is.",
     bindable = true,
     chord = true,
     bindId = "peekmap",
@@ -115,12 +108,6 @@ table.insert(ITEMS, 1, {
         return spec and IF.Binds.Text(spec, size) or "Not bound"
     end,
 })
-table.insert(ITEMS, 2, {
-    key = "keyboard", group = "look", label = "Keyboard key",
-    tip = "Held: the map, as the hotkey. Set in the game's Key Bindings > AddOns (Peek map).",
-    text = function() return KeyboardKey() or "Not bound" end,
-})
-
 local GROUPS = {
     { key = "look", label = "Peek map" },
 }

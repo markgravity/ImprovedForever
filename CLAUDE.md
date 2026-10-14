@@ -104,8 +104,12 @@ focus the way Forever's native windows do. The shared code is
   pad's own entries `pad = true`.
 - Lists scroll with the wheel; a row under the mouse shows its tooltip; windows
   have the game's close button (`UI.Window`: `win.onClose`) and close on Esc.
-- Item actions: Alt + click via `IF.Input.AddItemClick` (Alt + Left: Library,
-  Alt + Right: mark junk), plus a key binding on `IF.Input.Hovered()`.
+- Every binding (`IF.Binds.Add`) has two presses: the controller's (`accepts`,
+  `specs`, `set`) and a keyboard / mouse one (`Binds.lua`: `def.run(down)` or
+  `def.button` for a key, `def.click(item)` for a modified click on an item;
+  `def.defaultKey`). Don't add `Bindings.xml` entries or hardcoded clicks for
+  new features: give the binding a `run` / `button` / `click`. Item clicks
+  reach it through `IF.Input`'s `HandleModifiedItemClick` hook (`B.RunClick`).
 
 ## Quest Tracker: our fork of the game's tracker
 - `ImprovedForever_QuestTracker/Tracker/Blizzard_*` is Forever's own

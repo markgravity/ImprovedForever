@@ -4,7 +4,7 @@
 -- player's own, "New wheel"; the left stick picks one); beside it the
 -- wheel, its slots around it (8 a page: the D-pad left / right steps
 -- round them, L2 / R2 turn the page), what opens it in the
--- hub (bound in the Controller tab); on the right what a slot can take,
+-- hub (bound in the Bindings tab); on the right what a slot can take,
 -- its lists (Spells, Items, Macros, Emotes) in a bar along the top (the
 -- left stick left / right), each a list of cards (the D-pad up / down):
 -- Cross fills the slot and moves on to the next one. Triangle clears a
@@ -496,7 +496,7 @@ function W:Triangle(wheel)
 end
 
 -- Square held: deletes a wheel of yours (once confirmed). Binding a wheel
--- to a press is the Controller tab's.
+-- to a press is the Bindings tab's.
 function W:Square(wheel)
     if not wheel.id then return end
     self:PressOrHold("PAD3", function() menu.Toast(IF.PadText("Hold {X} to delete " .. wheel.label)) end, function()
@@ -842,7 +842,7 @@ function W:Render()
         else
             self.detail:Set({ title = wheel.label, tag = "Fills itself", tagColor = KC.slot, body = wheel.info,
                 extra = "Bound to: " .. (MW.HotkeyText(wheel.key) or "nothing")
-                    .. ". Bind it to a press in the Controller tab." })
+                    .. ". Bind it to a press in the Bindings tab." })
         end
     end
     -- The box over the wheel: naming

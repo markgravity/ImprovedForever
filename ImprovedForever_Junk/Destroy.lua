@@ -1,5 +1,5 @@
 -- Destroy (the Junk module's panel): with the bags open, R2 + R3 (or the
--- button(s) bound in the Controller tab) opens a panel listing what is safe
+-- button(s) bound in the Bindings tab) opens a panel listing what is safe
 -- to throw away; so does Triangle in the loot window once the bags are
 -- full, where Cross swaps: the junk goes, the loot that didn't fit comes in
 -- its place. What it lists: the junk, by the core's verdict (ImprovedForever's
@@ -1201,8 +1201,8 @@ lootEvents:SetScript("OnEvent", function(_, event, ...)
 end)
 
 ---------------------------------------------------------------------------
--- Opened without the pad: a key binding, /if destroy (from the loot window
--- while the bags are full, else the bags)
+-- Opened without the pad: its binding's key, /if destroy (from the loot
+-- window while the bags are full, else the bags)
 ---------------------------------------------------------------------------
 local function OpenByHand()
     if panel:IsShown() then return DS.Close() end
@@ -1213,14 +1213,12 @@ local function OpenByHand()
     DS.Open(fromLoot and "loot" or "bags")
 end
 
-IF.Actions.PressButton("ImprovedForeverDestroyOpen", OpenByHand)
-_G["BINDING_NAME_CLICK ImprovedForeverDestroyOpen:LeftButton"] = "Open / close the Destroy panel"
 IF.AddCommand("destroy", OpenByHand, ": open or close the Destroy panel")
 
--- Its binding, on the Controller tab (Binds.lua)
+-- Its binding, on the Bindings tab (Binds.lua)
 local B = IF.Binds
 B.Add({
-    id = "destroy", label = "Destroy", group = "Bags", tab = "controller",
+    id = "destroy", label = "Destroy", group = "Bags", tab = "bindings",
     icon = IF.TEX .. "ic_mod_destroy", context = "bags", order = 21,
     -- Watched, not taken; on an R3 combo the wheels leave it to the panel
     -- while the bags are open (Destroy.lua)
@@ -1234,4 +1232,5 @@ B.Add({
         IF.db.bagClean = spec ~= nil
         if spec then IF.Destroy.SetOpenKey(spec) end
     end,
+    run = function(down) if down then OpenByHand() end end,
 })

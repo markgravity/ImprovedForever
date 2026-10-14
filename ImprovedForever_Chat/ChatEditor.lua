@@ -11,12 +11,13 @@ local ITEMS = {
         tip = "While the chat has the controller (its edit box open), D-pad Up goes up into its lines: the D-pad "
             .. "picks a line, left / right a link in it (its tooltip shows). Cross opens an item in the Library, "
             .. "Square puts the link in your message, Circle goes back to the edit box.",
-        -- (with the mouse the chat's own links do it: Alt + click, the core's)
+        -- (with the mouse the chat's own links do it: the Library's click, the core's)
         note = function()
             if IF.Input.Pad() then return nil end
             return "For the controller. With the mouse the chat's own links do this: a click shows its tooltip, "
                 .. "Shift + click puts it in your message"
-                .. (IF.Library and ", Alt + click opens an item in the Library." or ".")
+                .. (IF.Library and IF.Binds.KeyBind(IF.Binds.Get("library")) and (", "
+                    .. IF.Binds.KeyText(IF.Binds.KeyBind(IF.Binds.Get("library"))) .. " opens an item in the Library.") or ".")
         end,
     }, OnOff(function() return CL.Settings().enabled end, function(on)
         CL.Settings().enabled = on

@@ -3,7 +3,7 @@
 -- the peek map, the touchpad click, the actions put on presses (Override.lua) and the
 -- menu's double press.
 -- Each feature keeps its own setting; this file reads and writes them
--- through one shape, so the Controller tab (BindEditor.lua) can show them all
+-- through one shape, so the Bindings tab (BindEditor.lua) can show them all
 -- on the controller and every tab can tell what a new binding replaces.
 --
 -- A press is a spec: "PADRSTICK" (pressed), "PADLSHOULDER+PADRSTICK" (one
@@ -243,11 +243,21 @@ function B.Overridable(spec)
 end
 
 -- A module's bindings: B.Add(def) one, B.AddSource(fn) a list that changes
--- (fn() -> defs: the wheels). order: where the Controller tab lists it.
+-- (fn() -> defs: the wheels). order: where the Bindings tab lists it.
 local fixed, sources = {}, {}
 
 function B.Add(def)
     def.order = def.order or 50
+    -- (one per id: an old Controller module still loaded adds its own again)
+    for i, other in ipairs(fixed) do
+        if other.id == def.id then
+            if IF.oldController and debugstack and (debugstack(2, 1, 0) or ""):find(IF.OLD_CONTROLLER, 1, true) then
+                return other
+            end
+            fixed[i] = def
+            return def
+        end
+    end
     fixed[#fixed + 1] = def
     table.sort(fixed, function(a, b) return a.order < b.order end)
     return def
@@ -266,6 +276,7 @@ B.Add({
     accepts = function(spec) return spec == "PADFORWARD:double" end,
     specs = function() return IF.db.menuDouble ~= false and { "PADFORWARD:double" } or {} end,
     set = function(spec) IF.db.menuDouble = spec ~= nil end,
+    run = function(down) if down and IF.Menu then IF.Menu.Toggle() end end,
 })
 
 -- A spell, item, macro, emote or window can go on the press: in its
@@ -387,7 +398,7 @@ focus:SetScript("OnUpdate", function(_, elapsed)
     end
 end)
 
--- Every binding, in the order the Controller tab lists them
+-- Every binding, in the order the Bindings tab lists them
 function B.All()
     local list = {}
     -- (the lists first: the wheels)
@@ -504,3 +515,181 @@ function B.Clear(spec)
     for _, def in ipairs(gone) do Unbind(def, spec) end
     return gone
 end
+
+---------------------------------------------------------------------------
+-- The keyboard / mouse press: each binding's second one, beside its
+-- controller press (both work, as the game's Key 1 / Key 2). A key as the
+-- game writes one ("F", "ALT-F", "CTRL-SHIFT-5"), or a modified click on an
+-- item ("ALT-BUTTON1": Alt + left click; BUTTON2 right, BUTTON3 middle). A
+-- binding takes a key when it has def.run(down) or def.button (the name of
+-- a button the key clicks: a secure one, the peek map's); def.click(item)
+-- takes a click on an item, and a key acts on the item under the mouse
+-- (IF.Input.Hovered). def.defaultKey: its key until one is set.
+-- IF.db.keyBinds = { [id] = spec, or false: none }. Keys are override
+-- bindings (out of combat; kept through it), on whatever has the focus.
+---------------------------------------------------------------------------
+local CLICK_NAMES = { BUTTON1 = "Left Click", BUTTON2 = "Right Click", BUTTON3 = "Middle Click" }
+local MOUSE_KEY = { LeftButton = "BUTTON1", RightButton = "BUTTON2", MiddleButton = "BUTTON3" }
+local MOD_NAMES = { ALT = "Alt", CTRL = "Ctrl", SHIFT = "Shift" }
+-- (the game's own modified clicks on an item: a chat link, the dressing
+-- room, its socket / profession; Bindings_Standard.xml)
+local GAME_CLICKS = { ["SHIFT-BUTTON1"] = "links it in the chat", ["CTRL-BUTTON1"] = "tries it on",
+    ["SHIFT-BUTTON2"] = "opens its profession" }
+
+function B.IsClick(spec)
+    return type(spec) == "string" and spec:match("BUTTON[123]$") ~= nil
+end
+
+-- The modifiers held now, as a key's prefix ("ALT-CTRL-")
+function B.ModsNow()
+    return (IsAltKeyDown() and "ALT-" or "") .. (IsControlKeyDown() and "CTRL-" or "")
+        .. (IsShiftKeyDown() and "SHIFT-" or "")
+end
+
+-- A click made now with a mouse button ("LeftButton"), as a spec
+function B.ClickSpec(button)
+    local key = MOUSE_KEY[button or ""]
+    return key and (B.ModsNow() .. key) or nil
+end
+
+-- Does a binding take a key / a click at all
+function B.TakesKey(def)
+    return def ~= nil and (def.run ~= nil or def.button ~= nil or def.click ~= nil)
+end
+
+-- Can spec go on def's keyboard / mouse press; else why not
+function B.KeyFits(def, spec)
+    if not B.TakesKey(def) then return false, def and def.label .. " has no keyboard press" end
+    if B.IsClick(spec) then
+        if not def.click then return false, def.label .. " takes a key, not a click" end
+        if not spec:find("-", 1, true) then return false, "Hold Alt, Ctrl or Shift as you click" end
+        if GAME_CLICKS[spec] then return false, B.KeyText(spec) .. " is the game's (it " .. GAME_CLICKS[spec] .. ")" end
+    elseif spec == "ESCAPE" then
+        return false, "Escape is the game's"
+    end
+    return true
+end
+
+local function KeyDB()
+    IF.db.keyBinds = IF.db.keyBinds or {}
+    return IF.db.keyBinds
+end
+
+-- def's keyboard / mouse press, or nil
+function B.KeyBind(def)
+    if not (def and B.TakesKey(def) and IF.db) then return nil end
+    local spec = KeyDB()[def.id]
+    if spec == false then return nil end
+    return spec or def.defaultKey
+end
+
+-- "Alt + F", "Ctrl + Left Click"
+function B.KeyText(spec)
+    if not spec then return "Not bound" end
+    local parts = {}
+    local key = spec
+    while true do
+        local mod, rest = key:match("^(%u+)%-(.+)$")
+        if not (mod and MOD_NAMES[mod]) then break end
+        parts[#parts + 1] = MOD_NAMES[mod]
+        key = rest
+    end
+    parts[#parts + 1] = CLICK_NAMES[key] or (GetBindingText and GetBindingText(key, "KEY_")) or key
+    return table.concat(parts, " + ")
+end
+
+-- The bindings on a keyboard / mouse press
+function B.KeyBound(spec)
+    local list = {}
+    if not spec then return list end
+    for _, def in ipairs(B.All()) do
+        if B.KeyBind(def) == spec then list[#list + 1] = def end
+    end
+    return list
+end
+
+-- Puts id's keyboard / mouse press on spec (nil: none), taking it from
+-- whatever had it. Returns what gave way. Out of combat.
+function B.SetKey(id, spec)
+    local def = B.Get(id)
+    if not def then return {} end
+    local gone = {}
+    for _, other in ipairs(B.KeyBound(spec)) do
+        if other.id ~= id then
+            KeyDB()[other.id] = false
+            gone[#gone + 1] = other
+        end
+    end
+    -- (the key free of an action on it too: Override.lua)
+    if spec and not B.IsClick(spec) and IF.Override and IF.Override.KeyAction(spec) then
+        IF.Override.SetKey(spec, nil)
+    end
+    KeyDB()[id] = spec or false
+    B.ApplyKeys()
+    return gone
+end
+
+-- The binding a click on an item runs, or nil
+function B.ClickDef(spec)
+    if not B.IsClick(spec) then return nil end
+    for _, def in ipairs(B.KeyBound(spec)) do
+        if def.click then return def end
+    end
+end
+
+-- A click on an item made now (button: "LeftButton"...): its binding run;
+-- true when one did. item: as IF.Input's ({ link, bag, slot, owner })
+function B.RunClick(button, item)
+    local def = B.ClickDef(B.ClickSpec(button))
+    if not (def and item) then return false end
+    def.click(item)
+    return true
+end
+
+local keyOwner = CreateFrame("Frame", "ImprovedForeverKeys")
+local keyButtons = {}
+local keysPending = false
+
+-- The button a binding's key clicks: its own (def.button), else one of ours
+-- running it (on the press and its release: def.run(down)), or for an item's
+-- binding, the item under the mouse on the press
+local function KeyButton(def)
+    if def.button then return def.button end
+    local b = keyButtons[def.id]
+    if b then return b:GetName() end
+    b = CreateFrame("Button", "ImprovedForeverKey_" .. def.id:gsub("[^%w]", "_"))
+    b:RegisterForClicks("AnyDown", "AnyUp")
+    local id = def.id
+    b:SetScript("OnClick", function(_, _, down)
+        local d = B.Get(id)
+        if not d then return end
+        if d.run then return d.run(down) end
+        if d.click and down then
+            local item = IF.Input and IF.Input.Hovered()
+            if item then d.click(item) end
+        end
+    end)
+    keyButtons[def.id] = b
+    return b:GetName()
+end
+
+function B.ApplyKeys()
+    if not IF.db then return end
+    if IF.InCombat() then
+        keysPending = true
+        return
+    end
+    keysPending = false
+    ClearOverrideBindings(keyOwner)
+    for _, def in ipairs(B.All()) do
+        local spec = B.KeyBind(def)
+        if spec and not B.IsClick(spec) then SetOverrideBindingClick(keyOwner, false, spec, KeyButton(def), "LeftButton") end
+    end
+    if IF.Override and IF.Override.ApplyKeys then IF.Override.ApplyKeys() end
+end
+
+IF.OnLogin(B.ApplyKeys)
+keyOwner:RegisterEvent("PLAYER_REGEN_ENABLED")
+keyOwner:SetScript("OnEvent", function()
+    if keysPending then B.ApplyKeys() end
+end)
