@@ -96,16 +96,30 @@ if ObjectiveTrackerManager then
 	hooksecurefunc(ObjectiveTrackerManager, "SetOpacity", MirrorOpacity)
 	-- (the fonts already changed: lay ours out again)
 	hooksecurefunc(ObjectiveTrackerManager, "SetTextSize", function() IFObjectiveTrackerManager:UpdateAll() end)
-	EventUtil.ContinueAfterAllEvents(MirrorOpacity, "PLAYER_ENTERING_WORLD", "VARIABLES_LOADED")
+	IQT.AfterLoad(MirrorOpacity)
 end
 
--- The quests in our order (the game's while its tracker has the pad:
--- Pad.lua)
+-- The quests in our order (held while the game's tracker has the pad:
+-- Pad.lua), the game's watch list kept in it (Sort.lua: SyncWatchOrder)
 for _, module in ipairs({ IFQuestObjectiveTracker, IFCampaignQuestObjectiveTracker }) do
 	local Build = module.BuildQuestWatchInfos
 	module.BuildQuestWatchInfos = function(self)
-		if IQT.padOrder then return Build(self) end
-		return IQT.SortWatchInfos(Build(self))
+		return IQT.SortWatchInfos(Build(self), self)
+	end
+	-- (/if quests debug rows: each quest's place and distance on its header)
+	local GetBlock = module.GetBlock
+	module.GetBlock = function(self, ...)
+		local block, isExisting = GetBlock(self, ...)
+		if block and not block.iqtSetHeader then
+			block.iqtSetHeader = block.SetHeader
+			block.SetHeader = function(b, text)
+				if IQT.debugRows and b.id then
+					text = text .. " " .. IQT.DebugTag(b.id)
+				end
+				return b.iqtSetHeader(b, text)
+			end
+		end
+		return block, isExisting
 	end
 end
 
@@ -141,4 +155,5 @@ SortButton()
 -- After each layout: the items' secure buttons over them
 function IQT.OnTrackerUpdate()
 	IQT.Items.Sync()
+	IQT.SyncWatchOrder()
 end

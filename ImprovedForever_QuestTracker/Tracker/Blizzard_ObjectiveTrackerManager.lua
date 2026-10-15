@@ -166,7 +166,7 @@ function IFObjectiveTrackerManager:CanShowPOIs(module)
 	if self.questPOIEnabled == nil then
 		self.questPOIEnabled = GetCVarBool("questPOI");
 		self.questPOIEnabledModules = { };
-		EventRegistry:RegisterFrameEventAndCallback("VARIABLES_LOADED", self.OnVariablesLoaded, self);
+		IFObjectiveTrackerAfterLoad(GenerateClosure(self.OnVariablesLoaded, self));
 		CVarCallbackRegistry:RegisterCallback("questPOI", function(_, value) self:OnCVarChanged("questPOI", value); end, self);
 	end
 
@@ -229,4 +229,4 @@ function IFObjectiveTrackerManager:SetCanAddModules(canAdd)
 	self.canAddModules = canAdd;
 end
 
-EventUtil.ContinueAfterAllEvents(GenerateClosure(IFObjectiveTrackerManager.Init, IFObjectiveTrackerManager), "PLAYER_ENTERING_WORLD", "VARIABLES_LOADED");
+IFObjectiveTrackerAfterLoad(GenerateClosure(IFObjectiveTrackerManager.Init, IFObjectiveTrackerManager));

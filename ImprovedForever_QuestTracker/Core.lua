@@ -38,6 +38,75 @@ function IFCanCreateQuestGroup(questID)
 	return can
 end
 
+-- Our quest objects' data load (Tracker/Blizzard_Quest.lua), never the
+-- game's shared QuestEventListener: it keeps one callback list per quest
+-- and runs it in a row, so the game's callbacks after ours would run
+-- tainted, filling the game's quest objects its tracker reads (closing its
+-- gamepad focus gets forbidden). A quest in the log has its data: the
+-- callback runs now. Else asked for, run when it arrives (from the server,
+-- so never inside our call).
+local questLoads = {}
+local questLoader = CreateFrame("Frame")
+questLoader:SetScript("OnEvent", function(_, _, questID, success)
+	local list = questLoads[questID]
+	if not list then return end
+	questLoads[questID] = nil
+	if success then
+		for _, callback in ipairs(list) do
+			xpcall(callback, CallErrorHandler)
+		end
+	end
+end)
+questLoader:RegisterEvent("QUEST_DATA_LOAD_RESULT")
+
+IFQuestEventListener = {}
+function IFQuestEventListener:AddCallback(questID, callback)
+	if HaveQuestData(questID) then
+		callback()
+		return
+	end
+	local list = questLoads[questID]
+	if not list then
+		list = {}
+		questLoads[questID] = list
+	end
+	list[#list + 1] = callback
+	if #list == 1 then
+		C_QuestLog.RequestLoadQuestByID(questID)
+	end
+end
+
+-- fn once both PLAYER_ENTERING_WORLD and VARIABLES_LOADED have come (and a
+-- frame after: the game's tracker set up by then). Never the game's
+-- EventUtil.ContinueAfterAllEvents: its EventRegistry counts each event's
+-- registrations in an attribute of a shared frame, which ours would write
+-- (unregistering on the event): the game's own waiter, ObjectiveTracker-
+-- Manager:Init's, then reads it and sets the whole tracker up tainted
+-- (closing its gamepad focus forbidden). Sessions where ours ran first.
+local afterLoad, loadEvents = {}, { PLAYER_ENTERING_WORLD = false, VARIABLES_LOADED = false }
+local loadWaiter = CreateFrame("Frame")
+loadWaiter:RegisterEvent("PLAYER_ENTERING_WORLD")
+loadWaiter:RegisterEvent("VARIABLES_LOADED")
+loadWaiter:SetScript("OnEvent", function(self, event)
+	loadEvents[event] = true
+	if not (loadEvents.PLAYER_ENTERING_WORLD and loadEvents.VARIABLES_LOADED) then return end
+	self:UnregisterAllEvents()
+	C_Timer.After(0, function()
+		for _, fn in ipairs(afterLoad) do fn() end
+		afterLoad = nil
+	end)
+end)
+
+function IQT.AfterLoad(fn)
+	if afterLoad then
+		afterLoad[#afterLoad + 1] = fn
+	else
+		fn()
+	end
+end
+-- (the fork's: tools/fork_objective_tracker.py)
+IFObjectiveTrackerAfterLoad = IQT.AfterLoad
+
 -- Sort modes ("none": the game's own order)
 IQT.SORTS = {
 	{ id = "none",          text = "Off (Blizzard sort)" },
@@ -100,8 +169,12 @@ end
 local ticker
 local function Login()
 	IQT.Settings()
-	-- (the taint bisect's switches, gone)
-	if ImprovedForeverDB then ImprovedForeverDB.qtBisect = nil end
+	-- (the taint bisect's switches and the watch order probe's log, gone)
+	if ImprovedForeverDB then
+		ImprovedForeverDB.qtBisect = nil
+		ImprovedForeverDB.qtOrderLog = nil
+		ImprovedForeverDB.qtTaintLog = nil
+	end
 	if not C_QuestLog.GetDistanceSqToQuest then
 		for i, entry in ipairs(IQT.SORTS) do
 			if entry.id == "distance" then

@@ -11,7 +11,7 @@ function QuestMixin:Init(questID)
 	self.isRepeatable = false;
 	self.isLegendary = false;
 
-	QuestEventListener:AddCallback(questID, function()
+	IFQuestEventListener:AddCallback(questID, function()
 		self.title = QuestUtils_GetQuestName(questID);
 		self.requiredMoney = C_QuestLog.GetRequiredMoney(questID);
 		self.isRepeatable = C_QuestLog.IsRepeatableQuest(questID);

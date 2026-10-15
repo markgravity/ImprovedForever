@@ -36,6 +36,7 @@ local function PrintStatus()
 	IQT.Print("/if quests sound - toggle the objective complete sound")
 	IQT.Print("/if quests menu - open the sort menu (also bindable in Key Bindings > AddOns)")
 	IQT.Print("/if quests debug - list tracked quests and whether the tracker shows them")
+	IQT.Print("/if quests debug rows - toggle each quest's place and distance on its header")
 	IQT.Print("Or use the filter button on the Quests header, or the Quest Tracker tab (/if).")
 end
 
@@ -48,6 +49,9 @@ ImprovedForever.AddCommand("quests", function(args)
 	elseif cmd == "completed" and COMPLETED_ALIASES[arg or ""] then
 		IQT.SetSortCompleted(COMPLETED_ALIASES[arg])
 		PrintStatus()
+	elseif cmd == "debug" and arg == "rows" then
+		IQT.SetDebugRows(not IQT.debugRows)
+		IQT.Print("debug rows " .. (IQT.debugRows and "on" or "off"))
 	elseif cmd == "debug" then
 		IQT.Debug()
 	elseif cmd == "menu" then

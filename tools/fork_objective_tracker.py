@@ -53,6 +53,17 @@ PATCHES = [
     # (in combat) to addon code: ours never shows the Maw block
     ("Blizzard_ScenarioObjectiveTracker.xml",
      '<Button parentKey="Container" inherits="MawBuffsContainer">', '<Button parentKey="Container">'),
+    # Never the game's EventRegistry for frame events (EventUtil's waiters,
+    # RegisterFrameEventAndCallback): it counts registrations in attributes
+    # of one shared frame, ours would write them, and the game's own
+    # tracker, set up by such a waiter, then runs tainted. Ours waits on its
+    # own frame (Core.lua: IFObjectiveTrackerAfterLoad).
+    ("Blizzard_ObjectiveTrackerManager.lua",
+     'EventUtil.ContinueAfterAllEvents(GenerateClosure(IFObjectiveTrackerManager.Init, IFObjectiveTrackerManager), "PLAYER_ENTERING_WORLD", "VARIABLES_LOADED");',
+     'IFObjectiveTrackerAfterLoad(GenerateClosure(IFObjectiveTrackerManager.Init, IFObjectiveTrackerManager));'),
+    ("Blizzard_ObjectiveTrackerManager.lua",
+     'EventRegistry:RegisterFrameEventAndCallback("VARIABLES_LOADED", self.OnVariablesLoaded, self);',
+     'IFObjectiveTrackerAfterLoad(GenerateClosure(self.OnVariablesLoaded, self));'),
 ]
 # Everywhere: the game's menu and frame manager swapped for ours (Menu.lua, Pad.lua)
 EVERYWHERE = [
@@ -156,6 +167,14 @@ def main():
     if "QuestCache = ObjectCache_Create(QuestMixin);" not in quest:
         sys.exit("Quest.lua: QuestCache line no longer matches")
     quest = quest.replace("QuestCache = ObjectCache_Create(QuestMixin);", "IFQuestCache = ObjectCache_Create(QuestMixin);")
+    # The game's QuestEventListener: one shared callback list per quest, run
+    # one after the other on QUEST_DATA_LOAD_RESULT. With ours in a list,
+    # the game's callbacks after it run tainted (they fill the game's quest
+    # objects, which its tracker reads: its gamepad focus tainted). Ours has
+    # its own listener (Core.lua).
+    if "QuestEventListener:AddCallback(" not in quest:
+        sys.exit("Quest.lua: QuestEventListener line no longer matches")
+    quest = quest.replace("QuestEventListener:AddCallback(", "IFQuestEventListener:AddCallback(")
     (OUT / "Blizzard_Quest.lua").write_text(HEADER.replace("Blizzard_ObjectiveTracker/{name}", "{name}").format(name="Blizzard_ObjectAPI/Mainline/Quest.lua") + quest, encoding="utf-8")
     written.insert(0, "Blizzard_Quest.lua")
     print(f"{len(names)} names renamed, {len(written)} files in {OUT.relative_to(ROOT)}")

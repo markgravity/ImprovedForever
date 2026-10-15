@@ -10,8 +10,10 @@ local IF = ImprovedForever
 -- block, by its id). Nothing here takes a button or binds one: from addon
 -- code either carries taint into the game's navigation (its window closing,
 -- SetPreferredGamepadInteractTarget, gets forbidden).
--- The game's tracker lays its quests out in the watch order: while it has
--- the pad, ours shows them in that order too (our sort back after).
+-- The game's tracker lays its quests out in the watch order, kept as ours
+-- (Sort.lua: SyncWatchOrder), so the D-pad, the game's, goes down our rows.
+-- While it has the pad, our order is held (Sort.lua: no re-sort, no
+-- re-sync, the rows still under the cursor), sorted again after.
 local Pad = {}
 IQT.Pad = Pad
 
@@ -94,13 +96,11 @@ local function HidePointer(hide)
 	IF.Focus.Fade(Pointer(), hide)
 end
 
--- While the game's tracker has the pad, ours lists its quests in the
--- game's order (Patch.lua: no sort of ours), so the D-pad, the game's,
--- goes through them top to bottom
-local function PadOrder(on)
-	if IQT.padOrder == on then return end
-	IQT.padOrder = on
-	IQT.Refresh()
+-- While the game's tracker has the pad, our order held (sorted again after)
+local function HoldOrder(on)
+	if IQT.padHeld == on then return end
+	IQT.padHeld = on
+	if not on then IQT.Refresh() end
 end
 
 ---------------------------------------------------------------------------
@@ -203,7 +203,7 @@ local function Stop()
 	mirroring, pointed = false, nil
 	if cursor then cursor:Hide() end
 	HidePointer(false)
-	PadOrder(false)
+	HoldOrder(false)
 	Hint(false)
 	lastR3 = true
 end
@@ -213,7 +213,7 @@ mirror:SetScript("OnUpdate", function()
 		return Stop()
 	end
 	mirroring = true
-	PadOrder(true)
+	HoldOrder(true)
 	WatchR3()
 	Hint(not IQT.IsDropdownShown())
 	local nav = _G.SmartNavigation
@@ -261,4 +261,4 @@ local function FollowCollapse()
 		end
 	end
 end
-EventUtil.ContinueAfterAllEvents(FollowCollapse, "PLAYER_ENTERING_WORLD", "VARIABLES_LOADED")
+IQT.AfterLoad(FollowCollapse)

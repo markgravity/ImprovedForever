@@ -182,7 +182,13 @@ when a gamepad-focused window closes):
   `/reload` while on. Don't use level 2: it can flood and freeze the game.
 - Taint sources found so far:
   - our code filling the game's shared caches first (`QuestCache:Get`,
-    `QuestUtil.CanCreateQuestGroup`): keep our own copies
+    `QuestUtil.CanCreateQuestGroup`) or adding to its shared async listeners
+    (`QuestEventListener:AddCallback`): keep our own copies
+  - the game's `EventRegistry` frame events (`EventUtil.ContinueAfterAllEvents`,
+    `RegisterFrameEventAndCallback`): their counts live in attributes of one
+    shared frame, ours writes them tainted, and the game's own waiter (the
+    objective tracker's `Init`) then runs tainted, in sessions where ours ran
+    first. Wait on our own frame
   - setting properties of the game's frames: use `IF.Focus.Fade`
   - `AddManagedFrame` into the game's columns
   - taking, passing on or binding the game's pad buttons while its window has
