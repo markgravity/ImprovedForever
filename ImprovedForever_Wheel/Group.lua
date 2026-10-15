@@ -153,7 +153,8 @@ function G.CastList()
     local spells = G.Spells()
     for i = 1, G.MAX_SPELLS do
         local id = tonumber((spells[i] or ""):match("^spell:(%d+)$"))
-        local name, icon = id and IF.SpellInfo(id)
+        local name, icon
+        if id then name, icon = IF.SpellInfo(id) end
         if name then list[#list + 1] = { label = name, spell = name, icon = icon } end
     end
     return list
