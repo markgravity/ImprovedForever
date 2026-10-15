@@ -1,71 +1,93 @@
--- Esc > Options > AddOns > Improved Forever: a pointer to the controller
--- panel, which holds every module's settings. Also /if.
+-- Esc > Options > AddOns > Improved Forever: how to open the controller
+-- panel, which holds every module's settings. No button: closing Options
+-- from addon code (HideUIPanel) gets SetPreferredGamepadInteractTarget
+-- forbidden, and the pad can't reach a canvas page's buttons anyway.
 local _, IF = ...
 
-local HELP = "All settings live in the controller panel: D-pad to move, {A} to choose, {B} to go back; "
-    .. "or click, the wheel to scroll, Esc to close. "
-    .. "Open it with /if, or bind \"Toggle Improved Forever panel\" in Key Bindings > AddOns."
+local K = IF.ConfigKit
+local KC = K.C
 
--- The game's options window, if shown
-local function OptionsShown()
-    return (SettingsPanel and SettingsPanel:IsShown())
-        or (InterfaceOptionsFrame and InterfaceOptionsFrame:IsShown())
+local INTRO = "Every module's settings live in the controller panel."
+
+-- Gold, for what to type or press
+local function Key(text)
+    return "|cffffd24a" .. text .. "|r"
 end
 
--- Never close the options window from here (HideUIPanel): addon code
--- closing a gamepad-focused window gets SetPreferredGamepadInteractTarget
--- forbidden. Wait for the player to close it, then open ours.
-local waiter = CreateFrame("Frame")
-waiter:Hide()
-waiter:SetScript("OnUpdate", function(self)
-    if OptionsShown() then return end
-    self:Hide()
-    IF.Menu.Open()
-end)
-
-local function OpenPanel()
-    if not OptionsShown() then
-        IF.Menu.Open()
-        return
+-- The tip's lines, with the pad's glyphs as they are now
+local function TipLines()
+    local lines = { "Type " .. Key("/if") .. " in chat" }
+    if IF.db and IF.db.menuDouble ~= false then
+        lines[#lines + 1] = "Press " .. IF.GlyphText("PADFORWARD", 18) .. " " .. Key("Menu twice") .. " on the controller"
     end
-    waiter:Show()
-    IF.Print("Close Options and the controller panel opens.")
+    lines[#lines + 1] = "Or bind " .. Key("Toggle Improved Forever panel") .. " in Key Bindings > AddOns"
+    return lines
 end
 
--- A canvas page of our own: only for a client without the settings list.
--- The pad can't reach a canvas's buttons (right from the category list only
--- looks in the settings list), so a client that has one gets that instead.
+local CONTROLS = "In the panel: D-pad to move, {A} to choose, {B} to go back; "
+    .. "or click, the wheel to scroll, Esc to close."
+
+---------------------------------------------------------------------------
+-- The page: its title, and a dark box (the tooltip's border round it) with
+-- the ways in, redrawn as it shows (the glyphs and settings of now)
+---------------------------------------------------------------------------
 local function CanvasPanel()
-    local panel = CreateFrame("Frame")
+    local panel = K.NewFrame("Frame")
     panel.name = IF.TITLE
 
-    local heading = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
-    heading:SetPoint("TOPLEFT", 16, -16)
+    local heading = K.Text(panel, 20, KC.title)
+    heading:SetPoint("TOPLEFT", 24, -24)
     heading:SetText(IF.TITLE)
 
-    local help = panel:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
-    help:SetPoint("TOPLEFT", heading, "BOTTOMLEFT", 0, -8)
-    help:SetPoint("RIGHT", panel, "RIGHT", -16, 0)
-    help:SetJustifyH("LEFT")
-    help:SetText(IF.PadText(HELP))
+    local tip = IF.UI.Panel(panel, 0.85)
+    tip:SetPoint("TOPLEFT", heading, "BOTTOMLEFT", 0, -20)
+    tip:SetPoint("RIGHT", panel, "RIGHT", -24, 0)
 
-    local open = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate")
-    open:SetSize(200, 26)
-    open:SetPoint("TOPLEFT", help, "BOTTOMLEFT", 0, -16)
-    open:SetText("Open controller panel")
-    open:SetScript("OnClick", OpenPanel)
+    local intro = K.Text(tip, 14, KC.cream)
+    intro:SetPoint("TOPLEFT", 16, -14)
+    intro:SetText(INTRO)
+
+    local title = K.Text(tip, 15, KC.title)
+    title:SetPoint("TOPLEFT", intro, "BOTTOMLEFT", 0, -14)
+    title:SetText("To open it")
+
+    local rows = {}
+    local controls = K.ChatText(tip, 13, KC.help)
+    controls:SetWordWrap(true)
+
+    local function Render()
+        local lines = TipLines()
+        local height = 14 + intro:GetStringHeight() + 14 + title:GetStringHeight()
+        local prev = title
+        for i, text in ipairs(lines) do
+            local row = rows[i]
+            if not row then
+                row = K.Text(tip, 14, KC.cream)
+                rows[i] = row
+            end
+            local gap = i == 1 and 12 or 8
+            row:ClearAllPoints()
+            row:SetPoint("TOPLEFT", prev, "BOTTOMLEFT", 0, -gap)
+            row:SetPoint("RIGHT", tip, "RIGHT", -16, 0)
+            row:SetText("|cffffd24a•|r  " .. text)
+            row:Show()
+            height = height + gap + row:GetStringHeight()
+            prev = row
+        end
+        for i = #lines + 1, #rows do rows[i]:Hide() end
+        controls:ClearAllPoints()
+        controls:SetPoint("TOPLEFT", prev, "BOTTOMLEFT", 0, -14)
+        controls:SetPoint("RIGHT", tip, "RIGHT", -16, 0)
+        controls:SetText(IF.PadText(CONTROLS))
+        tip:SetHeight(height + 14 + controls:GetStringHeight() + 16)
+    end
+    panel:SetScript("OnShow", Render)
+    Render()
     return panel
 end
 
 IF.OnLogin(function()
-    if Settings and Settings.RegisterVerticalLayoutCategory and CreateSettingsButtonInitializer then
-        -- The game's own settings list and button, which its pad navigation
-        -- reaches (D-pad right from the category list)
-        local category, layout = Settings.RegisterVerticalLayoutCategory(IF.TITLE)
-        layout:AddInitializer(CreateSettingsButtonInitializer("Controller panel", "Open",
-            OpenPanel, IF.PadText(HELP), true))
-        Settings.RegisterAddOnCategory(category)
-    elseif Settings and Settings.RegisterCanvasLayoutCategory then
+    if Settings and Settings.RegisterCanvasLayoutCategory then
         local panel = CanvasPanel()
         Settings.RegisterAddOnCategory(Settings.RegisterCanvasLayoutCategory(panel, panel.name))
     elseif InterfaceOptions_AddCategory then

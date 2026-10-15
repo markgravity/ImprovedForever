@@ -187,9 +187,7 @@ ITEM_QUALITY_COLORS = setmetatable({}, { __index = function() return { r = 1, g 
 RAID_CLASS_COLORS = setmetatable({}, { __index = function() return { r = 1, g = 1, b = 1, colorStr = "ffffffff" } end })
 SlashCmdList = {}
 Enum = Stub()
--- (category, layout: a stub's call returns only one)
 Settings = Stub()
-Settings.RegisterVerticalLayoutCategory = function() return Stub(), Stub() end
 C_Timer = { After = function() end, NewTicker = function() return Stub() end, NewTimer = function() return Stub() end }
 C_Container = { GetContainerNumSlots = function() return 0 end, GetContainerItemID = function() return nil end,
     GetContainerItemInfo = function() return nil end, GetContainerNumFreeSlots = function() return 0, 0 end }
