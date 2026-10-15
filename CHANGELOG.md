@@ -1,5 +1,38 @@
 # Changelog
 
+## Core 0.9.0
+
+- **Touchpad**: new default actions, and the ones that need a module wait until you're in the world.
+- The Options page now shows how to open the panel.
+- New glow textures for the Wheel's unit-frame highlight.
+
+## Wheel 0.8.0
+
+- **Group wheel**: pick a party or raid member with the stick, then cast a helpful spell on them. A
+  breathing glow marks the member on their unit frame, shaped to your frame layout.
+- Wheels can mix more kinds of slots, and the wheel editor was reworked.
+- You can walk with the left stick while a wheel is open.
+
+## Gather 0.6.3
+
+- Node scanning is spread out over time, so the minimap scan no longer hiccups your FPS. Labels and
+  alerts have their own timing.
+
+## Junk 0.7.1
+
+- Selling is now one path for Sell All Junk and the Destroy panel: each item is checked again just
+  before it goes, only counted sold once it leaves your bags, and at most 12 a press so all of it can
+  be bought back.
+
+## Vibration 0.6.2
+
+- Vibration reworked around the shared node scan: smoother, with fewer scan hiccups.
+
+## QuestTracker 0.6.2
+
+- Fixed: closing the tracker with the pad no longer gives a forbidden action error.
+- The D-pad now goes down the tracker in your quest sort order.
+
 ## Core 0.8.1
 
 - Fixed: the **Open** button in Options > AddOns > Improved Forever no longer gets a forbidden
