@@ -9,6 +9,9 @@ the controller button glyphs used when the client has no atlas for one.
   ic_slot, ic_disc, ic_hatch, ic_ring_dash, ic_slot_glow   the round slot
   ic_g_<a|b|x|y|lb|rb|lt|rt|ls|rs|dpad|dpad_lr|dpad_up>    button glyphs
   ic_area                      a map area (the Wiki's): a soft fill, a lit rim
+  ic_frame_glow, ic_round_glow a glow outside a frame's edge (a 64 x 64
+                               nine-slice, corners of 24: the edge at 20) /
+                               a circle's (40 across, centred)
 
 Run: python3 tools/make_ui_textures.py   (needs Pillow)
 """
@@ -118,6 +121,32 @@ def slot():
     done(img.filter(ImageFilter.GaussianBlur(3 * SS)), 64, 64, "ic_slot_glow")
 
 
+# A glow round a frame (the Group wheel's pick on its unit frame): only
+# outside its edge (the frame itself stays clear), a bright rim on the edge
+# fading out to nothing. A rounded box (a 64 x 64 nine-slice, corners of
+# 24, the edge at 20) and a round one (the circle 40 across, centred).
+def outer_glow(shape, name):
+    solid = big(64, 64)
+    shape(ImageDraw.Draw(solid), dict(fill=(255, 255, 255, 255)))
+    halo = solid.filter(ImageFilter.GaussianBlur(6 * SS))
+    a = halo.split()[3].point(lambda v: min(255, int(v * 2.2)))
+    rim = big(64, 64)
+    shape(ImageDraw.Draw(rim), dict(outline=(255, 255, 255, 255), width=2 * SS))
+    rim = rim.filter(ImageFilter.GaussianBlur(0.6 * SS)).split()[3]
+    a = Image.composite(Image.new("L", a.size, 255), a, rim)
+    # (nothing inside the shape)
+    inside = solid.split()[3].filter(ImageFilter.MinFilter(2 * SS + 1))
+    a = Image.composite(Image.new("L", a.size, 0), a, inside)
+    img = Image.new("RGBA", a.size, (255, 255, 255, 0))
+    img.putalpha(a)
+    done(img, 64, 64, name)
+
+
+def frame_glow():
+    outer_glow(lambda d, kw: rr(d, (20, 20, 44, 44), 4, **kw), "ic_frame_glow")
+    outer_glow(lambda d, kw: d.ellipse((12 * SS, 12 * SS, 52 * SS, 52 * SS), **kw), "ic_round_glow")
+
+
 # Button glyphs (PlayStation) -------------------------------------------------
 def glyph_base(round_):
     img = big(64, 64)
@@ -194,4 +223,5 @@ if __name__ == "__main__":
     buttons()
     marks()
     slot()
+    frame_glow()
     glyphs()
