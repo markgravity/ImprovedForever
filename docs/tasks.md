@@ -26,7 +26,7 @@ Work planned from the launch threads' feature requests and bug reports
 | 15 | Override binding cleared before it's removed | Core | P2 | S | test |
 | 16 | README: outdated file locations | Docs | P2 | S | test |
 | 17 | Gyro on the DualSense | Core | P3 | S | review |
-| 18 | Healer targeting (party / raid frames) | new | P3 | L | review |
+| 18 | Healer targeting: the Group wheel | Wheel | P3 | L | test |
 | 19 | Split the auction window file | Auction | P3 | L | review |
 
 ---
@@ -148,9 +148,19 @@ Work planned from the launch threads' feature requests and bug reports
 - **Asked by:** u/Shako_117. Check `C_GamePad.GetDeviceRawState` for motion data on Forever.
   **Review:** only if the API has it.
 
-### 18. Healer targeting (party / raid frames)
-- **From:** thread discussion (konoxians, Nirwel, dynari). See what Forever's own unit frame
-  navigation does in a raid first. **Review:** a module of its own, not promised.
+### 18. Healer targeting: the Group wheel
+- **From:** thread discussion (konoxians, Nirwel, dynari).
+- **Forever's own:** friendly modifier + D-pad targets party1-4, or walks a cursor over the
+  game's compact party / raid frames only (hard-coded; addon frames can't join), each step
+  changing the target.
+- **Built:** a built-in Group wheel (`Group.lua`): the party (all five slots) or the raid
+  (a page a raid group), by unit token. A pick targets; D-pad up / down on a member picks a
+  spell from the wheel's slots in the Wheels tab (helpful ranged spells by default), cast on
+  them without changing the target. Names, class, health read live (secret-safe). The
+  picked member's unit frame (the game's, or any addon's secure unit button) gets a gold
+  highlight of ours (`UnitFrames.lua`, read-only).
+- **Test:** party and raid, in combat, roster changes mid-fight, R3 twice, the highlight with
+  HealForever / Z-Perl Forever / ForeverUI, and no taint on closing pad-focused windows.
 
 ### 19. Split the auction window file
 - **From:** u/Sentiray (~2500 lines: rendering, selection, bindings, server replies).

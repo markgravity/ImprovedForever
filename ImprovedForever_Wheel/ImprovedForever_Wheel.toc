@@ -1,6 +1,6 @@
 ## Interface: 16001, 16002, 16003, 16100, 16101, 16200
 ## Title: Improved Forever: Wheel
-## Notes: Radial wheels on R3 combos: spells, items, emotes, consumables; the recent action slot.
+## Notes: Radial wheels on R3 combos: spells, items, emotes, consumables, your party or raid; the recent action slot.
 ## Author: markg
 ## Version: 0.7.1
 ## X-Website: https://github.com/markgravity/ImprovedForever
@@ -14,8 +14,10 @@
 Wheel.lua
 RingContent.lua
 WheelKinds.lua
+Group.lua
 MyWheels.lua
 Ring.lua
 BindPanel.lua
+UnitFrames.lua
 RecentSlot.lua
 WheelEditor.lua

@@ -8,12 +8,15 @@
 -- its lists (Spells, Items, Macros, Emotes) in a bar along the top (L1 /
 -- R1), each a list of cards (the D-pad up / down):
 -- Cross fills the slot and moves on to the next one. Triangle clears a
--- slot (held: renames, or resets a built-in wheel), Square held deletes.
+-- slot (held: renames, or resets a built-in wheel); Square hides or shows
+-- the wheel (with the mouse: the button under it), held deletes one of
+-- yours. A hidden wheel stays on this list, dimmed, but is off the
+-- Bindings tab and the ring (MyWheels.lua).
 -- "New wheel" makes one of a kind (WheelKinds.lua: the D-pad left / right
--- picks it): slots of your own, or one that fills itself. On a chat
--- phrase wheel Square (or "+ Add a phrase" in the Phrases list) types a
--- phrase for the slot (a keyboard; the D-pad left / right goes through
--- phrases added before, up / down its channel).
+-- picks it): slots of your own, or one that fills itself.
+-- "+ Add a phrase" in the Phrases list types a phrase for the slot (a
+-- keyboard; the one in the slot to edit; the D-pad left / right goes
+-- through phrases added before, up / down its channel).
 local IF = ImprovedForever
 
 local K = IF.ConfigKit
@@ -34,6 +37,12 @@ local CX, CY = 270, 270             -- in the wheel's 540 x 541 frame
 local WEDGE_RADIUS = 150 * SCALE    -- highlight / empty wedges
 local ICON_SIZE = math.floor(38 * SCALE + 0.5)
 local PER_PAGE = 8
+-- A wheel whose slots go in the hub (the Group wheel's spells): a small
+-- ring of them there, its members round the wheel
+local HUB_RADIUS, HUB_ICON = 45, 26
+-- What opens the wheel: its glyphs under it (in the wheel's frame, past
+-- its bottom edge)
+local BIND_Y = 541 + 22
 
 -- zone: nil, or "popup" (a confirmation up), "rename" (naming the wheel)
 -- kindIndex: the kind "New wheel" makes (KD.Available()'s)
@@ -42,10 +51,11 @@ local KD = IF.WheelKinds
 MW.Page = W
 
 ---------------------------------------------------------------------------
--- The wheels on the rail, then "New wheel" while there is room
+-- The wheels on the rail (hidden ones too, dimmed), then "New wheel" while
+-- there is room
 ---------------------------------------------------------------------------
 function W:Entries()
-    local entries = MW.Wheels()
+    local entries = MW.Wheels(true)
     if #MW.List() < MW.MAX then
         entries[#entries + 1] = { new = true, label = "+ New wheel" }
     end
@@ -71,11 +81,6 @@ end
 
 local function Editable(wheel)
     return wheel and wheel.slots ~= nil
-end
-
--- A wheel of chat phrases: Square types one
-local function Typed(wheel)
-    return wheel and (wheel.typed or (wheel.id and KD.Get(wheel.kind).typed)) or false
 end
 
 -- What the wheel's slots hold right now (a self-filling one: its content)
@@ -167,7 +172,7 @@ function W:Build(parent)
     f.hubName:SetJustifyH("CENTER")
     f.hubName:SetWordWrap(true)
     if f.hubName.SetMaxLines then f.hubName:SetMaxLines(2) end
-    -- What it is bound to, as button glyphs, alone in the hub
+    -- What it is bound to, as button glyphs, under the wheel
     f.bindGlyphs = K.GlyphRow(zone, 36)
     -- A wheel of several pages: a dot each (the native page dots), under it
     f.pageDots = {}
@@ -177,7 +182,7 @@ function W:Build(parent)
         f.pageDots[i] = d
     end
     f.bindNone = K.ChatText(zone, 13, KC.grey)
-    f.bindNone:SetPoint("CENTER", zone, "TOPLEFT", CX, -CY)
+    f.bindNone:SetPoint("CENTER", zone, "TOPLEFT", CX, -BIND_Y)
     f.bindNone:SetText("Not bound")
     f.count = K.Text(zone, 14, KC.title)
     f.count:SetPoint("CENTER", zone, "TOPLEFT", CX, -(CY + 10))
@@ -213,7 +218,7 @@ function W:Build(parent)
         s.label:SetJustifyH("CENTER")
         s.label:SetPoint("CENTER", zone, "TOPLEFT", CX + lx * SCALE, -CY + ly * SCALE)
         s:SetScript("OnClick", function(_, button)
-            if MW.renaming then return end
+            if MW.renaming or (W:Current() or {}).hub then return end
             menu.Disarm()
             W.slot = W:PageBase() + p
             if button == "RightButton" then
@@ -224,6 +229,51 @@ function W:Build(parent)
         end)
         f.slots[p] = s
     end
+
+    -- The hub's slots (a wheel with hub = true): 1 at the top, clockwise
+    f.hubSlots = {}
+    for p = 1, PER_PAGE do
+        local a = (p - 1) * math.pi / 4
+        local h = K.NewFrame("Button", nil, zone)
+        h:SetSize(HUB_ICON, HUB_ICON)
+        h:SetPoint("CENTER", zone, "TOPLEFT", CX + HUB_RADIUS * math.sin(a), -(CY - HUB_RADIUS * math.cos(a)))
+        h:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+        -- (the slot with the focus: a cyan disc behind it)
+        h.focus = K.RoundIcon(h, HUB_ICON + 6, "BACKGROUND")
+        h.focus:SetPoint("CENTER")
+        h.focus:SetTexture("Interface\\Buttons\\WHITE8x8")
+        h.focus:SetVertexColor(KC.info[1], KC.info[2], KC.info[3])
+        h.icon = K.RoundIcon(h, HUB_ICON, "ARTWORK")
+        h.icon:SetPoint("CENTER")
+        h.plus = K.Text(h, 14, KC.dimGold, "OVERLAY")
+        h.plus:SetPoint("CENTER", 0, 1)
+        h.plus:SetText("+")
+        h:SetScript("OnClick", function(_, button)
+            if MW.renaming then return end
+            menu.Disarm()
+            W:SetSlot(p)
+            if button == "RightButton" then
+                W:Empty()
+            else
+                W:Aim()
+            end
+        end)
+        h:Hide()
+        f.hubSlots[p] = h
+    end
+
+    -- Gamepad mode off: under the wheel, a button that hides or shows it
+    -- (Square's)
+    f.hideButton = K.Button(f, 14)
+    f.hideButton:SetSize(160, 30)
+    f.hideButton:SetPoint("TOP", zone, "BOTTOM", 0, -48)
+    f.hideButton.label:SetText("Hide wheel")
+    f.hideButton:SetScript("OnClick", function()
+        if MW.renaming then return end
+        menu.Disarm()
+        W:ToggleHidden(W:Current())
+    end)
+    f.hideButton:Hide()
 
     -- The name typed in a box over the wheel (a physical keyboard)
     local veil = K.NewFrame("Frame", nil, zone)
@@ -373,7 +423,9 @@ function W:OpenPicker(wheel)
             if MW.renaming then return end
             -- ("+ Add a phrase": the box, its text and channel)
             if e.add then
-                W:StartRename(W:Current(), "phrase", true)
+                local wheel = W:Current()
+                local current = wheel and wheel.slots and wheel.slots[W.slot]
+                W:StartRename(wheel, "phrase", not (current and KD.PhraseText(current)))
                 return menu.Render()
             end
             W:Fill(e)
@@ -513,25 +565,24 @@ function W:Triangle(wheel)
     end)
 end
 
--- Square held: deletes a wheel of yours (once confirmed); pressed on a
--- chat phrase wheel: types a phrase for the slot. Binding a wheel to a
--- press is the Bindings tab's.
+-- Hides a wheel (off the Bindings tab and the ring), or shows it again
+function W:ToggleHidden(wheel)
+    if not (wheel and wheel.key) or wheel.new then return end
+    local hidden = not MW.Hidden(wheel.key)
+    MW.SetHidden(wheel.key, hidden)
+    menu.Toast(wheel.label .. (hidden and " hidden: off the Bindings tab and the ring" or " shown"))
+    menu.Render()
+end
+
+-- Square: hides or shows the wheel; held, deletes a wheel of yours (once
+-- confirmed). Binding a wheel to a press is the Bindings tab's.
 function W:Square(wheel)
-    -- (a built-in phrase wheel: Square types, nothing to delete)
     if not wheel.id then
-        if Typed(wheel) then
-            self:StartRename(wheel, "phrase")
-            menu.Render()
-        end
+        self:ToggleHidden(wheel)
         return
     end
     self:PressOrHold("PAD3", function()
-        if Typed(wheel) then
-            W:StartRename(wheel, "phrase")
-            menu.Render()
-            return
-        end
-        menu.Toast(IF.PadText("Hold {X} to delete " .. wheel.label))
+        W:ToggleHidden(wheel)
     end, function()
         W:Confirm('Delete the wheel "' .. wheel.label .. '"?', "Delete", function()
             MW.Delete(wheel.id)
@@ -836,11 +887,8 @@ function W:Help()
             hints[#hints + 1] = H({ "Y" }, "Hold to Rename", "Y")
         end
         if Pages(wheel) > 1 then hints[#hints + 1] = H({ "LT", "RT" }, "Page", "RT") end
-        if wheel.id then
-            hints[#hints + 1] = H({ "X" }, Typed(wheel) and "Type / Hold to Delete" or "Hold to Delete", "X")
-        elseif Typed(wheel) then
-            hints[#hints + 1] = H({ "X" }, "Type", "X")
-        end
+        local hideVerb = wheel.hidden and "Show" or "Hide"
+        hints[#hints + 1] = H({ "X" }, wheel.id and (hideVerb .. " / Hold to Delete") or hideVerb, "X")
     end
     hints[#hints + 1] = H({ "RS" }, "Tab")
     hints[#hints + 1] = H({ "B" }, "Close", "B")
@@ -862,7 +910,9 @@ function W:Render()
 
     -- The wheels down the left
     local lines = {}
-    for i, entry in ipairs(entries) do lines[i] = { label = entry.label } end
+    for i, entry in ipairs(entries) do
+        lines[i] = { label = entry.hidden and ("|cff7d7468" .. entry.label .. " (hidden)|r") or entry.label }
+    end
     f.side:Render(IF.GlyphText("LS", 18) .. " Wheels", lines, self.index, self.zone == nil)
 
     -- "New wheel" selected: an empty wheel and what Cross does
@@ -886,13 +936,13 @@ function W:Render()
     f.title:Hide()
     f.kicker:Hide()
     f.count:Hide()
-    -- The page dots (the one shown lit), under the binding
+    -- The page dots (the one shown lit), in the hub
     local pageNow = base / PER_PAGE + 1
     for i, d in ipairs(f.pageDots) do
         d:SetShown(pages > 1 and i <= pages)
         if pages > 1 and i <= pages then
             d:ClearAllPoints()
-            d:SetPoint("CENTER", d:GetParent(), "TOPLEFT", CX + (i - (pages + 1) / 2) * 15, -(CY + 30))
+            d:SetPoint("CENTER", d:GetParent(), "TOPLEFT", CX + (i - (pages + 1) / 2) * 15, -CY)
             local name = i == pageNow and "gamepad-radialgamemenu-cursorbg-neutral" or "gamepad-radialgamemenu-cursorbg-inactive"
             if C_Texture.GetAtlasInfo(name) then
                 d:SetAtlas(name)
@@ -902,27 +952,63 @@ function W:Render()
             end
         end
     end
+    -- (a wheel with its slots in the hub: those there)
+    local hub = not isNew and wheel.hub
     local glyphs = not isNew and MW.BindGlyphs(wheel.key)
     f.bindGlyphs:SetShown(glyphs and true or false)
     f.bindNone:SetShown(not isNew and not glyphs)
     if glyphs then
         local w = f.bindGlyphs:Set(glyphs)
         f.bindGlyphs:ClearAllPoints()
-        f.bindGlyphs:SetPoint("CENTER", f.bindGlyphs:GetParent(), "TOPLEFT", CX, -CY)
+        f.bindGlyphs:SetPoint("CENTER", f.bindGlyphs:GetParent(), "TOPLEFT", CX, -BIND_Y)
         f.bindGlyphs:SetWidth(math.max(1, w))
     end
 
+    -- A hub wheel: its slots there, the focused one lit; round the wheel
+    -- what it holds now (the Group wheel: the group, its first page)
+    for p, h in ipairs(f.hubSlots) do
+        local action = hub and slots[p]
+        h:SetShown(hub and p <= max or false)
+        if hub and p <= max then
+            h.icon:SetShown(action ~= nil)
+            if action then K.SetIcon(h.icon, MW.ActionIcon(action) or 134400) end
+            h.plus:SetShown(not action)
+            h.focus:SetShown(p == self.slot)
+        end
+    end
+    local G = IF.GroupWheel
+    local members = hub and G and IF.RingBuilders[wheel.key] and IF.RingBuilders[wheel.key]() or {}
+    for p, s in ipairs(f.slots) do
+        local entry = hub and (members.groups and members.groups[1] or members)[p]
+        if hub then
+            s:SetShown(entry ~= nil)
+            s.empty:SetShown(false)
+            s.label:SetShown(entry ~= nil)
+            if entry then
+                local name, icon, color, usable = G.Look(entry.unit)
+                s.icon:Show()
+                K.SetIcon(s.icon, icon)
+                s.icon:SetDesaturated(not usable)
+                s.plus:Hide()
+                s.count:SetText("")
+                s.label:SetText(name)
+                s.label:SetTextColor(unpack(usable and (color or KC.title) or KC.grey))
+                s:SetAlpha(1)
+            end
+        end
+    end
     -- The slot the right stick picked always shows (the picker fills it)
     local onSlots = true
     for p, s in ipairs(f.slots) do
         local i = base + p
         local action = slots[i]
-        local shown = i <= max
-        s:SetShown(shown)
+        local shown = i <= max and not hub
+        if not hub then s:SetShown(shown) end
         -- (an empty slot: just its "+" and its place, no grey wedge)
-        s.empty:SetShown(false)
-        s.label:SetShown(shown)
+        if not hub then s.empty:SetShown(false) end
+        if not hub then s.label:SetShown(shown) end
         if shown then
+            s.icon:SetDesaturated(false)
             local name, icon = action and MW.ActionName(action), action and MW.ActionIcon(action)
             s.icon:SetShown(action ~= nil)
             if action then K.SetIcon(s.icon, icon or 134400) end
@@ -938,7 +1024,7 @@ function W:Render()
         end
     end
     -- The highlight on the slot with the focus (cyan: the picker fills it)
-    local showHighlight = not isNew and self.slot <= max
+    local showHighlight = not isNew and not hub and self.slot <= max
     f.highlight:SetShown(showHighlight)
     if showHighlight then
         local a = ((self.slot - 1) % PER_PAGE) * math.pi / 4
@@ -957,8 +1043,13 @@ function W:Render()
     local showSlot = onSlots
     local newKind = isNew and self:NewKind()
     f.hubName:SetText(newKind and newKind.label or showSlot and (focused and MW.ActionName(focused)
-        or MW.POSITIONS[(self.slot - 1) % PER_PAGE + 1]) or "")
+        or (hub and "Empty" or MW.POSITIONS[(self.slot - 1) % PER_PAGE + 1])) or "")
     f.hubName:SetTextColor(unpack(focused and KC.cream or KC.grey))
+    -- (the hub's slot's name, in its middle)
+    f.hubName:SetShown(hub or false)
+    f.hubName:ClearAllPoints()
+    f.hubName:SetPoint("CENTER", f.hubName:GetParent(), "TOPLEFT", CX, -(hub and CY or (CY - 9)))
+    f.hubName:SetSize(hub and 58 or 80, 30)
     f.count:SetText(isNew and "" or format("%d / %d", Count(wheel), max))
 
     -- Right: the picker (faded unless it has the focus), or the detail
@@ -983,6 +1074,9 @@ function W:Render()
                     .. ". Bind it to a press in the Bindings tab." })
         end
     end
+    -- (only with the game's gamepad mode off: on the pad, Square)
+    f.hideButton:SetShown(not isNew and not IF.Input.PadEnabled() and self.zone == nil)
+    if not isNew then f.hideButton.label:SetText(wheel.hidden and "Show wheel" or "Hide wheel") end
     -- The box over the wheel: naming
     f.veil:SetShown(self.zone == "rename")
     self.box:SetShown(self.zone == "rename")

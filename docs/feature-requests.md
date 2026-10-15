@@ -85,6 +85,8 @@ r/classicwowplus `1x5o7l2`.
   party / raid members with the D-pad (left / right picks the group, up / down the member).
 - **Idea:** check what Forever's own unit frame navigation does in a raid first; a raid-frame
   picker could be a module of its own later. Not promised.
+- **Now:** the Wheel's Group wheel (task 18): pick a member to target, or cast a picked spell
+  on them; their unit frame lights up.
 
 ### Motion controls (gyro)
 - **Asked by:** u/Shako_117 (pgnzmwq). Answered "Not yet... no gyro."

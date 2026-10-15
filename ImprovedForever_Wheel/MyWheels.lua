@@ -16,9 +16,9 @@ MW.MAX = 8
 MW.POSITIONS = { "Top", "Top right", "Right", "Bottom right", "Bottom", "Bottom left", "Left", "Top left" }
 
 -- The built-in rings; the wheels are added after them
-local BUILT_IN = { "native", "quest", "consumables", "emotes" }
+local BUILT_IN = { "native", "quest", "consumables", "emotes", "group" }
 -- The built-in wheels, shown before the player's own
-MW.BUILT_IN_WHEELS = { "quest", "consumables", "emotes" }
+MW.BUILT_IN_WHEELS = { "quest", "consumables", "emotes", "group" }
 
 ---------------------------------------------------------------------------
 -- The wheels: charDB.wheels = { { id = 1-8, name, kind (nil: "custom"),
@@ -41,6 +41,29 @@ function MW.Count(w)
         if w.slots[i] then n = n + 1 end
     end
     return n
+end
+
+---------------------------------------------------------------------------
+-- Hidden wheels (per character: charDB.hiddenWheels = { [ring key] =
+-- true }): off the Bindings tab, not on the ring (L1 / R1), their presses
+-- back to the game's (kept for when it's shown again). The Wheels tab
+-- still lists them, dimmed: Square there shows one again.
+---------------------------------------------------------------------------
+function MW.HiddenList()
+    IF.charDB.hiddenWheels = IF.charDB.hiddenWheels or {}
+    return IF.charDB.hiddenWheels
+end
+
+function MW.Hidden(key)
+    return IF.charDB and IF.charDB.hiddenWheels and IF.charDB.hiddenWheels[key] or false
+end
+IF.RingHidden = MW.Hidden
+
+-- (Changed, below)
+local Changed
+function MW.SetHidden(key, hidden)
+    MW.HiddenList()[key] = hidden or nil
+    Changed()
 end
 
 -- A wheel of this kind exists ("quest"...)
@@ -84,13 +107,15 @@ end
 -- IF.RINGS / RING_LABELS / RingBuilders: the built-in rings, then the wheels
 function MW.Register()
     local rings = {}
-    for _, key in ipairs(BUILT_IN) do rings[#rings + 1] = key end
+    for _, key in ipairs(BUILT_IN) do
+        if not MW.Hidden(key) then rings[#rings + 1] = key end
+    end
     for key in pairs(IF.RING_LABELS) do
         if key:find("^my%d") then IF.RING_LABELS[key], IF.RingBuilders[key] = nil, nil end
     end
     for _, w in ipairs(MW.List()) do
         local key = MW.RingKey(w.id)
-        rings[#rings + 1] = key
+        if not MW.Hidden(key) then rings[#rings + 1] = key end
         IF.RING_LABELS[key] = w.name
         IF.RingBuilders[key] = Builder(w.id)
     end
@@ -118,7 +143,7 @@ function MW.Register()
     end
 end
 
-local function Changed()
+function Changed()
     MW.Register()
     -- A recorded button on a wheel that is gone: let go
     local keys = MW.WheelKeys()
@@ -149,6 +174,7 @@ function MW.Create(kindKey)
 end
 
 function MW.Delete(id)
+    MW.HiddenList()[MW.RingKey(id)] = nil
     local list = MW.List()
     for i, w in ipairs(list) do
         if w.id == id then
@@ -177,9 +203,11 @@ end
 ---------------------------------------------------------------------------
 -- Every wheel, described for the editor: { key, label, builtin, slots
 -- (nil: fills itself), max (slots: 8 per page), lists (the picker's),
--- info, reset, id (own wheels: rename / delete) }
+-- info, reset, id (own wheels: rename / delete), hub (its slots go in the
+-- wheel's middle, its own content round it: the Group wheel's spells) }
+-- all: the hidden ones too (each with hidden = true)
 ---------------------------------------------------------------------------
-function MW.Wheels()
+function MW.Wheels(all)
     local wheels = {
         { key = "quest", label = IF.RING_LABELS.quest, builtin = true, max = IF.MAX_SLOTS,
             info = "Fills itself from your bags: the items a quest has you use, then the ones that start a"
@@ -192,6 +220,17 @@ function MW.Wheels()
             info = "Emotes to play with a flick of the stick. Change any slot.",
             reset = IF.ResetEmoteSlots, resetLabel = "Default emotes" },
     }
+    -- (the Group wheel fills itself with the group; its slots here are the
+    -- spells D-pad up / down picks on a member: Group.lua)
+    local G = IF.GroupWheel
+    if G then
+        wheels[#wheels + 1] = { key = "group", label = IF.RING_LABELS.group, builtin = true, slots = G.Spells(),
+            max = G.MAX_SPELLS, lists = { SPELLS }, hub = true,
+            info = "Fills itself with your party or raid, a group a page. A pick targets them; on a member,"
+                .. " D-pad up / down picks one of these spells instead, cast on them without changing your"
+                .. " target. Usable in combat; the group updates after a fight.",
+            reset = G.ResetSpells, resetLabel = "Default spells" }
+    end
     -- (the player's own, by kind: slots to fill, or none, it fills itself)
     for _, w in ipairs(MW.List()) do
         local kind = IF.WheelKinds.Get(w.kind)
@@ -204,7 +243,12 @@ function MW.Wheels()
             lists = kind.lists and kind.lists() or MW.CATALOG, info = kind.info,
             reset = reset, resetLabel = reset and "Defaults" or nil }
     end
-    return wheels
+    local shown = {}
+    for _, wheel in ipairs(wheels) do
+        wheel.hidden = MW.Hidden(wheel.key)
+        if all or not wheel.hidden then shown[#shown + 1] = wheel end
+    end
+    return shown
 end
 
 -- What a self-filling wheel holds right now, as actions by slot (each
@@ -281,7 +325,7 @@ function MW.ApplyWheelKeys()
     if not IF.Binds.InGame() then return end
     for spec, ringKey in pairs(MW.WheelKeys()) do
         local key = IF.Binds.KeyOf(spec)
-        if key and _G["ImprovedForeverWheel_" .. ringKey] then
+        if key and _G["ImprovedForeverWheel_" .. ringKey] and not MW.Hidden(ringKey) then
             SetOverrideBindingClick(keyOwner, false, key, "ImprovedForeverWheel_" .. ringKey, "LeftButton")
         end
     end

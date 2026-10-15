@@ -256,7 +256,12 @@ local function Refresh(force)
         local n = recent.type == "item" and ItemCount(recent.value)
         count:SetText(n and n > 1 and n or "")
         icon:SetDesaturated(n == 0)
-        label:SetText(recent.label or "")
+        -- (a group member's: who holds the token now, Group.lua)
+        if recent.unit and IF.GroupWheel then
+            label:SetText((IF.GroupWheel.Look(recent.unit)))
+        else
+            label:SetText(recent.label or "")
+        end
     else
         count:SetText("")
         label:SetText("|cff9d917a" .. (IF.RING_LABELS[wheel] or "") .. "|r")

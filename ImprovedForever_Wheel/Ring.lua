@@ -252,8 +252,12 @@ SecureHandlerWrapScript(trigger, "OnClick", trigger, [[
         self:SetAttribute("spell", nil)
         self:SetAttribute("item", nil)
         self:SetAttribute("macrotext", nil)
-        self:SetAttribute(actionType == "macro" and "macrotext" or actionType,
-            ring:GetAttribute("recent-" .. wheel .. "-value"))
+        -- (a group member's: on the same unit token)
+        self:SetAttribute("unit", ring:GetAttribute("recent-" .. wheel .. "-unit"))
+        if actionType ~= "target" then
+            self:SetAttribute(actionType == "macro" and "macrotext" or actionType,
+                ring:GetAttribute("recent-" .. wheel .. "-value"))
+        end
         if (self:GetAttribute("ic-keydown") or 1) == 1 then
             self:SetAttribute("type", actionType)
             return
@@ -268,6 +272,7 @@ SecureHandlerWrapScript(trigger, "OnClick", trigger, [[
         self:SetAttribute("ic-mode", nil)
         self:SetAttribute("spell", nil)
         self:SetAttribute("item", nil)
+        self:SetAttribute("unit", nil)
         self:SetAttribute("macrotext", macro)
         if (self:GetAttribute("ic-keydown") or 1) == 1 then
             self:SetAttribute("type", "macro")
@@ -310,7 +315,7 @@ end)
 -- in the game's Key Bindings, Bindings.xml) that opens it, or closes it if
 -- it is already up. Any key or pad button the player binds works, in combat
 -- too.
-IF.WHEEL_BINDING_KEYS = { "quest", "consumables", "emotes", "my1", "my2", "my3", "my4", "my5", "my6", "my7", "my8" }
+IF.WHEEL_BINDING_KEYS = { "quest", "consumables", "emotes", "group", "my1", "my2", "my3", "my4", "my5", "my6", "my7", "my8" }
 -- (a name kept: Buffs gave its place to Quest Items, and a key or crossbar
 -- slot bound to its button opens that now)
 local RENAMED = { buffs = "quest" }
@@ -362,7 +367,9 @@ SecureHandlerWrapScript(aim, "OnClick", aim, [[
 
 -- D-pad up / down: step the pick round the ring; while a chat phrase is
 -- picked, the channel it's said on ("ic-channel": 1 each one's own, then
--- "chan-cmd-<n>"'s, set out of combat).
+-- "chan-cmd-<n>"'s, set out of combat); while a group member is (the Group
+-- wheel), what a pick does to them ("ic-cast": 1 target, then the spell
+-- "cast-spell-<n>").
 local step = SecureButton("ImprovedForeverRingStep")
 step:RegisterForClicks("AnyDown")
 SecureHandlerWrapScript(step, "OnClick", step, [[
@@ -370,6 +377,13 @@ SecureHandlerWrapScript(step, "OnClick", step, [[
     if ring:GetAttribute("ic-waiting") then ring:RunAttribute("ic-take-pad") end
     local page = ring:GetAttribute("ic-active")
     local picked = page and ring:IsShown() and (ring:RunAttribute("ic-pick-body", 0.25) or ring:GetAttribute("ic-sticky"))
+    local casts = ring:GetAttribute("cast-n") or 1
+    if picked and casts > 1 and ring:GetAttribute(page .. "-unit-" .. picked) then
+        local c = ring:GetAttribute("ic-cast") or 1
+        if button == "PADDUP" then c = (c - 2) % casts + 1 else c = c % casts + 1 end
+        ring:SetAttribute("ic-cast", c)
+        return false
+    end
     if picked and ring:GetAttribute(page .. "-phrase-" .. picked) then
         local n = ring:GetAttribute("chan-n") or 1
         local c = ring:GetAttribute("ic-channel") or 1
@@ -434,13 +448,28 @@ SecureHandlerWrapScript(use, "OnClick", use, [[
     self:SetAttribute("spell", nil)
     self:SetAttribute("item", nil)
     self:SetAttribute("macrotext", nil)
-    self:SetAttribute(actionType == "macro" and "macrotext" or actionType, value)
+    -- (a group member: targeted, or the spell picked cast on them; any
+    -- other slot: no unit, a spell goes where it would from the bar)
+    local unit = ring:GetAttribute(key .. "-unit-" .. pick)
+    self:SetAttribute("unit", unit)
+    if unit then
+        local spell = ring:GetAttribute("cast-spell-" .. (ring:GetAttribute("ic-cast") or 1))
+        if spell then
+            actionType, value = "spell", spell
+        else
+            actionType, value = "target", nil
+        end
+    end
+    if actionType ~= "target" then
+        self:SetAttribute(actionType == "macro" and "macrotext" or actionType, value)
+    end
     self:SetAttribute("type", actionType)
     -- The wheel's most recent action (R3 twice uses it again)
     local wheel = ring:GetAttribute(key .. "-wheel")
     if wheel then
         ring:SetAttribute("recent-" .. wheel .. "-type", actionType)
         ring:SetAttribute("recent-" .. wheel .. "-value", value)
+        ring:SetAttribute("recent-" .. wheel .. "-unit", unit)
         ring:SetAttribute("ic-used-n", (ring:GetAttribute("ic-used-n") or 0) + 1)
         -- (with the count: the same slot twice is still a change)
         ring:SetAttribute("ic-used", key .. "#" .. pick .. "#" .. ring:GetAttribute("ic-used-n"))
@@ -633,23 +662,25 @@ prompts:SetFont("Fonts\\FRIZQT__.TTF", 12, "")
 prompts:SetShadowOffset(1, -1)
 prompts:SetPoint("TOP", selected, "BOTTOM", 0, -6)
 -- (pages: a wheel of more than one, D-pad left / right turns them; bind:
--- the picked slot can go on the crossbar, Square; chat: a chat phrase
--- picked, D-pad up / down its channel)
-local promptPages, promptBind, promptChat
-local function SetPrompts(pages, canBind, chat)
+-- the picked slot can go on the crossbar, Square; upDown: what D-pad up /
+-- down changes on the picked slot, "Channel" (a chat phrase), "Spell" (a
+-- group member), or false)
+local promptPages, promptBind, promptUpDown
+local function SetPrompts(pages, canBind, upDown)
     if pages ~= nil then promptPages = pages end
     if canBind ~= nil then promptBind = canBind end
-    if chat ~= nil then promptChat = chat end
+    if upDown ~= nil then promptUpDown = upDown end
     local bindLabel = _G.CONTEXT_ACTION_LABEL_BIND_TO_GAMEPAD_ACTION_BAR or "Bind"
     prompts:SetText(Glyph("RT") .. " Use      "
         .. (promptBind and (Glyph("X") .. " " .. bindLabel .. "      ") or "")
         .. Glyph("B") .. " Close"
         .. (promptPages and ("      " .. Glyph("DPAD_LR") .. " Page") or "")
-        .. (promptChat and ("      " .. Glyph("DPAD_UD") .. " Channel") or ""))
+        .. (promptUpDown and ("      " .. Glyph("DPAD_UD") .. " " .. promptUpDown) or ""))
 end
 SetPrompts(false, false, false)
 
--- The hub: while a chat phrase is picked, the channel it's said on
+-- The hub: while a chat phrase is picked, the channel it's said on; while
+-- a group member is, what a pick does to them (target, or a spell)
 local hubKicker = ring:CreateFontString(nil, "OVERLAY")
 hubKicker:SetFont("Fonts\\FRIZQT__.TTF", 10, "")
 hubKicker:SetShadowOffset(1, -1)
@@ -662,13 +693,43 @@ hubChannel:SetShadowOffset(1, -1)
 hubChannel:SetTextColor(unpack(GOLD))
 hubChannel:SetPoint("TOP", ring, "CENTER", 0, -2)
 hubChannel:SetWidth(96)
-local channelLabels = {}
-local function ShowChannel(chat)
-    hubKicker:SetShown(chat)
-    hubChannel:SetShown(chat)
-    if chat then hubChannel:SetText(channelLabels[ring:GetAttribute("ic-channel") or 1] or "") end
+-- (a group member picked: the spell's icon over its name; "Target" has
+-- the target icon)
+local TARGET_ICON = "Interface\\Icons\\Ability_Hunter_SniperShot"
+local hubIcon = ring:CreateTexture(nil, "OVERLAY")
+hubIcon:SetSize(34, 34)
+hubIcon:SetPoint("BOTTOM", ring, "CENTER", 0, 2)
+do
+    local mask = ring:CreateMaskTexture()
+    mask:SetAllPoints(hubIcon)
+    if HasAtlas("CircleMask") then
+        mask:SetAtlas("CircleMask")
+    else
+        mask:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+    end
+    hubIcon:AddMaskTexture(mask)
 end
-ShowChannel(false)
+hubIcon:Hide()
+local channelLabels = {}
+local castList = {} -- { label, spell?, icon? }, "ic-cast"'s (Group.lua)
+local hubMode
+-- mode: "chat", "cast" or nil (none shown)
+local function ShowChannel(mode)
+    hubMode = mode or nil
+    hubKicker:SetShown(hubMode == "chat")
+    hubChannel:SetShown(hubMode ~= nil)
+    hubIcon:SetShown(hubMode == "cast")
+    if hubMode == "chat" then
+        hubKicker:SetText("CHANNEL")
+        hubChannel:SetText(channelLabels[ring:GetAttribute("ic-channel") or 1] or "")
+    elseif hubMode == "cast" then
+        local cast = castList[ring:GetAttribute("ic-cast") or 1]
+        hubChannel:SetText(cast and cast.label or "Target")
+        hubIcon:SetTexture(cast and cast.icon or TARGET_ICON)
+        hubIcon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+    end
+end
+ShowChannel(nil)
 IF.OnPadStyleChanged(function() SetPrompts() end)
 
 local slots = {}
@@ -712,6 +773,17 @@ for index = 1, SLOTS_PER_PAGE do
     slot.label:SetShadowOffset(1, -1)
     slot.label:SetSize(90, 40)
     slot.label:SetPoint("CENTER", ring, "CENTER", lx, ly)
+    -- A group member's health, under the icon (the game's own secret-safe
+    -- StatusBar: fed the values as they are)
+    slot.health = CreateFrame("StatusBar", nil, ring)
+    slot.health:SetSize(ICON_SIZE, 4)
+    slot.health:SetPoint("TOP", slot.icon, "BOTTOM", 0, -3)
+    slot.health:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
+    slot.health:SetStatusBarColor(0.1, 0.8, 0.1)
+    local healthBack = slot.health:CreateTexture(nil, "BACKGROUND")
+    healthBack:SetAllPoints()
+    healthBack:SetColorTexture(0, 0, 0, 0.6)
+    slot.health:Hide()
     slots[index] = slot
 end
 
@@ -757,6 +829,12 @@ local function Pending(entry)
 end
 
 local function LabelColor(entry)
+    -- (a group member: their class colour, grey while gone, dead, offline)
+    local G = IF.GroupWheel
+    if entry.unit and G then
+        local _, _, color, usable = G.Look(entry.unit)
+        return usable and (color or GOLD) or GREY
+    end
     if Pending(entry) then return PENDING end
     local usable = entry.type ~= "item" or ItemCount(entry.value) > 0
     return usable and GOLD or GREY
@@ -802,6 +880,43 @@ local function EmptyText(info)
     return info and info.empty or "Nothing here"
 end
 
+-- Without the icon's own square frame (ConfigKit's SetIcon)
+local function SetSlotIcon(texture, icon)
+    if type(icon) == "string" and HasAtlas(icon) then
+        texture:SetAtlas(icon)
+    else
+        texture:SetTexture(icon)
+        texture:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+    end
+end
+
+-- A group member's slot, from their unit token now (so in combat too: the
+-- token's holder may have changed since the ring was built)
+local highlighted
+local function UpdateUnitSlot(index, entry)
+    local G = IF.GroupWheel
+    local slot = slots[index]
+    if not (G and slot and entry and entry.unit) then return end
+    local name, icon, color, usable = G.Look(entry.unit)
+    SetSlotIcon(slot.icon, icon)
+    slot.icon:SetDesaturated(not usable)
+    slot.label:SetText(name)
+    slot.label:SetTextColor(unpack(index == highlighted and { 1, 1, 1 } or (usable and (color or GOLD) or GREY)))
+    local max, now = G.Health(entry.unit)
+    slot.health:SetShown(max ~= nil)
+    if max then
+        slot.health:SetMinMaxValues(0, max)
+        slot.health:SetValue(now)
+    end
+end
+
+local function UpdateUnitSlots()
+    local entries = ringData[ring:GetAttribute("ic-active")] or {}
+    for index, entry in ipairs(entries) do
+        if entry.unit then UpdateUnitSlot(index, entry) end
+    end
+end
+
 local function RefreshVisuals()
     local active = ring:GetAttribute("ic-active")
     local entries = ringData[active] or {}
@@ -815,16 +930,13 @@ local function RefreshVisuals()
         slot.icon:SetShown(entry ~= nil)
         slot.label:SetShown(entry ~= nil)
         slot.count:SetShown(entry ~= nil)
+        slot.health:Hide()
         ShowCooldown(slot.cooldown, entry)
-        if entry then
-            -- Without the icon's own square frame (ConfigKit's SetIcon)
-            local icon = entry.icon or 134400
-            if type(icon) == "string" and HasAtlas(icon) then
-                slot.icon:SetAtlas(icon)
-            else
-                slot.icon:SetTexture(icon)
-                slot.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
-            end
+        if entry and entry.unit then
+            slot.count:SetText("")
+            UpdateUnitSlot(index, entry)
+        elseif entry then
+            SetSlotIcon(slot.icon, entry.icon or 134400)
             slot.count:SetText(entry.type == "item" and ItemCount(entry.value) or "")
             slot.label:SetText(entry.label)
             local usable = entry.type ~= "item" or ItemCount(entry.value) > 0
@@ -861,7 +973,7 @@ local function RefreshVisuals()
     pageRight:SetText(total > 1 and IF.GlyphText("RB", 38) or "")
     selected:SetText(#entries == 0 and EmptyText(info) or "")
     SetPrompts((info and info.of > 1) or false, nil, false)
-    ShowChannel(false)
+    ShowChannel(nil)
 end
 
 -- Same pick as the secure "ic-pick-body": the stronger of the two sticks.
@@ -898,7 +1010,9 @@ end
 -- macro or an emote has none)
 local function ShowTooltip(entry)
     local tip = GameTooltip
-    if not (entry and (entry.spellID or entry.type == "item" or entry.tip)) then
+    local unit = entry and entry.unit
+    if unit and not (UnitExists and UnitExists(unit)) then unit = nil end
+    if not (entry and (unit or entry.spellID or entry.type == "item" or entry.tip)) then
         if tip:GetOwner() == ring then tip:Hide() end
         return
     end
@@ -906,7 +1020,9 @@ local function ShowTooltip(entry)
     tip:ClearAllPoints()
     -- (the wheel art has ~35 px of clear edge around the ring)
     tip:SetPoint("RIGHT", ring, "LEFT", 28, 0)
-    if entry.spellID then
+    if unit then
+        tip:SetUnit(unit)
+    elseif entry.spellID then
         tip:SetSpellByID(entry.spellID)
     else
         tip:SetHyperlink(entry.tip or entry.value)
@@ -914,7 +1030,6 @@ local function ShowTooltip(entry)
     tip:Show()
 end
 
-local highlighted
 local function Highlight(pick)
     -- A new slot picked: a tick (Vibration tab: Wheel, Slot change)
     if pick and pick ~= highlighted and IF.Vibe then IF.Vibe.Fire("wheelTick") end
@@ -926,18 +1041,25 @@ local function Highlight(pick)
         highlight:SetPoint("CENTER", ring, "CENTER", slot.dx * SLOT_RADIUS, slot.dy * SLOT_RADIUS)
         highlight:SetRotation(SlotAngle(pick) + math.pi / 2)
         highlight:Show()
-        selected:SetText(entries[pick].label .. (Pending(entries[pick]) and "  (after combat)"
-            or (entries[pick].where and ("  (" .. entries[pick].where .. ")")) or ""))
+        if entries[pick].unit and IF.GroupWheel then
+            -- (a name may be a secret: set as it is, never joined to text)
+            selected:SetText((IF.GroupWheel.Look(entries[pick].unit)))
+        else
+            selected:SetText(entries[pick].label .. (Pending(entries[pick]) and "  (after combat)"
+                or (entries[pick].where and ("  (" .. entries[pick].where .. ")")) or ""))
+        end
         ShowTooltip(entries[pick])
     else
         highlight:Hide()
         selected:SetText(#entries == 0 and EmptyText(pageInfo[ring:GetAttribute("ic-active")]) or "")
         ShowTooltip(nil)
     end
-    -- A chat phrase picked: its channel in the hub, D-pad up / down changes it
-    local chat = (slot and entries[pick] and entries[pick].phrase) and true or false
-    ShowChannel(chat)
-    SetPrompts(nil, nil, chat)
+    -- A chat phrase picked: its channel in the hub, D-pad up / down changes
+    -- it; a group member (with spells to pick from): what a pick does
+    local entry = slot and entries[pick]
+    local mode = entry and (entry.phrase and "chat" or (entry.unit and #castList > 1 and "cast")) or nil
+    ShowChannel(mode)
+    SetPrompts(nil, nil, mode == "chat" and "Channel" or mode == "cast" and "Spell" or false)
     -- The picked entry's label turns white, like the native menu.
     for index, other in ipairs(slots) do
         local entry = entries[index]
@@ -947,16 +1069,32 @@ local function Highlight(pick)
     end
 end
 
-ring:SetScript("OnUpdate", function()
+local sinceUnits = 0
+ring:SetScript("OnUpdate", function(_, elapsed)
     local entries = ringData[ring:GetAttribute("ic-active")] or {}
     local pick = StickPick(entries) or ring:GetAttribute("ic-sticky")
     if pick ~= highlighted then
         Highlight(pick)
     end
+    -- (group members: names, health, who's there, a few times a second)
+    sinceUnits = sinceUnits + (elapsed or 0)
+    if sinceUnits > 0.2 then
+        sinceUnits = 0
+        UpdateUnitSlots()
+    end
     -- Square's prompt, while the picked slot can go on the crossbar
     local canBind = IF.RingBindAction(pick and entries[pick]) ~= nil
     if canBind ~= promptBind then SetPrompts(nil, canBind) end
 end)
+
+-- The group member picked on the ring now (UnitFrames.lua lights their
+-- frame), or nil
+function IF.RingPickedUnit()
+    if not ring:IsShown() or ring:GetAlpha() == 0 then return nil end
+    local entries = ringData[ring:GetAttribute("ic-active")] or {}
+    local entry = highlighted and entries[highlighted]
+    return entry and entry.unit
+end
 
 -- Square: the picked slot (as highlighted) to the bind panel; the ring
 -- closes first (its bindings go), then the panel takes the buttons
@@ -984,7 +1122,10 @@ ring:HookScript("OnAttributeChanged", function(_, name, value)
     elseif name == "ic-channel" then
         -- (kept for the next time, and shown in the hub)
         if IF.db and type(value) == "number" then IF.db.phraseChannel = value end
-        if ring:IsShown() then ShowChannel(hubChannel:IsShown()) end
+        if ring:IsShown() then ShowChannel(hubMode) end
+    elseif name == "ic-cast" then
+        if IF.charDB and type(value) == "number" then IF.charDB.groupCast = value end
+        if ring:IsShown() then ShowChannel(hubMode) end
     end
 end)
 
@@ -1006,6 +1147,7 @@ function IF.ApplyRecent()
         local recent = IF.charDB.recent[wheel]
         ring:SetAttribute("recent-" .. wheel .. "-type", recent and recent.type or nil)
         ring:SetAttribute("recent-" .. wheel .. "-value", recent and recent.value or nil)
+        ring:SetAttribute("recent-" .. wheel .. "-unit", recent and recent.unit or nil)
     end
 end
 
@@ -1036,8 +1178,17 @@ ring:HookScript("OnAttributeChanged", function(_, name, value)
     local info = key and pageInfo[key]
     if not (entry and info) then return end
     IF.charDB.recent = IF.charDB.recent or {}
-    IF.charDB.recent[info.ring] = { type = entry.type, value = entry.value, label = entry.label, icon = entry.icon,
-        equip = entry.equip }
+    if entry.unit then
+        -- (a group member: what the pick did, as the secure side has it;
+        -- its name is read live, RecentSlot.lua)
+        local actionType = ring:GetAttribute("recent-" .. info.ring .. "-type")
+        local cast = castList[ring:GetAttribute("ic-cast") or 1]
+        IF.charDB.recent[info.ring] = { type = actionType, value = ring:GetAttribute("recent-" .. info.ring .. "-value"),
+            unit = entry.unit, icon = actionType == "spell" and cast and cast.icon or entry.icon }
+    else
+        IF.charDB.recent[info.ring] = { type = entry.type, value = entry.value, label = entry.label, icon = entry.icon,
+            equip = entry.equip }
+    end
     if IF.RecentChanged then IF.RecentChanged() end
     if entry.equip then Equip(entry.equip) end
 end)
@@ -1087,6 +1238,7 @@ local function Rebuild()
                     ring:SetAttribute(key .. "-type-" .. index, entry.type)
                     ring:SetAttribute(key .. "-value-" .. index, entry.value)
                     ring:SetAttribute(key .. "-phrase-" .. index, entry.phrase)
+                    ring:SetAttribute(key .. "-unit-" .. index, entry.unit)
                 end
                 ring:SetAttribute(key .. "-count", #pageEntries)
                 ringData[key] = pageEntries
@@ -1116,6 +1268,18 @@ local function Rebuild()
     ring:SetAttribute("chan-n", #channels)
     local picked = IF.db and IF.db.phraseChannel
     ring:SetAttribute("ic-channel", (type(picked) == "number" and picked <= #channels) and picked or 1)
+    -- What a pick does to a group member (Group.lua): 1, target them; then
+    -- each spell, cast on them; the one picked last time
+    local G = IF.GroupWheel
+    local casts = G and G.CastList() or { { label = "Target" } }
+    wipe(castList)
+    for n = 1, math.max(#casts, ring:GetAttribute("cast-n") or 0) do
+        castList[n] = casts[n]
+        ring:SetAttribute("cast-spell-" .. n, casts[n] and casts[n].spell)
+    end
+    ring:SetAttribute("cast-n", #casts)
+    local cast = IF.charDB and IF.charDB.groupCast
+    ring:SetAttribute("ic-cast", (type(cast) == "number" and cast <= #casts) and cast or 1)
     IF.ApplyRecent()
     if ring:IsShown() then
         RefreshVisuals()

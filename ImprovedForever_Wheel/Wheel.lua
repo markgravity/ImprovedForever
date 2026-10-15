@@ -5,8 +5,8 @@ local IF = ImprovedForever
 
 IF.AddModule({ key = "wheel", label = "Wheels", icon = IF.TEX .. "ic_mod_wheel", addon = ... })
 
-IF.RINGS = { "native", "quest", "consumables", "emotes" }
-IF.RING_LABELS = { native = "Native (Look Here)", quest = "Quest Items", consumables = "Consumables", emotes = "Emotes" }
+IF.RINGS = { "native", "quest", "consumables", "emotes", "group" }
+IF.RING_LABELS = { native = "Native (Look Here)", quest = "Quest Items", consumables = "Consumables", emotes = "Emotes", group = "Group" }
 
 local DEFAULT_COMBOS = { R3 = "native", L1 = "quest", L2 = "emotes", R1 = "consumables", R2 = "native" }
 
@@ -19,8 +19,12 @@ local function Combos()
     return db.combos
 end
 
+-- (a hidden wheel's combo stays kept, but does the game's own R3 until
+-- the wheel is shown again: MyWheels.lua)
 function IF.GetComboRing(combo)
-    return Combos()[combo] or "native"
+    local ring = Combos()[combo] or "native"
+    if IF.RingHidden and IF.RingHidden(ring) then return "native" end
+    return ring
 end
 
 function IF.SetComboRing(combo, ring)
