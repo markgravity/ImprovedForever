@@ -31,7 +31,13 @@ touch.REGION_LABELS = {
     upleft = "Top left", upright = "Top right", downleft = "Bottom left", downright = "Bottom right",
 }
 
-local DEFAULTS = { upleft = "spellbook", upright = "bags", downleft = "questlog", downright = "character" }
+-- (top right: the peek map when the Map module is loaded, else the spellbook)
+local DEFAULTS = {
+    upleft = "questlog",
+    upright = function() return IF.PeekMap and "peekmap" or "spellbook" end,
+    downleft = "character",
+    downright = "bags",
+}
 -- An earlier version had sides and a centre too: their actions move to the
 -- corners nearest them, once (top -> top left, right -> top right...)
 local FROM_SIDES = { upleft = "up", upright = "right", downleft = "left", downright = "down" }
@@ -58,8 +64,9 @@ function touch.GetSettings()
         end
     end
     for region, action in pairs(DEFAULTS) do
-        if settings.regions[region] == nil then
-            settings.regions[region] = action
+        -- (one that depends on a module: only once every addon has loaded)
+        if settings.regions[region] == nil and (type(action) ~= "function" or IsLoggedIn()) then
+            settings.regions[region] = type(action) == "function" and action() or action
         end
     end
     return settings
