@@ -5,10 +5,10 @@ local IF = ImprovedForever
 
 IF.AddModule({ key = "wheel", label = "Wheels", icon = IF.TEX .. "ic_mod_wheel", addon = ... })
 
-IF.RINGS = { "native", "buffs", "consumables", "emotes" }
-IF.RING_LABELS = { native = "Native (Look Here)", buffs = "Buffs", consumables = "Consumables", emotes = "Emotes" }
+IF.RINGS = { "native", "quest", "consumables", "emotes" }
+IF.RING_LABELS = { native = "Native (Look Here)", quest = "Quest Items", consumables = "Consumables", emotes = "Emotes" }
 
-local DEFAULT_COMBOS = { R3 = "native", L1 = "buffs", L2 = "emotes", R1 = "consumables", R2 = "native" }
+local DEFAULT_COMBOS = { R3 = "native", L1 = "quest", L2 = "emotes", R1 = "consumables", R2 = "native" }
 
 local function Combos()
     local db = IF.db
@@ -30,7 +30,7 @@ function IF.SetComboRing(combo, ring)
     end
 end
 
--- /if ring <combo> <ring>  e.g. /if ring L1 buffs
+-- /if ring <combo> <ring>  e.g. /if ring L1 quest
 IF.AddCommand("ring", function(args)
     local combo, ring = args[1] and args[1]:upper(), args[2]
     if not IF.COMBO_LABELS[combo or ""] or not IF.RING_LABELS[ring or ""] then

@@ -45,6 +45,12 @@ local ITEMS = {
             .. " of Sell All Junk in its settings is left alone). Its button lights up while there is only"
             .. " this junk to sell.",
     }, OnOff(function() return S().sell end, function(on) S().sell = on end, "Sell All Junk")),
+    Item({
+        key = "sellBuyback", group = "junk", label = "Keep it buyable",
+        tip = "Sells at most 12 items a press (Sell All Junk, or the Destroy panel's Sell All), what the"
+            .. " vendor's buyback keeps: anything sold by mistake can be bought back. Press again for the"
+            .. " rest. Off: everything in one press.",
+    }, OnOff(function() return S().sellBuyback end, function(on) S().sellBuyback = on end, "Keep it buyable")),
     {
         key = "markKey", group = "junk", label = "Mark junk",
         tip = "The press that marks the bag item the cursor is on as junk, or no longer junk. Remembered for"

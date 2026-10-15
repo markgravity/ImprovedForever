@@ -244,9 +244,13 @@ local twice = CreateFrame("Button", "ImprovedForeverDoubleAction", UIParent, "Se
 twice:SetAttribute("type", "macro")
 local armed -- { w (the watched press), ends, fired }
 
+-- The binding first, its record after: in combat the binding can't go, so
+-- the record stays (the press still armed, as it is in game) and it goes
+-- once combat ends
 local function Disarm()
+    if IF.InCombat() then return end
+    ClearOverrideBindings(watchOwner)
     armed = nil
-    if not IF.InCombat() then ClearOverrideBindings(watchOwner) end
 end
 
 local function Arm(w)
@@ -265,6 +269,7 @@ end)
 watchOwner:SetScript("OnUpdate", function()
     if not IsKeyDown then return end
     if armed then
+        if IF.InCombat() then return end
         local w = armed.w
         local down = IsKeyDown(w.pressed)
         -- Over: done (once let go), timed out, or the held one let go
@@ -287,7 +292,10 @@ watchOwner:SetScript("OnUpdate", function()
 end)
 
 watchOwner:RegisterEvent("PLAYER_REGEN_DISABLED")
-watchOwner:SetScript("OnEvent", function() Disarm() end)
+watchOwner:RegisterEvent("PLAYER_REGEN_ENABLED")
+watchOwner:SetScript("OnEvent", function(_, event)
+    if event == "PLAYER_REGEN_DISABLED" or armed then Disarm() end
+end)
 
 IF.OnLogin(O.Apply)
 owner:RegisterEvent("PLAYER_REGEN_ENABLED")

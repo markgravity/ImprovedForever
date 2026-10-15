@@ -40,8 +40,10 @@ the core, **Improved Forever**:
 
 ## Features
 
-- **Wheels** on R3 combos, laid out like the game's radial menu: spells, items, emotes,
-  consumables (paged by category), several wheels per combo. Aim with the right stick.
+- **Wheels** on R3 combos, laid out like the game's radial menu. Built in: **Quest Items** and
+  **Consumables** (each fills itself from your bags) and **Emotes**. Make wheels of your own, mixing
+  spells, items, macros, emotes and chat phrases you add (D-pad up / down picks a phrase's channel on
+  the wheel), or a shaman's totems, or a trinket swap. Aim with the right stick.
 - **Recent action slot** on R3, placed in Edit Mode.
 - **Touchpad** corner actions.
 - **Chat lines**: with the chat open on the controller, D-pad Up picks its lines, left / right the links in a line
@@ -56,10 +58,10 @@ the core, **Improved Forever**:
 - **Wiki**: hold R3 on an item (bags, loot window, auction house) for everything about it: what drops
   it, who sells it, the recipes that make or use it, its quests and auction prices. Drops, vendors and
   quests come from [QuestieDB](https://github.com/Questie/QuestieDB)'s data: the addon when installed, else
-  a copy that ships with this one.
+  a copy that ships with the core.
 - **Journal**: a diary of each day you play, per character: the lands you passed through, the quests you
   finished, your fights and falls, what you looted, earned and made, written in your own words. Read it in
-  the Wiki's book (`/if journal`, a key binding or a wheel); with the Wiki, a quest, creature or item
+  a book like the Wiki's (`/if journal`, a key binding or a wheel); with the Wiki, a quest, creature or item
   in it opens its page.
 
 **Bindings**: every binding has a controller press and a keyboard / mouse press, both working, set
@@ -78,8 +80,9 @@ settings in the middle (left / right change one, Cross picks from its list on th
 
 - **CurseForge app**: search *Improved Forever* and install the modules you want (*Improved
   Forever: Wheel*, *Improved Forever: Auction*...); each brings the core along.
-- **Manual**: download `ImprovedForever-All-<version>.zip` (or the core's and each module's own
-  zip) from [Releases](https://github.com/markgravity/ImprovedForever/releases) and unzip it into
+- **Manual**: download the core's zip (`ImprovedForever-<version>.zip`) and each module's own
+  (`ImprovedForever_<Module>-<version>.zip`) from
+  [Releases](https://github.com/markgravity/ImprovedForever/releases) and unzip them into
   `World of Warcraft/_forever_/Interface/AddOns/` so you get `AddOns/ImprovedForever/`,
   `AddOns/ImprovedForever_Wheel/`... (remove an old `AddOns/ImprovedController/`).
 
@@ -99,10 +102,15 @@ one that isn't loaded.
 
 `vendor/QuestieDB` is a git submodule of [QuestieDB](https://github.com/Questie/QuestieDB), for its API
 types and data (`git submodule update --init`). `python tools/make_library_data.py` copies what the
-Wiki shows from it into `ImprovedForever_Wiki/WikiData.lua`, which ships; the submodule itself isn't packaged.
+Wiki and the item verdict need from it into the core's `ImprovedForever/WorldData.lua`, which ships; the
+submodule itself isn't packaged.
 
-- `tools/make_*.py` regenerate the TGA textures.
-- `python tools/make_library.py` regenerates `ImprovedForever_Wiki/WikiRecipes.lua` from the game's recipe tables (wago.tools).
+- `python tools/sync_forever_data.py` syncs all the game data with WoW Forever (QuestieDB moved to its
+  latest, `RecipeData.lua` and `WorldData.lua` rebuilt) and checks the IDs written in the code; `--check`
+  only checks.
+- `python tools/make_library.py` regenerates the core's `ImprovedForever/RecipeData.lua` from Forever's own
+  recipe tables (wago.tools).
+- The other `tools/make_*.py` regenerate the TGA textures (`ImprovedForever/textures/`).
 - `python tools/package.py` builds a zip per addon in `dist/` and `ImprovedForever-All.zip` with every addon; `python tools/package.py Wheel` builds only that one.
 - `python tools/make_module_icons.py --logos` also writes each module's CurseForge logo to `dist/logos/`.
 

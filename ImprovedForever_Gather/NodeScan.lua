@@ -7,8 +7,8 @@
 -- its own tooltip shows). Forever's minimap can be told where that point is
 -- (Minimap:UpdateMouseoverAtPoint, in screen pixels, for the controller's
 -- soft cursor), and answers at once. So a grid of points over the minimap is
--- read in one go; the points that read the same name side by side are one
--- dot, and their middle is where it is.
+-- read, a little each frame; the points that read the same name side by
+-- side are one dot, and their middle is where it is.
 local IF = ImprovedForever
 
 local N = {}
@@ -25,6 +25,15 @@ function N.Facing()
     local f = GetPlayerFacing and GetPlayerFacing()
     if type(f) ~= "number" or Secret(f) then return nil end
     return f
+end
+
+-- The player's place in the world, as yards east and north, or nil (in an
+-- instance). The world's x runs north, its y west.
+function N.Position()
+    if not UnitPosition then return nil end
+    local y, x = UnitPosition("player")
+    if type(x) ~= "number" or type(y) ~= "number" or Secret(x) or Secret(y) then return nil end
+    return -y, x
 end
 
 function N.Supported()
@@ -129,12 +138,59 @@ events:RegisterEvent("PLAYER_LOGIN")
 events:SetScript("OnEvent", function() skills = nil end)
 
 ---------------------------------------------------------------------------
+-- Herbs and ore show on the minimap only while Find Herbs / Find Minerals
+-- is on (Forever's spells and their icons)
+---------------------------------------------------------------------------
+local FIND_SPELLS = { [2383] = true, [8387] = true, [2580] = true, [8388] = true }
+local FIND_ICONS = { [133939] = true, [134183] = true, [136025] = true }
+
+-- The player has professions, and neither is Herbalism nor Mining
+local function NoGathering()
+    if not (GetProfessions and GetProfessionInfo) then return false end
+    local any = false
+    for _, index in pairs({ GetProfessions() }) do
+        local line = select(7, GetProfessionInfo(index))
+        if line == SKILL_LINE.herb or line == SKILL_LINE.ore then return false end
+        any = true
+    end
+    return any
+end
+
+-- true: one of them is on; false: neither is (the tracking list has them
+-- off, or the player has neither profession); nil: can't tell
+function N.Tracking()
+    local M = C_Minimap
+    if M and M.GetNumTrackingTypes and M.GetTrackingInfo then
+        local listed = false
+        for i = 1, M.GetNumTrackingTypes() or 0 do
+            local name, texture, active, _, _, spellID = M.GetTrackingInfo(i)
+            -- (a table on newer clients)
+            if type(name) == "table" then
+                texture, active, spellID = name.texture, name.active, name.spellID
+            end
+            if not (Secret(texture) or Secret(active) or Secret(spellID))
+                and (FIND_SPELLS[spellID] or FIND_ICONS[texture]) then
+                if active then return true end
+                listed = true
+            end
+        end
+        if listed then return false end
+    elseif GetTrackingTexture then
+        -- (one tracking at a time: its icon)
+        local texture = GetTrackingTexture()
+        if Secret(texture) then return nil end
+        return FIND_ICONS[texture] and true or false
+    end
+    if NoGathering() then return false end
+    return nil
+end
+
+---------------------------------------------------------------------------
 -- The scan
 ---------------------------------------------------------------------------
--- The points: inside the minimap's circle (and within `reach` of cx, cy if
--- given), N.step apart, every other row shifted half a step (no gaps a dot
--- can sit in)
-local function Points(radius, cx, cy, reach)
+-- The points: inside the minimap's circle, N.step apart, every other row
+-- shifted half a step (no gaps a dot can sit in)
+local function Points(radius)
     local grid = {}
     local step = N.step
     local rowStep = step * 0.866
@@ -145,7 +201,7 @@ local function Points(radius, cx, cy, reach)
         local shift = (j % 2) * step / 2
         for i = -n, n do
             local x, y = i * step + shift, j * rowStep
-            if x * x + y * y <= r * r and (not cx or (x - cx) ^ 2 + (y - cy) ^ 2 <= reach * reach) then
+            if x * x + y * y <= r * r then
                 grid[#grid + 1] = { x = x, y = y }
             end
         end
@@ -192,93 +248,195 @@ local function NamesAt(px, py, me)
     return counts, colors
 end
 
--- Points that read the same name next to each other are one dot: its
--- centre is their middle. Two dots of one herb closer than a dot's reach
--- read as one, with the name listed twice: counted.
-local function Group(hits)
-    local groups = {}
-    local near = (N.step * 1.6) ^ 2
-    for _, hit in ipairs(hits) do
-        -- Every group of this name it touches joins into one
-        local home
-        for gi = #groups, 1, -1 do
-            local g = groups[gi]
-            if g.name == hit.name then
-                local touches = false
-                for _, other in ipairs(g) do
-                    if (other.x - hit.x) ^ 2 + (other.y - hit.y) ^ 2 <= near then touches = true break end
-                end
-                if touches then
-                    if home then
-                        for _, other in ipairs(g) do home[#home + 1] = other end
-                        home.count = math.max(home.count, g.count)
-                        table.remove(groups, gi)
-                    else
-                        home = g
+-- Reading the whole grid at once is a few hundred calls into the game, and
+-- with many dots on the minimap (a hunter tracking humanoids in a city) it
+-- held up a frame every scan. So a scan reads N.budget milliseconds' worth
+-- of points each frame, then groups them a name at a time, the hover point
+-- put back off the minimap at the end of every frame's share. Each point
+-- read is turned into yards from where the player stood when the scan began,
+-- with that frame's zoom and facing and the steps taken since: a dot read
+-- over several frames stays one dot while the player walks or turns.
+N.budget = 1         -- milliseconds of a frame a scan may take
+N.perFrame = 30      -- points (or names) a frame, where the time can't be read
+
+local job            -- the scan under way
+local runner = CreateFrame("Frame")
+runner:Hide()
+
+-- Minimap units to yards, this frame: yards a unit, the turn of a turning
+-- minimap, and how far the player has walked since the scan began
+local function View(j)
+    local view = C_Minimap and C_Minimap.GetViewRadius and C_Minimap.GetViewRadius() or j.radius
+    local get = C_CVar and C_CVar.GetCVar or GetCVar
+    local facing = get("rotateMinimap") == "1" and N.Facing() or 0
+    local de, dn = 0, 0
+    local e, n = N.Position()
+    if e and j.east then de, dn = e - j.east, n - j.north end
+    return view / j.radius, math.cos(facing), math.sin(facing), de, dn
+end
+
+-- (again from the start: a new scan, or the minimap resized under one)
+local function Begin(j)
+    j.radius = Minimap:GetWidth() / 2
+    j.points, j.i = Points(j.radius), 1
+    j.east, j.north = N.Position()
+    j.yards = View(j)
+    j.byName, j.names, j.ni, j.found = {}, nil, 1, {}
+end
+
+-- One point: the names under it, each kept with where it is
+local function Read(j, mx, my, e, yards, c, s, de, dn)
+    local p = j.points[j.i]
+    j.i = j.i + 1
+    local counts, colors = NamesAt((mx + p.x) * e, (my + p.y) * e, j.me)
+    local ex, ny = p.x * yards, p.y * yards
+    -- A turning minimap has the way you face up
+    local east, north = ex * c - ny * s + de, ex * s + ny * c + dn
+    for name, count in pairs(counts) do
+        -- (only herbs and ore, unless every dot is asked for)
+        if j.all or N.Kind(name) then
+            local hits = j.byName[name]
+            if not hits then
+                hits = {}
+                j.byName[name] = hits
+            end
+            hits[#hits + 1] = { x = p.x, y = p.y, east = east, north = north, count = count, color = colors[name] }
+        end
+    end
+end
+
+-- One name's points into dots: points that read it next to each other
+-- (through any chain of them) are one dot, its centre their middle. Two
+-- dots of one herb closer than a dot's reach read as one, with the name
+-- listed twice: counted. Each point looks only in its own cell of a grid
+-- that size and the eight round it.
+local NONE = {}
+local function GroupName(j, name)
+    local hits = j.byName[name]
+    local near = N.step * 1.6 * j.yards
+    if not (near > 0) then near = 1 end
+    local near2 = near * near
+    local cells, parent = {}, {}
+    local function Root(k)
+        while parent[k] ~= k do
+            parent[k] = parent[parent[k]]
+            k = parent[k]
+        end
+        return k
+    end
+    for k, hit in ipairs(hits) do
+        parent[k] = k
+        local cx, cy = math.floor(hit.east / near), math.floor(hit.north / near)
+        for dx = -1, 1 do
+            for dy = -1, 1 do
+                for _, o in ipairs(cells[(cx + dx) * 100000 + cy + dy] or NONE) do
+                    local other = hits[o]
+                    if (other.east - hit.east) ^ 2 + (other.north - hit.north) ^ 2 <= near2 then
+                        parent[Root(o)] = Root(k)
                     end
                 end
             end
         end
-        if not home then
-            home = { name = hit.name, count = 0 }
-            groups[#groups + 1] = home
-        end
-        home[#home + 1] = hit
-        home.count = math.max(home.count, hit.count)
-        home.color = home.color or hit.color
+        local key = cx * 100000 + cy
+        cells[key] = cells[key] or {}
+        table.insert(cells[key], k)
     end
-    -- Minimap units to yards east / north of the player
-    local radius = Minimap:GetWidth() / 2
-    local view = C_Minimap and C_Minimap.GetViewRadius and C_Minimap.GetViewRadius() or radius
-    local yards = view / radius
-    local get = C_CVar and C_CVar.GetCVar or GetCVar
-    local facing = get("rotateMinimap") == "1" and N.Facing() or 0
-    local c, s = math.cos(facing), math.sin(facing)
-    local found = {}
-    for _, g in ipairs(groups) do
-        local x, y = 0, 0
-        for _, hit in ipairs(g) do
-            x, y = x + hit.x, y + hit.y
+    local groups, order = {}, {}
+    for k, hit in ipairs(hits) do
+        local r = Root(k)
+        local g = groups[r]
+        if not g then
+            g = { n = 0, count = 0, x = 0, y = 0, east = 0, north = 0 }
+            groups[r] = g
+            order[#order + 1] = g
         end
-        x, y = x / #g, y / #g
-        if N.debug then
-            local kind, need = N.Kind(g.name)
+        g.n = g.n + 1
+        g.count = math.max(g.count, hit.count)
+        g.x, g.y = g.x + hit.x, g.y + hit.y
+        g.east, g.north = g.east + hit.east, g.north + hit.north
+        g.color = g.color or hit.color
+    end
+    for _, g in ipairs(order) do
+        local x, y = g.x / g.n, g.y / g.n
+        if j.debug then
+            local kind, need = N.Kind(name)
             local col = g.color and string.format("%02x%02x%02x", g.color[1] * 255, g.color[2] * 255, g.color[3] * 255)
             IF.Print(string.format("  %s x%d: %d point(s) at %.0f,%.0f; game colour %s; needs %s, skill %s (bonus %s) -> %s",
-                g.name, g.count, #g, x, y, col or "none", tostring(need), tostring(kind and N.Skill(kind)),
-                tostring(kind and N.SkillBonus(kind)), tostring(N.State(g.name))))
+                name, g.count, g.n, x, y, col or "none", tostring(need), tostring(kind and N.Skill(kind)),
+                tostring(kind and N.SkillBonus(kind)), tostring(N.State(name))))
         end
-        local ex, ny = x * yards, y * yards
-        -- A turning minimap has the way you face up
-        found[#found + 1] = { name = g.name, count = g.count, x = x, y = y, gameColor = g.color,
-            east = ex * c - ny * s, north = ex * s + ny * c }
+        j.found[#j.found + 1] = { name = name, count = g.count, x = x, y = y, gameColor = g.color,
+            east = g.east / g.n, north = g.north / g.n }
     end
-    return found
 end
 
--- Reads the minimap (or only within `reach` minimap units of x, y), in
--- this frame. Each dot: name, count, x / y on the minimap, east / north in
--- yards from the player
-function N.Scan(x, y, reach)
-    if not N.Supported() or not Minimap:IsVisible() then return {} end
-    local radius = Minimap:GetWidth() / 2
-    local mx, my = Minimap:GetCenter()
-    if not mx then return {} end
-    local e = Minimap:GetEffectiveScale()
-    local me = UnitName("player")
-    if Minimap.SetUsingSoftCursor then Minimap:SetUsingSoftCursor(true) end
-    local hits = {}
-    for _, p in ipairs(Points(radius, x, y, reach)) do
-        local counts, colors = NamesAt((mx + p.x) * e, (my + p.y) * e, me)
-        for name, count in pairs(counts) do
-            hits[#hits + 1] = { name = name, x = p.x, y = p.y, count = count, color = colors[name] }
-        end
-    end
-    -- The hover point off the minimap again
-    Minimap:UpdateMouseoverAtPoint(-10000, -10000)
-    if Minimap.SetUsingSoftCursor then Minimap:SetUsingSoftCursor(false) end
-    return Group(hits)
+function N.Stop()
+    job = nil
+    runner:Hide()
 end
+
+function N.Running()
+    return job ~= nil
+end
+
+-- Starts reading the minimap, over the next frames (a scan under way is
+-- dropped). opts.all: every dot, not only herbs and ore; opts.debug: each
+-- dot printed. done(found) when it's read: each dot's name, count, x / y on
+-- the minimap, gameColor, east / north in yards from found.east / .north,
+-- where the player stood when it began (nil: unknown). false: the minimap
+-- can't be read now
+function N.Start(opts, done)
+    opts = opts or {}
+    if not N.Supported() or not Minimap:IsVisible() or not Minimap:GetCenter() then return false end
+    job = { all = opts.all, debug = opts.debug or N.debug, done = done, me = UnitName("player") }
+    Begin(job)
+    runner:Show()
+    return true
+end
+
+local clock = debugprofilestop
+local sliceStart
+local function Spent(n)
+    if clock then return clock() - sliceStart >= N.budget end
+    return n >= N.perFrame
+end
+
+runner:SetScript("OnUpdate", function()
+    local j = job
+    if not j then return N.Stop() end
+    -- The minimap gone: the last scan stands
+    local mx, my = Minimap:GetCenter()
+    if not Minimap:IsVisible() or not mx then return N.Stop() end
+    if Minimap:GetWidth() / 2 ~= j.radius then Begin(j) end
+    sliceStart = clock and clock()
+    local n = 0
+    if j.i <= #j.points then
+        local e = Minimap:GetEffectiveScale()
+        local yards, c, s, de, dn = View(j)
+        if Minimap.SetUsingSoftCursor then Minimap:SetUsingSoftCursor(true) end
+        repeat
+            Read(j, mx, my, e, yards, c, s, de, dn)
+            n = n + 1
+        until j.i > #j.points or Spent(n)
+        -- The hover point off the minimap again, before the game's own look
+        Minimap:UpdateMouseoverAtPoint(-10000, -10000)
+        if Minimap.SetUsingSoftCursor then Minimap:SetUsingSoftCursor(false) end
+        if j.i <= #j.points then return end
+    end
+    if not j.names then
+        j.names = {}
+        for name in pairs(j.byName) do j.names[#j.names + 1] = name end
+    end
+    while j.ni <= #j.names do
+        if Spent(n) then return end
+        GroupName(j, j.names[j.ni])
+        j.ni, n = j.ni + 1, n + 1
+    end
+    N.Stop()
+    local found = j.found
+    found.east, found.north, found.all = j.east, j.north, j.all
+    if j.done then j.done(found) end
+end)
 
 ---------------------------------------------------------------------------
 -- Where a dot is, from where the player stands and faces now

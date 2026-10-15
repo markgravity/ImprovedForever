@@ -5,26 +5,26 @@ Work planned from the launch threads' feature requests and bug reports
 
 **Priority:** P0 bug players hit now · P1 promised publicly · P2 worth doing · P3 later / research.
 **Size:** S (an hour or two) · M (a day) · L (several days).
-**Status:** `todo` · `needs info` (waiting on a player) · `review` (approve or drop) · `done`.
+**Status:** `todo` · `needs info` (waiting on a player) · `review` (approve or drop) · `test` (built, to try in game) · `done`.
 
 | # | Task | Module | Pri | Size | Status |
 |---|---|---|---|---|---|
-| 1 | Gather: spread the minimap scan, stop the FPS hiccups | Gather | P0 | M | todo |
-| 2 | Vibration: jump and auto-attack start | Vibration | P0 | S | todo |
+| 1 | Gather: spread the minimap scan, stop the FPS hiccups | Gather | P0 | M | test |
+| 2 | Vibration: jump and auto-attack start | Vibration | P0 | S | test |
 | 3 | Crash from the "control panel" (Immolation_E) | Core | P0 | S | needs info |
 | 4 | Crash on load (Ninjatendo90) | All | P0 | S | needs info |
-| 5 | Quest item wheel | Wheel | P1 | M | todo |
+| 5 | Quest item wheel | Wheel | P1 | M | test |
 | 6 | Ground-targeted spells from the pad | Wheel | P1 | M | review |
-| 7 | Trinket / gear swap wheel | Wheel | P1 | L | todo |
-| 8 | Chat phrases wheel | Wheel | P1 | S | todo |
+| 7 | Trinket / gear swap wheel | Wheel | P1 | L | test |
+| 8 | Chat phrases wheel | Wheel | P1 | S | test |
 | 9 | Hide / customise HUD elements | Core | P1 | ? | needs info |
 | 10 | Swap the A/B glyphs on screen only | Core | P2 | S | review |
-| 11 | Totems wheel preset | Wheel | P2 | S | todo |
+| 11 | Totems wheel preset | Wheel | P2 | S | test |
 | 12 | Easy Controller - Forever compatibility | All | P2 | S | todo |
 | 13 | Journal: talks (chat, whispers) as an option | Journal | P2 | S | review |
-| 14 | One vendor-sell path, confirmed sales | Junk, Auction | P2 | M | todo |
-| 15 | Override binding cleared before it's removed | Core | P2 | S | todo |
-| 16 | README: outdated file locations | Docs | P2 | S | todo |
+| 14 | One vendor-sell path, confirmed sales | Junk, Auction | P2 | M | test |
+| 15 | Override binding cleared before it's removed | Core | P2 | S | test |
+| 16 | README: outdated file locations | Docs | P2 | S | test |
 | 17 | Gyro on the DualSense | Core | P3 | S | review |
 | 18 | Healer targeting (party / raid frames) | new | P3 | L | review |
 | 19 | Split the auction window file | Auction | P3 | L | review |

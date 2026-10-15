@@ -5,10 +5,15 @@
 -- wheel, its slots around it (8 a page: the D-pad left / right steps
 -- round them, L2 / R2 turn the page), what opens it in the
 -- hub (bound in the Bindings tab); on the right what a slot can take,
--- its lists (Spells, Items, Macros, Emotes) in a bar along the top (the
--- left stick left / right), each a list of cards (the D-pad up / down):
+-- its lists (Spells, Items, Macros, Emotes) in a bar along the top (L1 /
+-- R1), each a list of cards (the D-pad up / down):
 -- Cross fills the slot and moves on to the next one. Triangle clears a
 -- slot (held: renames, or resets a built-in wheel), Square held deletes.
+-- "New wheel" makes one of a kind (WheelKinds.lua: the D-pad left / right
+-- picks it): slots of your own, or one that fills itself. On a chat
+-- phrase wheel Square (or "+ Add a phrase" in the Phrases list) types a
+-- phrase for the slot (a keyboard; the D-pad left / right goes through
+-- phrases added before, up / down its channel).
 local IF = ImprovedForever
 
 local K = IF.ConfigKit
@@ -31,7 +36,9 @@ local ICON_SIZE = math.floor(38 * SCALE + 0.5)
 local PER_PAGE = 8
 
 -- zone: nil, or "popup" (a confirmation up), "rename" (naming the wheel)
-local W = { index = 1, slot = 1, btn = 1 }
+-- kindIndex: the kind "New wheel" makes (KD.Available()'s)
+local W = { index = 1, slot = 1, btn = 1, kindIndex = 1 }
+local KD = IF.WheelKinds
 MW.Page = W
 
 ---------------------------------------------------------------------------
@@ -64,6 +71,11 @@ end
 
 local function Editable(wheel)
     return wheel and wheel.slots ~= nil
+end
+
+-- A wheel of chat phrases: Square types one
+local function Typed(wheel)
+    return wheel and (wheel.typed or (wheel.id and KD.Get(wheel.kind).typed)) or false
 end
 
 -- What the wheel's slots hold right now (a self-filling one: its content)
@@ -159,7 +171,7 @@ function W:Build(parent)
     f.bindGlyphs = K.GlyphRow(zone, 36)
     -- A wheel of several pages: a dot each (the native page dots), under it
     f.pageDots = {}
-    for i = 1, 3 do
+    for i = 1, 4 do
         local d = zone:CreateTexture(nil, "OVERLAY")
         d:SetSize(11, 11)
         f.pageDots[i] = d
@@ -285,7 +297,7 @@ function W:Build(parent)
     -- Right: the picker (its lists in a bar, its choices as cards), or for
     -- a self-filling wheel what it does
     local right = (8 + SIDE_W + 6) + 540 * ZONE_SCALE + 6
-    self.picker = UI.CardPicker(f, 1, 46, menu.Render, "LS")
+    self.picker = UI.CardPicker(f, 1, 46, menu.Render, "LB", "RB")
     self.picker:SetPoint("TOPLEFT", f, "TOPLEFT", right, -8)
     self.picker:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -8, 8)
     self.detail = K.Detail(f, 340)
@@ -300,16 +312,11 @@ function W:Show()
     self:Select(self.index)
 end
 
--- The left stick (Menu.lua): up / down the wheels, left / right the
--- picker's lists
+-- The left stick (Menu.lua): up / down the wheels (the picker's lists are
+-- L1 / R1's)
 function W:StickStep(dir)
     if self.zone or MW.renaming then return end
     self:Select(self.index + dir)
-end
-
-function W:StickSide(dir)
-    if self.zone or MW.renaming or not self.picker.def then return end
-    self.picker:Press(dir < 0 and "LT" or "RT")
 end
 
 function W:Hide()
@@ -349,6 +356,11 @@ function W:OpenPicker(wheel)
         kicker = function() return format("Slot %d · %s", W.slot, MW.POSITIONS[(W.slot - 1) % PER_PAGE + 1]) end,
         title = function() return (W:Current() or {}).label or "" end,
         lists = wheel.lists, rows = PICKER_ROWS, current = wheel.slots[self.slot], chooseVerb = "Choose, next",
+        -- (phrases: where they go right now)
+        status = function()
+            local list = W.picker.def and W.picker.def.lists[W.picker.list]
+            return list == KD.PHRASES and ("|cff9fd8e2Said to " .. KD.PhraseWhere() .. "|r") or ""
+        end,
         -- Already in this wheel: a diamond
         marked = function(e)
             local current = W:Current()
@@ -358,7 +370,13 @@ function W:OpenPicker(wheel)
             return false
         end,
         onChoose = function(e)
-            if not MW.renaming then W:Fill(e) end
+            if MW.renaming then return end
+            -- ("+ Add a phrase": the box, its text and channel)
+            if e.add then
+                W:StartRename(W:Current(), "phrase", true)
+                return menu.Render()
+            end
+            W:Fill(e)
         end,
     })
 end
@@ -495,11 +513,26 @@ function W:Triangle(wheel)
     end)
 end
 
--- Square held: deletes a wheel of yours (once confirmed). Binding a wheel
--- to a press is the Bindings tab's.
+-- Square held: deletes a wheel of yours (once confirmed); pressed on a
+-- chat phrase wheel: types a phrase for the slot. Binding a wheel to a
+-- press is the Bindings tab's.
 function W:Square(wheel)
-    if not wheel.id then return end
-    self:PressOrHold("PAD3", function() menu.Toast(IF.PadText("Hold {X} to delete " .. wheel.label)) end, function()
+    -- (a built-in phrase wheel: Square types, nothing to delete)
+    if not wheel.id then
+        if Typed(wheel) then
+            self:StartRename(wheel, "phrase")
+            menu.Render()
+        end
+        return
+    end
+    self:PressOrHold("PAD3", function()
+        if Typed(wheel) then
+            W:StartRename(wheel, "phrase")
+            menu.Render()
+            return
+        end
+        menu.Toast(IF.PadText("Hold {X} to delete " .. wheel.label))
+    end, function()
         W:Confirm('Delete the wheel "' .. wheel.label .. '"?', "Delete", function()
             MW.Delete(wheel.id)
             W.key = nil
@@ -509,8 +542,20 @@ function W:Square(wheel)
     end)
 end
 
+-- The kind "New wheel" makes
+function W:NewKind()
+    local kinds = KD.Available()
+    self.kindIndex = math.max(1, math.min(self.kindIndex or 1, #kinds))
+    return kinds[self.kindIndex]
+end
+
+function W:StepKind(step)
+    local kinds = KD.Available()
+    self.kindIndex = ((self.kindIndex or 1) - 1 + step) % #kinds + 1
+end
+
 function W:CreateWheel()
-    local id = MW.Create()
+    local id = MW.Create(self:NewKind().key)
     if not id then
         menu.Toast("8 wheels at most. Delete one to make room.", true)
         return
@@ -527,14 +572,18 @@ end
 ---------------------------------------------------------------------------
 local SUGGESTIONS = {
     "Combat", "Defensive", "Healing", "Buffs", "Utility", "Cooldowns", "Crowd Control", "Pets", "Travel",
-    "Mounts", "Professions", "Food & Drink", "Potions", "Macros", "Social", "Questing", "PvP", "Dungeon",
+    "Mounts", "Professions", "Food & Drink", "Potions", "Macros", "Social", "Questing", "Quest Items",
+    "PvP", "Dungeon",
 }
 
 function W:Suggestions(wheel)
     local list = {}
-    -- First, what is in its first filled slot
+    -- First, its kind's own name, then what is in its first filled slot
+    local kind = KD.Get(wheel.kind)
+    if kind.name then list[1] = kind.name end
+    local slots = Slots(wheel)
     for i = 1, wheel.max do
-        local name = wheel.slots[i] and MW.ActionName(wheel.slots[i])
+        local name = slots[i] and MW.ActionName(slots[i])
         if name then
             list[#list + 1] = name
             break
@@ -547,34 +596,93 @@ end
 
 function W:StepName(step)
     local wheel = self:Current()
-    if not (wheel and wheel.id) then return end
-    local list = self:Suggestions(wheel)
+    if not (wheel and (wheel.id or self.typing == "phrase")) then return end
+    local list
+    if self.typing == "phrase" then
+        -- (the phrases added before)
+        list = {}
+        for _, action in ipairs(KD.SavedPhrases()) do list[#list + 1] = KD.PhraseText(action) end
+        if #list == 0 then return end
+    else
+        list = self:Suggestions(wheel)
+    end
     self.suggestion = ((self.suggestion or 0) - 1 + step) % #list + 1
     self.box.edit:SetText(list[self.suggestion])
     self.box.edit:HighlightText()
 end
 
-function W:StartRename(wheel)
-    if not wheel.id or IF.InCombat() then return end
-    MW.renaming = wheel.id
+-- The phrase box's kicker: the slot, and where the phrase goes
+function W:PhraseKicker()
+    self.box.kicker:SetText(format("PHRASE FOR SLOT %d  ·  %s", self.slot,
+        KD.ChannelLabel(KD.CHANNELS[self.channel].key):upper()))
+end
+
+-- D-pad up / down in the phrase box: its channel
+function W:StepChannel(step)
+    self.channel = (self.channel - 1 + step) % #KD.CHANNELS + 1
+    self:PhraseKicker()
+end
+
+-- The box over the wheel: its name, or (mode "phrase") a chat phrase for
+-- the slot aimed at (blank: a new one, from "+ Add a phrase")
+function W:StartRename(wheel, mode, blank)
+    if not wheel or IF.InCombat() then return end
+    mode = mode or "name"
+    -- (a name: the player's own wheels; a phrase: any wheel with slots)
+    if mode == "name" and not wheel.id then return end
+    if mode == "phrase" and not Editable(wheel) then return end
+    MW.renaming = wheel.key
+    self.typing = mode
     self.suggestion = 0
     self.zone = "rename"
     local edit = self.box.edit
-    self.box.help:SetText(IF.PadText("D-pad left / right picks a name, {A} confirms, {B} cancels. A keyboard can type one too."))
-    edit:SetText(wheel.label)
+    local phrase = self.typing == "phrase"
+    edit:SetMaxLetters(phrase and 200 or 40)
+    if phrase then
+        local current = not blank and wheel.slots and wheel.slots[self.slot]
+        local chan = current and KD.PhraseChannel(current) or "auto"
+        self.channel = 1
+        for i, c in ipairs(KD.CHANNELS) do
+            if c.key == chan then self.channel = i end
+        end
+        self:PhraseKicker()
+        edit:SetText(current and KD.PhraseText(current) or "")
+    else
+        self.box.kicker:SetText("WHEEL NAME")
+        edit:SetText(wheel.label)
+    end
+    self.box.help:SetText(IF.PadText(phrase
+        and "Type a phrase (a keyboard), or D-pad left / right picks one you added; up / down its channel."
+            .. " {A} confirms, {B} cancels."
+        or "D-pad left / right picks a name, {A} confirms, {B} cancels. A keyboard can type one too."))
     self.frame.veil:Show()
     edit:SetFocus()
     edit:HighlightText()
 end
 
 function W:FinishRename(text)
-    local id = MW.renaming
-    if not id then return end
+    local key = MW.renaming
+    if not key then return end
     MW.renaming = nil
     self.box.edit:ClearFocus()
     self.frame.veil:Hide()
     if self.zone == "rename" then self.zone = nil end
-    if text then MW.Rename(id, text) end
+    local typing = self.typing
+    self.typing = nil
+    if text and typing == "phrase" then
+        -- (kept in the Phrases list; the slot takes it, on to the next, as a
+        -- pick from the list)
+        local chan = KD.CHANNELS[self.channel or 1].key
+        local action = KD.MakePhrase(text, chan)
+        local wheel = self:Current()
+        if action and Editable(wheel) and wheel.key == key then
+            KD.SavePhrase(action)
+            self:Fill({ action = action, name = KD.PhraseText(action) })
+        end
+    elseif text then
+        local wheel = self:Current()
+        if wheel and wheel.key == key and wheel.id then MW.Rename(wheel.id, text) end
+    end
     menu.Render()
 end
 
@@ -655,15 +763,28 @@ function W:Press(name)
             self:FinishRename(self.box.edit:GetText())
         elseif name == "B" then
             self:FinishRename(nil)
+        elseif (name == "UP" or name == "DOWN") and self.typing == "phrase" then
+            self:StepChannel(name == "UP" and -1 or 1)
         elseif name == "LEFT" or name == "RIGHT" or name == "UP" or name == "DOWN" then
             self:StepName((name == "LEFT" or name == "UP") and -1 or 1)
         end
         return true
     end
-    -- (L1 / R1 the tabs, Circle closes: the panel's)
-    if name == "LB" or name == "RB" or name == "B" then return false end
+    -- L1 / R1: the picker's lists (the panel's tabs are the right stick's)
+    if name == "LB" or name == "RB" then
+        if not (self.picker.def and Editable(wheel)) then return false end
+        self.picker:Press(name == "LB" and "LT" or "RT")
+        menu.Render()
+        return true
+    end
+    -- (Circle closes: the panel's)
+    if name == "B" then return false end
     if not wheel or wheel.new then
-        if name == "A" then self:CreateWheel() end
+        if name == "A" then
+            self:CreateWheel()
+        elseif name == "LEFT" or name == "RIGHT" then
+            self:StepKind(name == "LEFT" and -1 or 1)
+        end
         menu.Render()
         return true
     end
@@ -690,24 +811,36 @@ function W:Help()
     local H = K.H
     local wheel = self:Current()
     if self.zone == "rename" then
-        return { H({ "DPAD_LR" }, "Name", "RIGHT"), H({ "A" }, "Confirm", "A"), H({ "B" }, "Cancel", "B") }
+        local hints = { H({ "DPAD_LR" }, self.typing == "phrase" and "Phrase" or "Name", "RIGHT") }
+        if self.typing == "phrase" then hints[#hints + 1] = H({ "DPAD_UD" }, "Channel", "DOWN") end
+        hints[#hints + 1] = H({ "A" }, "Confirm", "A")
+        hints[#hints + 1] = H({ "B" }, "Cancel", "B")
+        return hints
     end
     if self.zone == "popup" then return { H({ "A" }, "Confirm", "A"), H({ "B" }, "Cancel", "B") } end
     -- Only what does something here: a wheel that fills itself has no slot
     -- to fill, "New wheel" nothing to page, bind or clear
-    local hints = { H({ "LS" }, Editable(wheel) and "Wheel / List" or "Wheel") }
+    local hints = { H({ "LS" }, "Wheel") }
     if not wheel or wheel.new then
+        if #KD.Available() > 1 then hints[#hints + 1] = H({ "DPAD_LR" }, "Kind", "RIGHT") end
         hints[#hints + 1] = H({ "A" }, "Create", "A")
     else
         hints[#hints + 1] = H({ "DPAD_LR" }, "Slot")
         if Editable(wheel) then
+            hints[#hints + 1] = H({ "LB", "RB" }, "List", "RB")
             hints[#hints + 1] = H({ "DPAD_UD" }, "Move")
             hints[#hints + 1] = H({ "A" }, "Choose", "A")
             hints[#hints + 1] = H({ "Y" }, wheel.id and "Clear / Hold to Rename"
                 or (wheel.reset and "Clear / Hold to Reset" or "Clear"), "Y")
+        elseif wheel.id then
+            hints[#hints + 1] = H({ "Y" }, "Hold to Rename", "Y")
         end
         if Pages(wheel) > 1 then hints[#hints + 1] = H({ "LT", "RT" }, "Page", "RT") end
-        if wheel.id then hints[#hints + 1] = H({ "X" }, "Hold to Delete", "X") end
+        if wheel.id then
+            hints[#hints + 1] = H({ "X" }, Typed(wheel) and "Type / Hold to Delete" or "Hold to Delete", "X")
+        elseif Typed(wheel) then
+            hints[#hints + 1] = H({ "X" }, "Type", "X")
+        end
     end
     hints[#hints + 1] = H({ "RS" }, "Tab")
     hints[#hints + 1] = H({ "B" }, "Close", "B")
@@ -822,7 +955,8 @@ function W:Render()
     end
     local focused = slots[self.slot]
     local showSlot = onSlots
-    f.hubName:SetText(showSlot and (focused and MW.ActionName(focused)
+    local newKind = isNew and self:NewKind()
+    f.hubName:SetText(newKind and newKind.label or showSlot and (focused and MW.ActionName(focused)
         or MW.POSITIONS[(self.slot - 1) % PER_PAGE + 1]) or "")
     f.hubName:SetTextColor(unpack(focused and KC.cream or KC.grey))
     f.count:SetText(isNew and "" or format("%d / %d", Count(wheel), max))
@@ -837,8 +971,12 @@ function W:Render()
         self.picker:Close()
         self.detail:Show()
         if isNew then
-            self.detail:Set({ title = "New wheel", body = "Makes an empty wheel of your own and opens it: pick a"
-                .. " spell, an item, a macro or an emote for each slot. Up to " .. MW.MAX .. " wheels." })
+            local kinds = KD.Available()
+            self.detail:Set({ title = "New wheel: " .. newKind.label,
+                tag = newKind.slots and "Your slots" or "Fills itself", tagColor = KC.slot,
+                body = newKind.about .. " Up to " .. MW.MAX .. " wheels.",
+                extra = #kinds > 1 and IF.PadText("D-pad left / right: the kind (" .. self.kindIndex .. " of "
+                    .. #kinds .. "). {A} makes it.") or nil })
         else
             self.detail:Set({ title = wheel.label, tag = "Fills itself", tagColor = KC.slot, body = wheel.info,
                 extra = "Bound to: " .. (MW.HotkeyText(wheel.key) or "nothing")

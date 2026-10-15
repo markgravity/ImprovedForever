@@ -160,7 +160,7 @@ end
 ---------------------------------------------------------------------------
 -- What the press's slot holds: an action ("spell:<id>", "item:<id>",
 -- "macro:<name>", or what one of our macros stands for: "emote:wave",
--- "map", "wheel:buffs"...), or nil (empty, or not a crossbar press)
+-- "map", "wheel:quest"...), or nil (empty, or not a crossbar press)
 function N.Get(spec)
     local storage = Storage(spec)
     if not storage then return nil end

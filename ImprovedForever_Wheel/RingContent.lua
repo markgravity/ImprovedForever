@@ -1,37 +1,14 @@
 -- What goes on each ring. Every builder returns a list of entries:
---   { label, icon, count?, type = "spell"|"item"|"macro", value, spellID?, macroName? }
--- A wheel's slots hold actions: "spell:<id>", "item:<id>", "macro:<name>"
--- or "emote:<token>"; Buffs and Emotes keep theirs here, the player's own
--- wheels in MyWheels.lua, Consumables fills itself from the bags.
+--   { label, icon, count?, type = "spell"|"item"|"macro", value, spellID?, macroName?,
+--     action? (the slot's action, for the editor) }
+-- A wheel's slots hold actions: "spell:<id>", "item:<id>", "macro:<name>",
+-- "emote:<token>" or "phrase:<text>" (WheelKinds.lua); Emotes keeps
+-- its here, the player's own wheels in MyWheels.lua, Consumables fills
+-- itself from the bags, Quest items too (WheelKinds.lua).
 local IF = ImprovedForever
 
 local MAX_SLOTS = 24 -- three pages of eight
 IF.MAX_SLOTS = MAX_SLOTS
-
-local CLASS_BUFFS = {
-    WARRIOR = { "Battle Shout", "Commanding Shout" },
-    MAGE = {
-        "Arcane Intellect", "Arcane Brilliance", "Frost Armor", "Ice Armor", "Mage Armor", "Molten Armor",
-        "Dampen Magic", "Amplify Magic", "Ice Barrier", "Mana Shield",
-    },
-    PRIEST = {
-        "Power Word: Fortitude", "Prayer of Fortitude", "Divine Spirit", "Prayer of Spirit",
-        "Shadow Protection", "Prayer of Shadow Protection", "Inner Fire", "Fear Ward", "Power Word: Shield",
-    },
-    DRUID = { "Mark of the Wild", "Gift of the Wild", "Thorns", "Omen of Clarity" },
-    PALADIN = {
-        "Blessing of Might", "Blessing of Wisdom", "Blessing of Kings", "Blessing of Salvation",
-        "Blessing of Light", "Blessing of Sanctuary", "Greater Blessing of Might", "Greater Blessing of Wisdom",
-        "Greater Blessing of Kings", "Righteous Fury",
-    },
-    WARLOCK = { "Demon Armor", "Demon Skin", "Fel Armor", "Unending Breath", "Detect Invisibility", "Soul Link" },
-    SHAMAN = { "Lightning Shield", "Water Shield", "Water Breathing", "Water Walking" },
-    HUNTER = {
-        "Aspect of the Hawk", "Aspect of the Monkey", "Aspect of the Cheetah", "Aspect of the Pack",
-        "Aspect of the Wild", "Trueshot Aura",
-    },
-    ROGUE = {},
-}
 
 local DEFAULT_EMOTES = { "wave", "hello", "thank", "cheer", "dance", "laugh", "bow", "roar" }
 
@@ -47,6 +24,9 @@ end
 -- An action as a ring entry, or nil (a macro deleted...)
 function IF.ActionEntry(action)
     local kind, value = Parse(action)
+    if kind == "phrase" then
+        return IF.WheelKinds and IF.WheelKinds.PhraseEntry(action)
+    end
     local name, icon = IF.ActionInfo(action)
     if not name then
         return nil
@@ -76,43 +56,8 @@ function IF.SlotEntries(slots, max)
 end
 
 ---------------------------------------------------------------------------
--- Buffs (per character) and Emotes (account) slots
+-- Emotes (account) slots
 ---------------------------------------------------------------------------
-
--- The buff spells the class starts with, as slots
-local function DefaultBuffSlots()
-    local _, class = UnitClass("player")
-    local slots = {}
-    for _, name in ipairs(CLASS_BUFFS[class] or {}) do
-        local _, _, spellID = SpellInfo(name)
-        if spellID and #slots < MAX_SLOTS then
-            slots[#slots + 1] = "spell:" .. spellID
-        end
-    end
-    return slots
-end
-
-function IF.GetBuffSlots()
-    local db = IF.charDB
-    if not db.buffSlots then
-        -- An earlier version kept a list of spell names
-        if db.buffs then
-            db.buffSlots = {}
-            for i, name in ipairs(db.buffs) do
-                local _, _, spellID = SpellInfo(name)
-                if spellID then db.buffSlots[i] = "spell:" .. spellID end
-            end
-            db.buffs = nil
-        else
-            db.buffSlots = DefaultBuffSlots()
-        end
-    end
-    return db.buffSlots
-end
-
-function IF.ResetBuffSlots()
-    IF.charDB.buffSlots = DefaultBuffSlots()
-end
 
 function IF.GetEmoteSlots()
     if not IF.db.emoteSlots then
@@ -127,10 +72,6 @@ function IF.ResetEmoteSlots()
         slots[i] = "emote:" .. token
     end
     IF.db.emoteSlots = slots
-end
-
-local function BuildBuffs()
-    return IF.SlotEntries(IF.GetBuffSlots(), MAX_SLOTS)
 end
 
 -- Consumable subclasses (item class 0) in display order; others go last.
@@ -221,8 +162,8 @@ end
 
 IF.BuildConsumables = BuildConsumables
 
+-- (Quest items: WheelKinds.lua adds its own)
 IF.RingBuilders = {
-    buffs = BuildBuffs,
     consumables = BuildConsumables,
     emotes = BuildEmotes,
 }

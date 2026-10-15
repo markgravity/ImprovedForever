@@ -2,7 +2,8 @@
 -- Forever's Vibration module (moust4ki, MIT License, see
 -- LICENSE-EasyController.md): its patterns, played on the two
 -- standard motors at one strength for all. Three events: you level up, you
--- land a critical hit (damage or heal), you take one; casts, matched to
+-- land a critical hit (damage or heal), you take one; ours: you start a
+-- melee auto attack, you jump; casts, matched to
 -- what they are (fire, Hearthstone, mining, tailoring...); eating and
 -- drinking, while you sit with food or a drink. Each has a pattern of
 -- its own, or none, grouped as Easy Controller does (Combat, Progress). Set
@@ -216,6 +217,9 @@ V.EVENTS = {
     { key = "critted", group = "combat", label = "Critical hit taken", icon = EVENT_ICONS .. "critted", on = true,
         combo = true,
         pattern = "double", tip = "An enemy lands a critical hit on you." },
+    { key = "autoAttack", group = "combat", label = "Auto attack", icon = VIBE_ICONS .. "slash", on = false,
+        pattern = "pulse", tip = "You start attacking in melee: Attack, or an ability that starts your"
+            .. " swings. Once as they start, not on every swing. Off by default." },
     { key = "shot", group = "combat", label = "Shooting", icon = EVENT_ICONS .. "shot", on = true,
         pattern = "auto", auto = "Match the weapon", family = "weapon", gap = 0.15, tip = "Each ranged shot you fire: Auto Shot,"
             .. " Shoot (a wand, a bow, a gun), Throw, a hunter's instant shots. Match the weapon: a bow's"
@@ -223,6 +227,9 @@ V.EVENTS = {
     { key = "lowHp", group = "combat", label = "Low health", icon = EVENT_ICONS .. "lowhp", on = true,
         pattern = "heart", loop = true, tip = "While your health is at 35% or less (the game's red"
             .. " low-health warning), its pattern plays over and over." },
+    { key = "jump", group = "combat", label = "Jump", icon = VIBE_ICONS .. "charge", on = false,
+        pattern = "micro", tip = "You jump (not while swimming, flying or already in the air). Off by"
+            .. " default: it comes often." },
     { key = "cast", group = "combat", parent = "spellcast", label = "Casting", icon = EVENT_ICONS .. "cast", on = false,
         pattern = "sweep", loop = true, tip = "While you cast or channel a spell, its pattern plays over"
             .. " and over until the spell ends (instant spells: nothing)." },
@@ -1480,6 +1487,8 @@ local CAST_HANDLERS = {
 
 local events = CreateFrame("Frame")
 events:RegisterEvent("PLAYER_LEVEL_UP")
+-- (melee auto-attack starting; ranged's is START_AUTOREPEAT_SPELL)
+events:RegisterEvent("PLAYER_ENTER_COMBAT")
 events:RegisterEvent("START_AUTOREPEAT_SPELL")
 events:RegisterEvent("STOP_AUTOREPEAT_SPELL")
 for event in pairs(CAST_HANDLERS) do events:RegisterUnitEvent(event, "player") end
@@ -1492,6 +1501,10 @@ events:SetScript("OnEvent", function(_, event, ...)
     if not IF.db then return end
     if event == "PLAYER_LEVEL_UP" then
         V.Fire("levelUp")
+    elseif event == "PLAYER_ENTER_COMBAT" then
+        -- (started by an ability: its own feel just played, kept)
+        if last.instant and GetTime() - last.instant < 0.3 then return end
+        V.Fire("autoAttack")
     elseif event == "START_AUTOREPEAT_SPELL" or event == "STOP_AUTOREPEAT_SPELL" then
         -- (stopped: its last shot may still be flying)
         ranged.auto = event == "START_AUTOREPEAT_SPELL"
@@ -1504,6 +1517,22 @@ events:SetScript("OnEvent", function(_, event, ...)
         CombatLog()
     end
 end)
+
+---------------------------------------------------------------------------
+-- Jumping: the game's Jump binding (pad, keyboard) calls JumpOrAscendStart;
+-- hooked after it (hooksecurefunc: the jump itself stays the game's). Not
+-- in water, in the air or on a flight: no jump comes of it there.
+---------------------------------------------------------------------------
+local function Airborne()
+    return (IsSwimming and IsSwimming()) or (IsFlying and IsFlying()) or (IsFalling and IsFalling())
+        or (UnitOnTaxi and UnitOnTaxi("player"))
+end
+
+if JumpOrAscendStart then
+    hooksecurefunc("JumpOrAscendStart", function()
+        if IF.db and not Airborne() then V.Fire("jump") end
+    end)
+end
 
 ---------------------------------------------------------------------------
 -- Low health. WoW Forever hides the player's health from addons in combat,

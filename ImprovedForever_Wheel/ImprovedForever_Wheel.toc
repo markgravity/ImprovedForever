@@ -13,6 +13,7 @@
 
 Wheel.lua
 RingContent.lua
+WheelKinds.lua
 MyWheels.lua
 Ring.lua
 BindPanel.lua

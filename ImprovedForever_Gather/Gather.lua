@@ -58,10 +58,6 @@ function Gather.SkillColor(node)
     return state and N.COLORS[state]
 end
 
-local function Secret(v)
-    return type(issecretvalue) == "function" and issecretvalue(v)
-end
-
 -- A label's words: "Silverleaf x2", "Bruiseweed (100)" for one beyond the
 -- player's skill
 function Gather.LabelText(node)
@@ -72,14 +68,8 @@ function Gather.LabelText(node)
     return text
 end
 
--- The player's place in the world, as yards east and north, or nil (in an
--- instance). The world's x runs north, its y west.
-local function PlayerPos()
-    if not UnitPosition then return nil end
-    local y, x = UnitPosition("player")
-    if type(x) ~= "number" or type(y) ~= "number" or Secret(x) or Secret(y) then return nil end
-    return -y, x
-end
+-- The player's place in the world, as yards east and north, or nil
+local PlayerPos = N.Position
 
 local function Vibrate()
     if IF.Vibe and IF.Vibe.Settings().enabled then IF.Vibe.Play("pulse") end
@@ -112,13 +102,14 @@ end
 
 local nodes, scanEast, scanNorth = {}, nil, nil
 
--- The herbs and ore on the minimap (NPCs, players, quest givers left out)
-local function Rescan()
+-- The herbs and ore of a scan (NPCs, players, quest givers left out), and
+-- where the player stood when it began
+local function Rescan(found)
     nodes = {}
-    for _, node in ipairs(N.Scan()) do
+    for _, node in ipairs(found) do
         if N.Kind(node.name) then nodes[#nodes + 1] = node end
     end
-    scanEast, scanNorth = PlayerPos()
+    scanEast, scanNorth = found.east, found.north
 end
 
 -- Where a label can go round its dot (x, y its centre): right, left,
@@ -205,19 +196,13 @@ local function Place()
     end
 end
 
-overlay:SetScript("OnUpdate", function(self, elapsed)
-    self.left = (self.left or 0) - elapsed
-    if self.left <= 0 then
-        self.left = PlayerPos() and SCAN or SCAN / 2
-        Rescan()
-    end
-    Place()
-end)
+overlay:SetScript("OnUpdate", Place)
 
+local UpdateScans
 function Gather.ApplyLabels()
     local on = Gather.Settings().labels and N.Supported()
-    overlay.left = 0
     overlay:SetShown(on and true or false)
+    UpdateScans(true, false)
 end
 
 function Gather.SetLabels(on)
@@ -357,11 +342,9 @@ end
 -- What was there at the last look: name -> how many
 local seen = {}
 
-local function Watch()
-    local s = Gather.Settings()
-    if not s.alert or IF.InCombat() or not N.Supported() or not Minimap:IsVisible() then return end
+local function Watch(found)
     local counts, fresh = {}, {}
-    for _, node in ipairs(N.Scan()) do
+    for _, node in ipairs(found) do
         if Wanted(node.name) then
             counts[node.name] = (counts[node.name] or 0) + node.count
             fresh[#fresh + 1] = node
@@ -378,20 +361,53 @@ local function Watch()
     Gather.Alert(new[1], #new - 1)
 end
 
-local watcher = CreateFrame("Frame")
-watcher.left = 0
-watcher:SetScript("OnUpdate", function(self, elapsed)
-    self.left = self.left - elapsed
-    if self.left > 0 then return end
-    self.left = Gather.Settings().interval
-    Watch()
+---------------------------------------------------------------------------
+-- The scans: one at a time (NodeScan.lua spreads each over frames), shared
+-- by the labels (every SCAN) and the alerts (every interval); each keeps
+-- the last scan's dots until the next is read. None while neither is on,
+-- nor while Find Herbs / Find Minerals is off and only herbs and ore are
+-- wanted: nothing to find
+---------------------------------------------------------------------------
+local scanner = CreateFrame("Frame")
+scanner:Hide()
+local labelsLeft, alertLeft = 0, 0
+
+-- A scan's dots to the labels, and to the alerts when their look is due
+local function Publish(found)
+    if overlay:IsShown() then Rescan(found) end
+    local s = Gather.Settings()
+    if s.alert and alertLeft <= 0 and not IF.InCombat() and (found.all or s.alertFor ~= "all") then
+        alertLeft = s.interval
+        Watch(found)
+    end
+end
+
+scanner:SetScript("OnUpdate", function(_, elapsed)
+    labelsLeft, alertLeft = labelsLeft - elapsed, alertLeft - elapsed
+    if N.Running() then return end
+    local s = Gather.Settings()
+    local labels = overlay:IsVisible() and labelsLeft <= 0
+    local alerts = s.alert and alertLeft <= 0 and not IF.InCombat() and N.Supported() and Minimap:IsVisible()
+    if not (labels or alerts) then return end
+    if labels then labelsLeft = PlayerPos() and SCAN or SCAN / 2 end
+    local all = s.alert and s.alertFor == "all"
+    if not all and N.Tracking() == false then return Publish({}) end
+    N.Start({ all = all }, Publish)
 end)
-watcher:Hide()
+
+-- (labels / alerts: looked for at once)
+UpdateScans = function(labels, alerts)
+    if labels then labelsLeft = 0 end
+    if alerts then alertLeft = 0 end
+    local s = Gather.Settings()
+    local on = (s.labels and N.Supported()) or s.alert
+    scanner:SetShown(on and true or false)
+    if not on then N.Stop() end
+end
 
 function Gather.ApplyAlert()
     seen = {}
-    watcher.left = 0
-    watcher:SetShown(Gather.Settings().alert)
+    UpdateScans(false, true)
 end
 
 IF.OnLogin(function()
@@ -407,9 +423,11 @@ function Gather.Command(option, value)
         N.step = value
     elseif option == "debug" then
         -- One scan, each dot printed
-        N.debug = true
-        N.Scan()
-        N.debug = false
+        if not N.Start({ all = true, debug = true }, function(found)
+            IF.Print("Minimap: " .. #found .. " dot(s)")
+        end) then
+            IF.Print("This client can't read the minimap now.")
+        end
         return
     elseif option then
         IF.Print("usage: /if nodes [step <n>|debug]")

@@ -1,8 +1,9 @@
 -- The wheels, adapted from Easy Controller - Forever's MyWheels (moust4ki,
 -- MIT License, see LICENSE-EasyController.md): the built-in ones
--- (Buffs, Consumables, Emotes) and up to 8 of the player's own per
--- character, 8 slots each, holding the spells, items, macros and emotes
--- they pick. Each is a ring ("buffs", "my<id>"...), opened by an R3 combo
+-- (Quest Items, Consumables, Emotes) and up to 8 of the player's own per
+-- character, each of a kind (WheelKinds.lua): 8 slots holding the spells,
+-- items, macros and emotes they pick, or one that fills itself (quest
+-- items...). Each is a ring ("quest", "my<id>"...), opened by an R3 combo
 -- or its own key binding. Configured in the panel's Wheels tab
 -- (WheelEditor.lua), which works on the descriptions MW.Wheels() returns.
 local IF = ImprovedForever
@@ -15,12 +16,13 @@ MW.MAX = 8
 MW.POSITIONS = { "Top", "Top right", "Right", "Bottom right", "Bottom", "Bottom left", "Left", "Top left" }
 
 -- The built-in rings; the wheels are added after them
-local BUILT_IN = { "native", "buffs", "consumables", "emotes" }
+local BUILT_IN = { "native", "quest", "consumables", "emotes" }
 -- The built-in wheels, shown before the player's own
-MW.BUILT_IN_WHEELS = { "buffs", "consumables", "emotes" }
+MW.BUILT_IN_WHEELS = { "quest", "consumables", "emotes" }
 
 ---------------------------------------------------------------------------
--- The wheels: charDB.wheels = { { id = 1-8, name, slots = { [1-8] = "spell:133" } } }
+-- The wheels: charDB.wheels = { { id = 1-8, name, kind (nil: "custom"),
+-- slots = { [1-8] = "spell:133" } } }
 ---------------------------------------------------------------------------
 function MW.List()
     IF.charDB.wheels = IF.charDB.wheels or {}
@@ -35,32 +37,47 @@ end
 
 function MW.Count(w)
     local n = 0
-    for i = 1, MW.SLOTS do
+    for i = 1, IF.WheelKinds.Get(w.kind).max or MW.SLOTS do
         if w.slots[i] then n = n + 1 end
     end
     return n
+end
+
+-- A wheel of this kind exists ("quest"...)
+function MW.HasKind(key)
+    for _, w in ipairs(MW.List()) do
+        if (w.kind or "custom") == key then return true end
+    end
+    return false
 end
 
 function MW.RingKey(id)
     return "my" .. id
 end
 
+-- (a chat phrase is its own name: WheelKinds.lua)
 function MW.ActionName(action)
+    local phrase = IF.WheelKinds.PhraseText(action)
+    if phrase then return phrase end
     return (IF.ActionInfo(action))
 end
 
 function MW.ActionIcon(action)
+    if IF.WheelKinds.PhraseText(action) then return IF.WheelKinds.PHRASE_ICON end
     return select(2, IF.ActionInfo(action))
 end
 
 MW.CATALOG = IF.Actions.CATALOG
 local SPELLS, ITEMS, MACROS, EMOTES = unpack(MW.CATALOG)
 
--- As a ring: the filled slots in order
+-- As a ring: the filled slots in order, or what its kind fills it with
 local function Builder(id)
     return function()
         local w = MW.Get(id)
-        return w and IF.SlotEntries(w.slots, MW.SLOTS) or {}
+        if not w then return {} end
+        local kind = IF.WheelKinds.Get(w.kind)
+        if kind.build then return kind.build({ max = kind.max, wheel = w }) end
+        return IF.SlotEntries(w.slots, kind.max or MW.SLOTS)
     end
 end
 
@@ -78,6 +95,16 @@ function MW.Register()
         IF.RingBuilders[key] = Builder(w.id)
     end
     IF.RINGS = rings
+    -- Buffs gave its place to Quest Items: what opened it opens that
+    for combo, ring in pairs(IF.db.combos or {}) do
+        if ring == "buffs" then IF.db.combos[combo] = "quest" end
+    end
+    local keys = MW.WheelKeys()
+    for button, ring in pairs(keys) do
+        if ring == "buffs" then keys[button] = "quest" end
+    end
+    IF.charDB.buffSlots, IF.charDB.buffs = nil, nil
+    IF.db.phraseSlots, IF.db.phraseDefaultsGone, IF.db.phraseSlotsFull = nil, nil, nil
     -- Each wheel's line in the game's Key Bindings (AddOns)
     for _, key in ipairs(IF.WHEEL_BINDING_KEYS or {}) do
         _G["BINDING_NAME_CLICK ImprovedForeverWheel_" .. key .. ":LeftButton"] = "Open wheel: "
@@ -104,12 +131,17 @@ local function Changed()
 end
 MW.Changed = Changed
 
-function MW.Create()
+-- A new wheel of a kind (nil: "custom"), named after it
+function MW.Create(kindKey)
+    local kind = IF.WheelKinds.Get(kindKey)
     local used = {}
     for _, w in ipairs(MW.List()) do used[w.id] = true end
     for id = 1, MW.MAX do
         if not used[id] then
-            table.insert(MW.List(), { id = id, name = "Wheel " .. id, slots = {} })
+            local slots = {}
+            for i, action in ipairs(kind.defaults and kind.defaults() or {}) do slots[i] = action end
+            table.insert(MW.List(), { id = id, name = kind.name or ("Wheel " .. id),
+                kind = kind.key ~= "custom" and kind.key or nil, slots = slots })
             Changed()
             return id
         end
@@ -149,10 +181,9 @@ end
 ---------------------------------------------------------------------------
 function MW.Wheels()
     local wheels = {
-        { key = "buffs", label = IF.RING_LABELS.buffs, builtin = true, slots = IF.GetBuffSlots(),
-            max = IF.MAX_SLOTS, lists = { SPELLS, ITEMS, MACROS },
-            info = "Your class buffs to start with: change any slot. Three pages of eight.",
-            reset = IF.ResetBuffSlots, resetLabel = "Class defaults" },
+        { key = "quest", label = IF.RING_LABELS.quest, builtin = true, max = IF.MAX_SLOTS,
+            info = "Fills itself from your bags: the items a quest has you use, then the ones that start a"
+                .. " quest. An item leaves once its quest is done. Nothing to set here but its hotkey." },
         { key = "consumables", label = IF.RING_LABELS.consumables, builtin = true, max = IF.MAX_SLOTS,
             info = "Fills itself from your bags: food and drink, potions, bandages, scrolls, elixirs and flasks,"
                 .. " best kinds first. Nothing to set here but its hotkey." },
@@ -161,18 +192,33 @@ function MW.Wheels()
             info = "Emotes to play with a flick of the stick. Change any slot.",
             reset = IF.ResetEmoteSlots, resetLabel = "Default emotes" },
     }
+    -- (the player's own, by kind: slots to fill, or none, it fills itself)
     for _, w in ipairs(MW.List()) do
-        wheels[#wheels + 1] = { key = MW.RingKey(w.id), label = w.name, id = w.id, slots = w.slots, max = MW.SLOTS,
-            lists = MW.CATALOG, info = "A wheel of your own: spells, items, macros or emotes in any slot." }
+        local kind = IF.WheelKinds.Get(w.kind)
+        local reset = kind.defaults and function()
+            wipe(w.slots)
+            for i, action in ipairs(kind.defaults()) do w.slots[i] = action end
+        end
+        wheels[#wheels + 1] = { key = MW.RingKey(w.id), label = w.name, id = w.id, kind = kind.key,
+            slots = kind.slots and w.slots or nil, max = kind.max or MW.SLOTS,
+            lists = kind.lists and kind.lists() or MW.CATALOG, info = kind.info,
+            reset = reset, resetLabel = reset and "Defaults" or nil }
     end
     return wheels
 end
 
--- What a self-filling wheel holds right now, as actions by slot
+-- What a self-filling wheel holds right now, as actions by slot (each
+-- group from a page of its own, as the ring shows it)
 function MW.LiveSlots(wheel)
     local slots = {}
-    for i, entry in ipairs(IF.RingBuilders[wheel.key]()) do
-        slots[i] = entry.value
+    local entries = IF.RingBuilders[wheel.key] and IF.RingBuilders[wheel.key]() or {}
+    local n = 0
+    for _, group in ipairs(entries.groups or { entries }) do
+        for _, entry in ipairs(group) do
+            n = n + 1
+            slots[n] = entry.action or entry.value
+        end
+        n = math.ceil(n / MW.SLOTS) * MW.SLOTS
     end
     return slots
 end

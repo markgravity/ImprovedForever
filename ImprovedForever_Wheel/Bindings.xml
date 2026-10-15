@@ -1,5 +1,5 @@
 <Bindings>
-	<Binding name="CLICK ImprovedForeverWheel_buffs:LeftButton" header="IMPROVEDFOREVER_WHEEL" category="ADDONS"/>
+	<Binding name="CLICK ImprovedForeverWheel_quest:LeftButton" header="IMPROVEDFOREVER_WHEEL" category="ADDONS"/>
 	<Binding name="CLICK ImprovedForeverWheel_consumables:LeftButton" category="ADDONS"/>
 	<Binding name="CLICK ImprovedForeverWheel_emotes:LeftButton" category="ADDONS"/>
 	<Binding name="CLICK ImprovedForeverWheel_my1:LeftButton" category="ADDONS"/>

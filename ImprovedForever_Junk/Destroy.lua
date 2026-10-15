@@ -47,7 +47,7 @@ local function Card(e)
     return {
         bag = e.bag, slot = e.slot, itemID = e.itemID, link = e.link, icon = e.icon, count = e.count,
         quality = e.quality or 0, value = e.value, ah = e.ah, reason = e.tag or "Junk", rank = e.rank,
-        sellable = e.sellable, junk = e.verdict == "junk", why = e.why,
+        sellable = e.sellable, verdict = e.verdict, junk = e.verdict == "junk", why = e.why,
     }
 end
 
@@ -94,7 +94,8 @@ local watch = CreateFrame("Frame")
 watch:RegisterEvent("ADDON_ACTION_BLOCKED")
 watch:RegisterEvent("ADDON_ACTION_FORBIDDEN")
 watch:SetScript("OnEvent", function(_, _, addon, fn)
-    if addon == IF.name and (tostring(fn):find("DeleteCursorItem") or tostring(fn):find("UseContainerItem")) then
+    -- (named after the module whose code it is: ImprovedForever_Junk)
+    if type(addon) == "string" and addon:find("^ImprovedForever") and tostring(fn):find("DeleteCursorItem") then
         blocked = true
     end
 end)
@@ -745,46 +746,23 @@ function DS.AtVendor()
     return merchant and merchant:IsShown() or false
 end
 
-local function SellOne(e)
-    local info = SlotInfo(e.bag, e.slot)
-    if not info or info.itemID ~= e.itemID or info.isLocked then return false end
-    ClearCursor()
-    blocked = false
-    local use = (C_Container and C_Container.UseContainerItem) or UseContainerItem
-    if not use then return false end
-    use(e.bag, e.slot)
-    return not blocked
-end
-
+-- Sold by the Junk module's one seller (Junk.lua: judged again, counted
+-- once gone from the bags)
 function DS.Sell(e)
     if IF.InCombat() or not DS.AtVendor() then return end
-    if SellOne(e) then
-        IF.Print("sold " .. (e.link or "item") .. (e.count > 1 and (" x" .. e.count) or "") .. " for " .. Money(e.value))
-    elseif blocked then
-        IF.Print("the game doesn't let addons sell items here.")
-    end
-    C_Timer.After(0.2, DS.Refresh)
+    ClearCursor()
+    IF.Junk.Sell({ e }, { done = function() DS.Refresh() end })
 end
 
--- Every listed one a vendor buys
+-- Every listed one a vendor buys (not from a bag kept out of Sell All Junk)
 function DS.SellAll()
     if IF.InCombat() or not DS.AtVendor() then return end
-    local done, worth = 0, 0
+    local list = {}
     for _, e in ipairs(DS.items) do
-        if e.sellable then
-            if SellOne(e) then
-                done, worth = done + 1, worth + e.value
-            elseif blocked then
-                break
-            end
-        end
+        if e.sellable then list[#list + 1] = e end
     end
-    if blocked and done == 0 then
-        IF.Print("the game doesn't let addons sell items here.")
-    elseif done > 0 then
-        IF.Print("sold " .. done .. (done == 1 and " item" or " items") .. " for " .. Money(worth))
-    end
-    C_Timer.After(0.3, DS.Refresh)
+    ClearCursor()
+    IF.Junk.Sell(list, { bulk = true, done = function() DS.Refresh() end })
 end
 
 -- noLoot: from the loot window, destroy only (no swap)

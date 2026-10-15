@@ -5,7 +5,8 @@
 --   the game's junk coin on each junk bag slot (a texture of ours: nothing
 --     written in the game's frames);
 --   a vendor's Sell All Junk sells it too, after the game's greys (its
---     button lit while there is only ours to sell);
+--     button lit while there is only ours to sell; 12 at most a press, all
+--     of it bought back if need be, unless the player lets it sell all);
 --   an ordinary item a quest needs says so in its tooltip, in orange:
 --     "Needed for "Redridge Goulash"";
 --   L2 + L3 on a bag item (watched, not taken; rebindable in the Bindings
@@ -26,6 +27,7 @@ local SELL_PAUSE = 0.25
 local DEFAULTS = {
     icons = true,              -- the junk coin on the bag slots
     sell = true,               -- the vendor's Sell All Junk sells ours too
+    sellBuyback = true,        -- 12 at most a press: all of it can be bought back
     mark = true,               -- the mark press, while a bag is open
     tooltip = true,            -- item tooltips say which quest needs an ordinary item
 }
@@ -103,15 +105,27 @@ local function HookBags()
 end
 
 ---------------------------------------------------------------------------
--- Selling: with the vendor's Sell All Junk (the game sells its greys, then
--- ours go: what isn't grey), a few at a time
+-- Selling: the one seller (the vendor's Sell All Junk, after the game's
+-- greys; the Destroy panel's Sell and Sell All), a few at a time. Each item
+-- is judged again just before it goes (the core's verdict: still what it
+-- was picked for), and counted sold only once its bag slot has emptied: a
+-- request proves nothing (the vendor closes, the server says no). An item
+-- whose data hasn't come yet stops the run, never waved through. At most
+-- what the vendor's buyback keeps (12) a run, so all of it can be bought
+-- back (sellBuyback; off: all at once).
 ---------------------------------------------------------------------------
+local BUYBACK = BUYBACK_ITEMS_PER_PAGE or 12
+local CONFIRM_WAIT = 1         -- s: still in its slot, unlocked, this long after: not sold
+local CONFIRM_GIVE_UP = 5      -- s: still in its slot this long after, locked or not: not sold
+
 local function AtVendor()
     local merchant = _G.MerchantFrame
     return merchant and merchant:IsShown() or false
 end
+J.AtVendor = AtVendor
 
--- A bag the player keeps out of Sell All Junk (its settings menu)
+-- A bag the player keeps out of Sell All Junk (its settings menu); the
+-- game's answer missing (an error): kept out too
 local function Excluded(bag)
     local ok, out = pcall(function()
         if bag == 0 then
@@ -120,58 +134,162 @@ local function Excluded(bag)
         local flag = Enum.BagSlotFlags and Enum.BagSlotFlags.ExcludeJunkSell
         return flag and C_Container.GetBagSlotFlag and C_Container.GetBagSlotFlag(bag, flag)
     end)
-    return ok and out or false
+    if not ok then return true end
+    return out and true or false
+end
+
+-- The one rule: may the vendor have it? picked: the entry it was picked
+-- by; now: its verdict again (IV.Judge); bulk: a sell-all (never from a bag
+-- kept out of Sell All Junk). Junk or a vendor's (never kept, never one for
+-- the auction house), still what it was picked for, with a price.
+function J.MaySell(picked, now, bulk)
+    if not (picked and now) or now.itemID ~= picked.itemID then return false end
+    if now.verdict ~= "junk" and now.verdict ~= "vendor" then return false end
+    if now.verdict ~= picked.verdict or not now.sellable then return false end
+    return not (bulk and Excluded(now.bag))
 end
 
 -- Ours to sell: junk a vendor buys, not grey (the game's own), out of the
 -- bags it sells from
 function J.ToSell()
     return IV.Bags(function(e)
-        return e.verdict == "junk" and e.sellable and e.quality > 0 and not Excluded(e.bag)
+        return e.verdict == "junk" and e.quality > 0 and J.MaySell(e, e, true)
     end)
 end
 
-local selling                  -- { list, i, sold, worth }; nil: not under way
+-- run: { list, i, bulk, what, done, sent = { pending sales }, sold, unsold,
+-- refused, worth, left, stop ("vendor", "data", "buyback") }; nil: none under way
+local run
 local blocked = false
+local ticker = CreateFrame("Frame")
+ticker:Hide()
 
-local function SellNext()
-    local s = selling
-    if not s then return end
-    if not AtVendor() or IF.InCombat() or blocked then
-        selling = nil
+local function Plural(n, what)
+    return n .. " " .. what .. (n == 1 and "" or "s")
+end
+
+local function Finish(r)
+    run = nil
+    ticker:Hide()
+    if r.sold == 1 and r.one then
+        local e = r.one
+        IF.Print("sold " .. (e.link or "item") .. (e.count > 1 and (" x" .. e.count) or "") .. " for " .. IV.Money(r.worth))
+    elseif r.sold > 0 then
+        IF.Print("sold " .. Plural(r.sold, r.what) .. " for " .. IV.Money(r.worth))
+    end
+    if blocked and r.sold == 0 then
+        IF.Print("the game doesn't let addons sell items here.")
+    elseif r.unsold > 0 then
+        IF.Print(Plural(r.unsold, r.what) .. " not taken by the vendor.")
+    end
+    if r.refused > 0 then
+        IF.Print(Plural(r.refused, r.what) .. " not sold: kept now, or in a bag kept out of Sell All Junk.")
+    end
+    if blocked or r.left == 0 then
+        -- (nothing else to say)
+    elseif r.stop == "data" then
+        IF.Print("an item's data hasn't come from the server yet: selling stopped, try again.")
+    elseif r.stop == "buyback" then
+        IF.Print(Plural(r.left, r.what) .. " left (the vendor buys back only the last " .. BUYBACK .. "): sell again.")
     else
-        local use = (C_Container and C_Container.UseContainerItem) or UseContainerItem
-        local n = 0
-        while s.i <= #s.list and n < SELL_BATCH do
-            local e = s.list[s.i]
-            s.i = s.i + 1
-            local info = SlotInfo(e.bag, e.slot)
-            if info and info.itemID == e.itemID and not info.isLocked then
+        IF.Print(Plural(r.left, r.what) .. " not sold: the vendor's window closed.")
+    end
+    if r.done then r.done(r.sold) end
+end
+
+-- The sales sent, checked: gone from its slot (sold), or still there
+-- (not); the run ends once none is pending and none is left to send
+local function Check()
+    local r = run
+    if not r then
+        ticker:Hide()
+        return
+    end
+    local now = GetTime()
+    for i = #r.sent, 1, -1 do
+        local s = r.sent[i]
+        local info = SlotInfo(s.bag, s.slot)
+        if not info or info.itemID ~= s.itemID then
+            r.sold, r.worth = r.sold + 1, r.worth + s.value
+            if r.sold == 1 then r.one = s end
+            table.remove(r.sent, i)
+        elseif now - s.at > CONFIRM_GIVE_UP or (not info.isLocked and now - s.at > CONFIRM_WAIT) then
+            r.unsold = r.unsold + 1
+            table.remove(r.sent, i)
+        end
+    end
+    if #r.sent == 0 and not r.sending then Finish(r) end
+end
+ticker:SetScript("OnUpdate", function(self, elapsed)
+    self.t = (self.t or 0) + elapsed
+    if self.t < 0.1 then return end
+    self.t = 0
+    Check()
+end)
+
+local function SendNext()
+    local r = run
+    if not r then return end
+    -- (the rest left where it is: what was sent is still checked)
+    local function Stop(why)
+        r.stop, r.left = why, r.left + (#r.list - r.i + 1)
+        r.i = #r.list + 1
+    end
+    local use = (C_Container and C_Container.UseContainerItem) or UseContainerItem
+    if not use or not AtVendor() or IF.InCombat() or blocked then Stop("vendor") end
+    local n = 0
+    while r.i <= #r.list and n < SELL_BATCH do
+        local e = r.list[r.i]
+        local info = SlotInfo(e.bag, e.slot)
+        if info and info.itemID == e.itemID then
+            if r.buyback and #r.sent + r.sold + r.unsold >= BUYBACK then
+                Stop("buyback")
+                break
+            end
+            local now = IV.Judge(e.bag, e.slot)
+            if not now then
+                -- (its data not here yet: no verdict, no sale)
+                Stop("data")
+                break
+            end
+            if info.isLocked then
+                -- (moving, or already being sold: not now)
+            elseif J.MaySell(e, now, r.bulk) then
                 use(e.bag, e.slot)
                 if blocked then break end
-                s.sold, s.worth, n = s.sold + 1, s.worth + e.value, n + 1
+                r.sent[#r.sent + 1] = { bag = e.bag, slot = e.slot, itemID = e.itemID, link = now.link,
+                    count = now.count, value = now.value, at = GetTime() }
+                n = n + 1
+            else
+                r.refused = r.refused + 1
             end
         end
-        if s.i <= #s.list and not blocked then
-            C_Timer.After(SELL_PAUSE, SellNext)
-            return
-        end
-        selling = nil
+        r.i = r.i + 1
     end
-    if blocked and s.sold == 0 then
-        IF.Print("the game doesn't let addons sell items here.")
-    elseif s.sold > 0 then
-        IF.Print("sold " .. s.sold .. (s.sold == 1 and " junk item" or " junk items") .. " for " .. IV.Money(s.worth))
+    if r.i <= #r.list and not blocked then
+        C_Timer.After(SELL_PAUSE, SendNext)
+        return
     end
+    r.sending = false
+    ticker:Show()
+end
+
+-- Sells the entries of list (IV.Judge's) a vendor may have (J.MaySell).
+-- opts: { bulk (a sell-all), what ("junk item"; "item"), done = fn(sold),
+-- once the run is over }. Out of combat, at a vendor; one run at a time.
+function J.Sell(list, opts)
+    opts = opts or {}
+    if run or IF.InCombat() or not AtVendor() or #list == 0 then return false end
+    blocked = false
+    run = { list = list, i = 1, bulk = opts.bulk, buyback = J.Settings().sellBuyback, what = opts.what or "item", done = opts.done, sent = {},
+        sold = 0, unsold = 0, refused = 0, worth = 0, left = 0, sending = true }
+    SendNext()
+    return true
 end
 
 function J.SellJunk()
-    if selling or IF.InCombat() or not AtVendor() then return end
-    local list = J.ToSell()
-    if #list == 0 then return end
-    blocked = false
-    selling = { list = list, i = 1, sold = 0, worth = 0 }
-    SellNext()
+    if run or IF.InCombat() or not AtVendor() then return end
+    J.Sell(J.ToSell(), { bulk = true, what = "junk item" })
 end
 
 local watch = CreateFrame("Frame")

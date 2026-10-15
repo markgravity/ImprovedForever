@@ -515,12 +515,13 @@ function UI.CardPicker(parent, cols, cardH, onRender, leftKey, rightKey)
         self:Show()
     end
 
+    -- (false, not nil: a frame's field stays one, read before it is set)
     function p:Close()
-        self.def = nil
+        self.def = false
         self:Hide()
     end
 
-    function p:IsOpen() return self.def ~= nil end
+    function p:IsOpen() return self.def and true or false end
 
     -- (the list's entries without its section titles: the cards)
     function p:LoadList()

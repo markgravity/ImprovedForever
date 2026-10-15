@@ -389,6 +389,27 @@ local CHECKS = {
         end
         M.Close()
     end },
+    -- (the Wheel module: a wheel of each kind made, built and shown)
+    { name = "wheel kinds", fn = function()
+        local IF = rawget(_G, "ImprovedForever")
+        local MW, KD = IF and IF.MyWheels, IF and IF.WheelKinds
+        if not (MW and KD and IF.Menu) then return end
+        local M = IF.Menu
+        M.Open()
+        M.SetTab("wheel")
+        for _, kind in ipairs(KD.ORDER) do
+            if #MW.List() >= MW.MAX then table.remove(MW.List(), 1) end
+            local id = MW.Create(kind.key)
+            IF.RingBuilders[MW.RingKey(id)]()
+            MW.Page.key = MW.RingKey(id)
+            for _, name in ipairs({ "RIGHT", "RT", "A", "Y", "X", "LEFT" }) do
+                if not M.IsOpen() then M.Open("wheel") end
+                M.Press(name)
+            end
+        end
+        if KD.Equip then KD.Equip({ item = 1, slot = 13 }) end
+        M.Close()
+    end },
 }
 
 local args = { ... }
