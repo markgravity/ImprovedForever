@@ -1,6 +1,6 @@
 -- R3 rings. Press R3 (optionally holding L1/L2/R1/R2) to open a ring, point
 -- at a slot with the right stick (the pick stays when it springs back; the
--- left stick still moves, as with the native radial) or step with the
+-- left stick still walks, as with the native radial) or step with the
 -- D-pad, then press R2 to use it. Circle closes. L1/R1 switch wheels,
 -- D-pad left / right its pages: every ring is cut into pages of eight, like
 -- Forever's native radial menu (GamepadRadial), whose art and layout the
@@ -74,38 +74,32 @@ local function GetCVarSafe(name)
     return ok and value or nil
 end
 
--- While the ring is up this child takes the right stick (it aims) so the
--- camera stays still, and lets the left one through so the character still
--- moves, as Forever's own radial does: a stick handler's true result
--- passes that stick on (the game's input binding stack works the same
--- way). It shows and hides with the ring, so the secure show / hide drives
--- it in combat too; the pad state the pick reads is unaffected.
-local function TakesStick(stick)
-    return stick == "Camera" or stick == "Right"
-end
-
+-- While the ring is up this child takes the sticks, so the right stick
+-- aims without turning the camera. EnableGamePadStick takes both sticks
+-- (whatever the handler returns), so the left one walks through bindings
+-- instead: its directions arrive as keys (GamePadStickAxisButtons) and the
+-- ring binds them to the movement actions while it's up (OnShow below). It
+-- shows and hides with the ring, so the secure show / hide drives it in
+-- combat too; the pad state the pick reads is unaffected.
 local stickCapture = CreateFrame("Frame", nil, ring)
 stickCapture:SetAllPoints(ring)
 if stickCapture.EnableGamePadStick then
     stickCapture:EnableGamePadStick(true)
-    stickCapture:SetScript("OnGamePadStick", function(_, stick)
-        return not TakesStick(stick)
-    end)
+    stickCapture:SetScript("OnGamePadStick", function() end)
 end
 
 -- After the ring closes (a slot used, Circle) the right stick is often
--- still pushed: it stays taken until it is back near the middle (or 3 s
--- pass), so the camera doesn't swing round as the ring goes.
-local RELEASE_SQ, RELEASE_MAX = 0.2 * 0.2, 3
+-- still pushed: the sticks stay taken a moment, until it is back near the
+-- middle (at most RELEASE_MAX: the left stick can't walk meanwhile), so the
+-- camera doesn't swing round as the ring goes.
+local RELEASE_SQ, RELEASE_MAX = 0.2 * 0.2, 0.5
 local afterCapture = CreateFrame("Frame", nil, UIParent)
 afterCapture:SetAllPoints(UIParent)
 afterCapture:SetFrameStrata("DIALOG")
 afterCapture:Hide()
 if afterCapture.EnableGamePadStick then
     afterCapture:EnableGamePadStick(true)
-    afterCapture:SetScript("OnGamePadStick", function(_, stick)
-        return not TakesStick(stick)
-    end)
+    afterCapture:SetScript("OnGamePadStick", function() end)
 end
 
 local function AimStickPushed()
@@ -475,9 +469,9 @@ SecureHandlerWrapScript(close, "OnClick", close, [[
     return false
 ]])
 
--- While the ring is up it owns R2, Circle, L1, R1, the D-pad and the right
--- stick's directions, whatever they do otherwise (R2, L1, R1: once let go,
--- ic-take-pad), and Square out of combat.
+-- While the ring is up it owns R2, Circle, L1, R1, the D-pad and both
+-- sticks' directions (the left one's walk), whatever they do otherwise (R2,
+-- L1, R1: once let go, ic-take-pad), and Square out of combat.
 SecureHandlerWrapScript(ring, "OnShow", ring, [[
     self:RunAttribute("ic-take-pad", true)
     local combat = PlayerInCombat()
@@ -491,10 +485,14 @@ SecureHandlerWrapScript(ring, "OnShow", ring, [[
         end
         self:SetBindingClick(true, modifier .. "PADDLEFT", "ImprovedForeverRingPage", "PADDLEFT")
         self:SetBindingClick(true, modifier .. "PADDRIGHT", "ImprovedForeverRingPage", "PADDRIGHT")
-        -- (the right stick aims; the left one is left to move the character)
+        -- (the right stick aims; the left one walks, its sticks being taken)
         for _, key in ipairs(newtable("PADRSTICKUP", "PADRSTICKDOWN", "PADRSTICKLEFT", "PADRSTICKRIGHT")) do
             self:SetBindingClick(true, modifier .. key, "ImprovedForeverRingAim", key)
         end
+        self:SetBinding(true, modifier .. "PADLSTICKUP", "MOVEFORWARD")
+        self:SetBinding(true, modifier .. "PADLSTICKDOWN", "MOVEBACKWARD")
+        self:SetBinding(true, modifier .. "PADLSTICKLEFT", "STRAFELEFT")
+        self:SetBinding(true, modifier .. "PADLSTICKRIGHT", "STRAFERIGHT")
     end
 ]])
 SecureHandlerWrapScript(ring, "OnHide", ring, [[
