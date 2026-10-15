@@ -36,10 +36,20 @@ r/classicwowplus `1x5o7l2`.
   sec", "Inc", "OOM") sent to the chat type in use or to `/p`, `/s`. Auto complete is out of
   scope for now (typing stays the game's).
 
+### Quest items and ground-targeted spells on the pad
+- **Asked by:** u/swjodokast (r/wowforever, pgqrdqy): "a way to interact with quest items and
+  targeted AOE that the alpha controller support is lacking".
+- **Promised:** "Let put it on my list and get you know if it's possible".
+- **Idea:** quest items: see the quest item wheel above. Ground-targeted spells (Blizzard,
+  Flamestrike, Rain of Fire, Consecration-likes, traps): a wheel / binding entry that casts at
+  the target's or your own feet with a secure macro (`/cast [@target]` / `[@player]` / `[@cursor]`),
+  if Forever's client honours those for ground spells. Test first.
+
 ### Hide target icons and other buttons for a cleaner look
 - **Asked by:** u/ActuallyaDoombot (r/wowforever, pgp3vt8): "an option to make the target
   icons invisible as well as other buttons/icons".
-- **Promised:** "Noted as a request!"
+- **Promised:** "Noted as a request!" Their follow-up (pgpuz8l): "Customization of what can be
+  shown would be great!"
 - **Open question:** which icons exactly (the gamepad target / interact icons over units? the
   crossbar's button glyphs?). Ask them before building. Careful: nameplates and the game's
   frames can't be touched (taint), so only what `IF.Focus.Fade` or a CVar can hide.
@@ -52,11 +62,67 @@ r/classicwowplus `1x5o7l2`.
 - **Idea:** install both, check bindings (both write crossbar slots / override bindings) and
   taint on window close. If they clash, detect it at login and say so once.
 
+### Swap the A/B glyphs on screen only
+- **Asked by:** u/ufointrovert (r/wowforever, pgpi1ko, follow-up pgpo1tr, not answered yet): with
+  a Switch Pro the on-screen A and B look reversed; keep the buttons' behaviour, swap only the
+  pictures.
+- **Idea:** `/if buttons` already picks the style for our windows. Check whether Forever has a
+  setting / CVar for its own glyph style (crossbar, legends) we can flip; if not, say so.
+
+### Gather: skip tracked nodes that aren't gathering
+- **Asked by:** u/swjodokast (r/wowforever, pgqk2lh, edit 2): with many tracked dots (hunter
+  tracking humans in a capital) FPS hiccups every 1-2 s.
+- **Idea:** only probe blips that can be gathering nodes (skip while no gathering tracking is
+  on, or by the blip's texture / tracking type), and spread the probe over frames. See Bugs.
+
+### Wheel presets: totems
+- **From:** u/ParanoiD84 (r/wowforever, pgpmlrr): "Radial wheels should be great for totems".
+- **Idea:** a ready-made Totems wheel for shamans (one per element, or all on one), like the
+  consumables wheel fills itself.
+
+### Healer targeting on the pad
+- **From:** a thread under FiskX (pgoypqn): konoxians, Nirwel, dynari (pgu7cil) on picking
+  party / raid members with the D-pad (left / right picks the group, up / down the member).
+- **Idea:** check what Forever's own unit frame navigation does in a raid first; a raid-frame
+  picker could be a module of its own later. Not promised.
+
+### Motion controls (gyro)
+- **Asked by:** u/Shako_117 (pgnzmwq). Answered "Not yet... no gyro."
+- **Idea:** check whether `C_GamePad.GetDeviceRawState` reports the DualSense gyro on Forever.
+
+### Steam Deck / trackpads keep the mouse
+- **From:** u/stwabewwie (r/wowforever, pgt53r1, not answered yet): hopes it doesn't disable the
+  mouse like other gamepad addons (trackpads). We don't: every module but Controller and Wheel
+  is mouse usable. Worth a reply.
+
 ### Not possible from an addon (answered, no plan)
 - Remap physical buttons (Switch Pro A/B swap) while keeping the on-screen layout
   (u/ufointrovert, pgpi1ko): happens before the game; only `/if buttons` labels.
 - Chat from the Battle.net phone app (u/Megaspids, pgoh39n).
 - Haptics / devices outside the controller (several jokes, BarrettRTS pgp85as).
+- Vibrate when a fish bites (u/RockoRockyBoxxyMan, pgqjhvt): Forever fires no event for it;
+  answered.
+- Cursor always shown in controller mode for touchpad pads (u/SophieBean420 pgu0b9p,
+  u/Unrealcoza05 pgu4hk2: it takes a few seconds to appear): the game controls it; answered.
+- Custom minimap gathering icons (u/Ollywombat, pgoy4k1): the icons are the game's; Gather
+  only adds names. Answered.
+- Normal-looking action bars instead of the controller UI (u/madpropz, pgow8uv): that's the
+  game's UI; ConsolePort for another layout. Answered.
+- First person view with weapons and spell effects (u/Real_Batu_Rem, pgspnk7, not answered):
+  out of scope, the camera / model rendering isn't an addon's.
+
+## Bug reports
+
+- [x] **Options > AddOns button: forbidden action / crash / freeze.** u/Nilbogz (pgonjs3),
+  u/swjodokast (pgqk2lh: "\if brings up the options just fine and no freeze"). Fixed in Core 0.8.1.
+- [ ] **Gather: FPS hiccups every 1-2 s with many minimap dots.** u/swjodokast (pgqk2lh).
+  Answered "Let me check".
+- [ ] **"Control panel" crashes the game.** u/Immolation_E (r/wowforever, pgs5hn9). Probably the
+  same Options button (0.8.1); ask whether it was Options > AddOns or `/if`.
+- [ ] **Vibration: nothing on jump or on starting a melee attack** (8BitDo pad). u/Immolation_E
+  (pgs5hn9).
+- [ ] **Crashes on load.** u/Ninjatendo90 (r/classicwowplus, pgsarbn). Asked which addons; no
+  details yet.
 
 ## Code review notes (u/Sentiray, r/classicwow, pgpfhxx)
 
