@@ -158,9 +158,9 @@ variables instead of the chat, then read the file:
 - The game writes it to disk only on `/reload` or logout. Ask the user to run
   the probe, `/reload`, and say when it's done.
 - Read it from
-  `/Applications/World of Warcraft/_classic_beta_/WTF/Account/53960380#1/SavedVariables/ImprovedForever.lua`
+  `/Applications/World of Warcraft/_classic_beta_/WTF/Account/<account>/SavedVariables/ImprovedForever.lua`
   (per-character data: `ImprovedForeverCharDB` under
-  `WTF/Account/53960380#1/<realm>/<character>/SavedVariables/`).
+  `WTF/Account/<account>/<realm>/<character>/SavedVariables/`).
 - To find which event comes with something, log every event while it
   happens: `frame:RegisterAllEvents()`, leave out chat and the like, and write
   each name at most once a second. The fishing probe did this (since removed;
