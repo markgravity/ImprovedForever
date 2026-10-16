@@ -1,0 +1,17 @@
+## Interface: 16001, 16002, 16003, 16100, 16101, 16200
+## Title: Improved Forever: Minimap
+## Notes: Names beside the minimap's dots: herbs, ore, quests, NPCs.
+## Author: markg
+## Version: 0.6.3
+## X-Website: https://github.com/markgravity/ImprovedForever
+## X-License: MIT
+## X-Curse-Project-ID: 1736863
+## IconTexture: Interface\AddOns\ImprovedForever\textures\ic_mod_gather
+## Group: ImprovedForever
+## Dependencies: ImprovedForever
+## OptionalDeps: ImprovedForever_Vibration
+
+Module.lua
+NodeScan.lua
+Minimap.lua
+MinimapEditor.lua

@@ -784,6 +784,13 @@ for index = 1, SLOTS_PER_PAGE do
     healthBack:SetAllPoints()
     healthBack:SetColorTexture(0, 0, 0, 0.6)
     slot.health:Hide()
+    -- A consumable's stat values (RingContent.lua) under the icon, each
+    -- in its kind's colour
+    slot.stat = ring:CreateFontString(nil, "OVERLAY")
+    slot.stat:SetFont("Fonts\\FRIZQT__.TTF", 11, "")
+    slot.stat:SetShadowOffset(1, -1)
+    slot.stat:SetPoint("TOP", slot.icon, "BOTTOM", 0, -7)
+    slot.stat:Hide()
     slots[index] = slot
 end
 
@@ -931,6 +938,8 @@ local function RefreshVisuals()
         slot.label:SetShown(entry ~= nil)
         slot.count:SetShown(entry ~= nil)
         slot.health:Hide()
+        slot.stat:SetText(entry and not entry.unit and entry.stat or "")
+        slot.stat:SetShown(entry ~= nil and entry.stat ~= nil and not entry.unit)
         ShowCooldown(slot.cooldown, entry)
         if entry and entry.unit then
             slot.count:SetText("")

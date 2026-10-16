@@ -113,6 +113,83 @@ local function ItemCount(itemID)
     return getCount and getCount(itemID) or 0
 end
 
+-- A consumable's stat values, short, for its slot ("2148 HP\n2934 Mana",
+-- "+25 Agi"), read from its Use: line; nil when it has none we know
+local STAT_SHORT = {
+    stamina = "Sta", spirit = "Spi", strength = "Str", agility = "Agi", intellect = "Int",
+    armor = "Armor", ["attack power"] = "AP", ["ranged attack power"] = "RAP",
+    ["spell damage"] = "Spell", ["healing"] = "Heal", ["maximum health"] = "Max HP",
+    ["health"] = "Max HP", ["mana"] = "Max Mana", ["defense"] = "Def",
+}
+local USE = ITEM_SPELL_TRIGGER_ONUSE or "Use:"
+local MAX_STAT_LINES = 2
+-- Each value in its kind's colour (health green, mana blue, as the unit
+-- frames' bars; a buff orange)
+local STAT_COLOR = { hp = "ff40ff40", mana = "ff59b3ff", energy = "ffffe633", rage = "ffff4d4d", buff = "ffff9933" }
+local function Colored(kind, text)
+    return "|c" .. STAT_COLOR[kind] .. text .. "|r"
+end
+
+-- "455-585" or "2148" before a word ("health"), or nil
+local function Amount(text, word)
+    local low, high = text:match("(%d+) to (%d+) " .. word)
+    if low then return low .. "-" .. high end
+    return text:match("(%d+) " .. word)
+end
+
+-- "your stamina and spirit" -> "Sta/Spi"
+local function StatNames(subject)
+    subject = subject:gsub("^your ", ""):gsub("^the target's ", ""):gsub("^%s+", ""):gsub("%s+$", "")
+    local names = {}
+    for name in (subject .. " and "):gmatch("(.-) and ") do
+        name = name:gsub("^your ", ""):gsub(" resistance$", " res")
+        names[#names + 1] = STAT_SHORT[name] or name:gsub("(%a)(%a*)", function(a, b) return a:upper() .. b end)
+    end
+    return table.concat(names, "/")
+end
+
+local function ParseStat(text)
+    text = text:lower()
+    local parts = {}
+    local hp = Amount(text, "health") or text:match("heals (%d+) damage")
+    local mana = Amount(text, "mana")
+    if hp and not text:match("increases [%a' ]-health by") then parts[#parts + 1] = Colored("hp", hp .. " HP") end
+    if mana and not text:match("increases [%a' ]-mana by") then parts[#parts + 1] = Colored("mana", mana .. " Mana") end
+    for _, word in ipairs({ "energy", "rage" }) do
+        local amount = Amount(text, word)
+        if amount then parts[#parts + 1] = Colored(word, amount .. " " .. word:gsub("^%a", string.upper)) end
+    end
+    -- (an elixir, a scroll: "Increases Agility by 25"; "by up to 20")
+    for subject, amount in text:gmatch("increases ([%a' ]-) by [upto ]*(%d+)") do
+        parts[#parts + 1] = Colored("buff", "+" .. amount .. " " .. StatNames(subject))
+    end
+    -- (well fed: "...and gain 12 Stamina and Spirit for 15 min")
+    for amount, subject in text:gmatch("gain (%d+) ([%a ]-) for") do
+        parts[#parts + 1] = Colored("buff", "+" .. amount .. " " .. StatNames(subject))
+    end
+    for i = #parts, MAX_STAT_LINES + 1, -1 do parts[i] = nil end
+    return #parts > 0 and table.concat(parts, "\n") or nil
+end
+
+-- (by item: false once read with nothing to show; not kept while the
+-- tooltip isn't loaded yet)
+local statCache = {}
+local function ConsumableStat(bag, slot, itemID)
+    if statCache[itemID] ~= nil then return statCache[itemID] or nil end
+    local tips = C_TooltipInfo
+    local ok, data = false, nil
+    if tips and tips.GetBagItem then ok, data = pcall(tips.GetBagItem, bag, slot) end
+    if not ok or type(data) ~= "table" or not data.lines or #data.lines < 2 then return nil end
+    local use = {}
+    for _, line in ipairs(data.lines) do
+        local text = line.leftText
+        if type(text) == "string" and text:sub(1, #USE) == USE then use[#use + 1] = text:sub(#USE + 1) end
+    end
+    local stat = ParseStat(table.concat(use, " "))
+    statCache[itemID] = stat or false
+    return stat
+end
+
 local function BuildConsumables()
     local seen, items = {}, {}
     for bag = 0, NUM_BAG_SLOTS or 4 do
@@ -130,6 +207,8 @@ local function BuildConsumables()
                         value = "item:" .. itemID,
                         order = SUBCLASS_ORDER[subclassID] or 99,
                         subclass = subclassID,
+                        -- (its values on the slot, under the icon)
+                        stat = ConsumableStat(bag, slot, itemID),
                     })
                 end
             end
