@@ -156,7 +156,14 @@ end
 -- A card's presses: a binding's own, an action's where it is
 local function PressesOf(e, map)
     if not e then return {} end
-    if e.def then return e.def.specs() end
+    if e.def then
+        -- (a binding that can go on a touchpad corner too, def.corner: the corner is its press)
+        if not (e.def.corner and HasTouchpad()) then return e.def.specs() end
+        local list = {}
+        for _, spec in ipairs(e.def.specs()) do list[#list + 1] = spec end
+        for _, press in ipairs((map or ActionPresses())[e.def.id] or {}) do list[#list + 1] = press end
+        return list
+    end
     return (map or ActionPresses())[e.action] or {}
 end
 
@@ -570,14 +577,18 @@ function P:Bind()
         end,
         onKey = function(spec) P:BindKey(e, spec) end,
         accept = function(spec)
-            if def then return def.accepts(spec) end
+            if def then
+                -- (the touchpad's click: the corner under the finger, for one that takes a corner)
+                if def.corner and spec == "PADBACK" and HasTouchpad() then return true end
+                return def.accepts(spec)
+            end
             local _, pressed = B.Parse(spec)
             return (pressed == "PADBACK" and HasTouchpad()) or B.ActionFits(spec)
         end,
         reject = function(spec) return B.GameOwns(spec) or ((e.name or "It") .. " can't go on that press") end,
         onDone = function(spec, info)
-            if def then return P:BindDef(def, spec) end
             local _, pressed = B.Parse(spec)
+            if def and not (def.corner and pressed == "PADBACK" and HasTouchpad()) then return P:BindDef(def, spec) end
             if pressed == "PADBACK" and HasTouchpad() then
                 local region = info and info.touch and touch.RegionAt(info.touch[1], info.touch[2])
                 if not region then return menu.Toast("Click the touchpad in the corner you want", true) end
@@ -635,6 +646,11 @@ function P:Unbind(which)
     if not presses[1] then return menu.Toast((e and e.name or "It") .. " isn't bound") end
     if e.def then
         B.Assign(e.def.id, nil)
+        if e.def.corner then
+            for _, region in ipairs(touch.REGIONS) do
+                if touch.GetSettings().regions[region] == e.def.id then touch.SetAction(region, "none") end
+            end
+        end
     else
         TakeOff(e.action)
     end

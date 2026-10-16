@@ -1,14 +1,14 @@
 -- The Map tab, a tab of settings (IF.SettingsPage, SettingsPage.lua): how
 -- the peek map looks (opacity, size, place on the screen and an offset
--- from it: a slider each way); seen the next time it opens. Its hotkey
--- (also on the Bindings tab, Binds.lua) and its key; its touchpad corner on
--- the Bindings tab. PeekMap.lua does
--- the work.
+-- from it: a slider each way; the quest names and the button legend on or
+-- off); seen the next time it opens. Its press (a button, a key or a
+-- touchpad corner) is set on the Bindings tab only (Binds.lua,
+-- BindEditor.lua). PeekMap.lua does the work.
 local IF = ImprovedForever
 
 local menu = IF.Menu
 local PeekMap = IF.PeekMap
-local Item = IF.SettingsItem
+local Item, OnOff = IF.SettingsItem, IF.SettingsOnOff
 
 local LIMIT = 50   -- the offset's reach, in % of the screen
 
@@ -24,7 +24,8 @@ local function Choice(key, label, choices)
         value = function() return tostring(S()[key]) end,
         text = function()
             local c = byValue[S()[key]]
-            return c and c[2] or tostring(S()[key])
+            return c and c[2] or (key == "size" and math.floor(S()[key] * 100 + 0.5) .. "% of the screen")
+                or tostring(S()[key])
         end,
         options = function()
             local list = {}
@@ -79,6 +80,18 @@ local ITEMS = {
         { "TOPLEFT", "Top left" }, { "TOPRIGHT", "Top right" }, { "BOTTOMLEFT", "Bottom left" },
         { "BOTTOMRIGHT", "Bottom right" },
     })),
+    Item({
+        key = "labels", group = "look", label = "Quest names",
+        tip = "Each quest's name beside its node on the map, none over another. The focused quest's is gold.",
+    }, OnOff(function() return S().labels end, function(on) S().labels = on end, "Quest names")),
+    Item({
+        key = "legend", group = "look", label = "Button legend",
+        tip = "The buttons' prompts below the map while it's held (L2 / R2 change quest, L1 / R1 resize), shown"
+            .. " with the controller.",
+    }, OnOff(function() return S().legend end, function(on)
+        S().legend = on
+        if PeekMap.ShowLegend then PeekMap.ShowLegend() end
+    end, "Button legend")),
     {
         key = "x", group = "look", label = "Offset left / right",
         tip = "Moves the map from its position, by a share of the screen's width.",
@@ -91,23 +104,6 @@ local ITEMS = {
     },
 }
 
--- Its presses: the pad's (recorded here as on the Bindings tab) and a key
--- (its binding's keyboard / mouse press)
-table.insert(ITEMS, 1, {
-    key = "hotkey", group = "look", label = "Hotkey",
-    tip = "Held: the map shows, see-through; let go and it closes. Works in combat. Square records the"
-        .. " controller's press: one button, or hold one and press another (recording it again unbinds it);"
-        .. " or a key, held as the button is.",
-    bindable = true,
-    chord = true,
-    bindId = "peekmap",
-    toggle = true,
-    binding = function() return PeekMap.Key() end,
-    keyText = function(size)
-        local spec = PeekMap.Key()
-        return spec and IF.Binds.Text(spec, size) or "Not bound"
-    end,
-})
 local GROUPS = {
     { key = "look", label = "Peek map" },
 }
