@@ -221,11 +221,24 @@ function IQT.SyncWatchOrder()
 	local key = table.concat(target, ",")
 	if key == tried then return end
 	tried = key
+	local focused = IQT.FocusedQuestID()
 	for i = last, 1, -1 do
 		local id = target[i]
 		local watchType = C_QuestLog.GetQuestWatchType and C_QuestLog.GetQuestWatchType(id)
 		C_QuestLog.RemoveQuestWatch(id)
 		C_QuestLog.AddQuestWatch(id, watchType)
+	end
+	-- (the focused quest kept: the game drops the focus of a quest whose
+	-- watch is taken off, Blizzard_QuestSuperTracking's QUEST_WATCH_LIST_-
+	-- CHANGED, now or on the event's next dispatch)
+	if focused then
+		local function Refocus()
+			if not IQT.FocusedQuestID() and C_QuestLog.GetLogIndexForQuestID(focused) then
+				C_SuperTrack.SetSuperTrackedQuestID(focused)
+			end
+		end
+		Refocus()
+		C_Timer.After(0, Refocus)
 	end
 end
 
