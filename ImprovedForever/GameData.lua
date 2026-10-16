@@ -256,6 +256,103 @@ function GD.QuestOpen(questID)
 end
 
 ---------------------------------------------------------------------------
+-- An NPC's quests by its name (the minimap's dots give only names): the
+-- quests it starts and the ones it ends, from our copy of the data
+-- (WorldData.lua), indexed once first asked
+---------------------------------------------------------------------------
+local npcQuests
+local function NpcQuests()
+    if npcQuests then return npcQuests end
+    npcQuests = {}
+    local data = IF.WorldData
+    if not (data and data.quests and data.npcs) then return npcQuests end
+    local names = {}
+    local function Add(ids, questID, key)
+        for id in ids:gmatch("%d+") do
+            id = tonumber(id)
+            if names[id] == nil then
+                local row = data.npcs[id]
+                names[id] = row and row:match("^([^|]+)") or false
+            end
+            local name = names[id]
+            if name then
+                local q = npcQuests[name] or { starts = {}, ends = {} }
+                npcQuests[name] = q
+                q[key][#q[key] + 1] = questID
+            end
+        end
+    end
+    -- (a quest row: name|level|zone|required level|started by NPCs|objects|
+    -- items|finished by NPCs|...)
+    for questID, row in pairs(data.quests) do
+        local starts, ends = row:match("^[^|]*|[^|]*|[^|]*|[^|]*|([^|]*)|[^|]*|[^|]*|([^|]*)")
+        if starts then
+            Add(starts, questID, "starts")
+            Add(ends, questID, "ends")
+        end
+    end
+    return npcQuests
+end
+
+local function InLog(questID)
+    local log = C_QuestLog
+    if log and log.GetLogIndexForQuestID then return log.GetLogIndexForQuestID(questID) ~= nil end
+    return log and log.IsOnQuest and log.IsOnQuest(questID) or false
+end
+
+-- A quest the character can take now: open, not in the log, its level
+-- reached and one of the quests before it done
+local function Available(questID)
+    if InLog(questID) or not GD.QuestOpen(questID) then return false end
+    local level = QuestField(questID, "requiredLevel")
+    if level and level > (UnitLevel("player") or 0) then return false end
+    local before = QuestField(questID, "preQuestSingle")
+    if type(before) == "table" and #before > 0 then
+        for _, id in ipairs(before) do
+            if Completed(id) then return true end
+        end
+        return false
+    end
+    return true
+end
+
+-- A quest's items (the ones it needs: our copy's items' related quests,
+-- filled out from the quests' objectives), indexed once first asked ->
+-- { itemID } or nil
+local questItems
+function GD.QuestItems(questID)
+    if not questItems then
+        questItems = {}
+        local items = IF.WorldData and IF.WorldData.items or {}
+        -- (an item row: NPC drops|object drops|item drops|vendors|quest
+        -- rewards|starts quest|related quests)
+        for itemID, row in pairs(items) do
+            local related = row:match("^[^|]*|[^|]*|[^|]*|[^|]*|[^|]*|[^|]*|([^|]*)")
+            for id in (related or ""):gmatch("%d+") do
+                id = tonumber(id)
+                questItems[id] = questItems[id] or {}
+                table.insert(questItems[id], itemID)
+            end
+        end
+    end
+    return questItems[questID]
+end
+
+-- "end": an NPC a quest in the log is handed in to; "start": one with a
+-- quest the character can take; nil: neither (or an NPC not known)
+function GD.QuestNpc(name)
+    local q = NpcQuests()[name]
+    if not q then return nil end
+    for _, id in ipairs(q.ends) do
+        if InLog(id) then return "end" end
+    end
+    for _, id in ipairs(q.starts) do
+        if Available(id) then return "start" end
+    end
+    return nil
+end
+
+---------------------------------------------------------------------------
 -- Recipes: the bundled index (RecipeData.lua), the ones seen in game on
 -- top (IF.db.recipesSeen); a row: { skillLine, makesItemID, makesCount,
 -- taughtByItemID, reagent, count, ... }

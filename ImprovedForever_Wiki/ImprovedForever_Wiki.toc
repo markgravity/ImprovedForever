@@ -9,7 +9,7 @@
 ## IconTexture: Interface\AddOns\ImprovedForever\textures\ic_mod_wiki
 ## Group: ImprovedForever
 ## Dependencies: ImprovedForever
-## OptionalDeps: QuestieDB, ImprovedForever_Auction, ImprovedForever_Junk, ImprovedForever_Gather, ImprovedForever_Vibration
+## OptionalDeps: QuestieDB, ImprovedForever_Auction, ImprovedForever_Junk, ImprovedForever_Minimap, ImprovedForever_Vibration
 
 Module.lua
 Wiki.lua

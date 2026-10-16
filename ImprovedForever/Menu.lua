@@ -38,8 +38,9 @@ local STEP_DELAY, STEP_EVERY = 0.35, 0.2
 menu.TABS = {}
 
 function menu.AddTab(def)
-    -- (an old Controller module still loaded: its tab is the core's Bindings now)
-    if def.key == "controller" then return def end
+    -- (an old Controller module still loaded: its tab is the core's Bindings
+    -- now; an old Gather beside Minimap: its tab is Minimap's, Core.lua)
+    if def.key == "controller" or (IF.oldGather and def.key == "gather") then return def end
     def.order = def.order or 50
     if not def.icon and def.module and IF.Module(def.module) then def.icon = IF.Module(def.module).icon end
     for i, other in ipairs(menu.TABS) do

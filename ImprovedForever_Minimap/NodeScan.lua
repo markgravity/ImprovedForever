@@ -139,7 +139,7 @@ end
 ---------------------------------------------------------------------------
 N.TYPES = { "herb", "ore", "quest", "npc", "party" }
 
--- The quests in the log, by title
+-- The quests in the log, by title -> its quest ID (true: unknown)
 local questTitles
 local function QuestTitles()
     if questTitles then return questTitles end
@@ -149,7 +149,7 @@ local function QuestTitles()
         for i = 1, log.GetNumQuestLogEntries() or 0 do
             local info = log.GetInfo(i)
             local title = info and not info.isHeader and info.title
-            if type(title) == "string" and not Secret(title) then questTitles[title] = true end
+            if type(title) == "string" and not Secret(title) then questTitles[title] = info.questID or true end
         end
     elseif GetNumQuestLogEntries and GetQuestLogTitle then
         for i = 1, GetNumQuestLogEntries() or 0 do
@@ -158,6 +158,32 @@ local function QuestTitles()
         end
     end
     return questTitles
+end
+
+-- A quest of the log's ID, by its title (nil: not in the log, or unknown)
+function N.QuestID(title)
+    local id = QuestTitles()[title]
+    return type(id) == "number" and id or nil
+end
+
+-- A quest's area as the minimap names it: its title and the objectives
+-- under it ("Night Web's Hollow\n5/10 Young Night Web Spider slain"), one
+-- name (NamesAt). Its title and objectives: { have, need (nil: no count),
+-- subject ("Young Night Web Spider slain"), text }
+function N.QuestBlock(name)
+    local title, rest = name:match("^([^\n]*)\n(.*)$")
+    if not title then return nil end
+    local objectives = {}
+    for line in rest:gmatch("[^\n]+") do
+        local have, need, subject = line:match("^(%d+)%s*/%s*(%d+)%s*(.*)$")
+        if not have then
+            -- ("Young Night Web Spider slain: 5/10", the quest log's way)
+            subject, have, need = line:match("^(.-):?%s*(%d+)%s*/%s*(%d+)$")
+        end
+        objectives[#objectives + 1] = { have = tonumber(have), need = tonumber(need),
+            subject = subject or line, text = line }
+    end
+    return title, objectives
 end
 
 -- The party / raid unit a name is ("party2", "raid14"), or nil
@@ -183,7 +209,7 @@ function N.Type(name)
     if kind then return kind end
     local t = types[name]
     if t then return t end
-    if QuestTitles()[name] or name:find("%d+%s*/%s*%d+") then
+    if name:find("\n") or QuestTitles()[name] or name:find("%d+%s*/%s*%d+") then
         t = "quest"
     elseif N.GroupUnit(name) then
         t = "party"
@@ -293,10 +319,18 @@ end
 -- name -> how many dots of it are at a point (two dots of one herb under it
 -- list it twice), and name -> the colour the game gives it. The player's
 -- own arrow is left out.
+-- A quest area's lines: its title, then its objectives ("- 5/10 Young Night
+-- Web Spider slain"), read as one name: N.QuestBlock
+local function Objective(name)
+    return name:match("^%-%s*(.+)$") or (name:find("^%d+%s*/%s*%d+") and name)
+end
+
 local function NamesAt(px, py, me)
     local counts, colors = {}, {}
     Minimap:UpdateMouseoverAtPoint(px, py)
     local data = C_TooltipInfo.GetMinimapMouseover()
+    -- Every name in order, with its colour
+    local pieces = {}
     for _, line in ipairs(data and data.lines or {}) do
         local text = line.leftText
         if type(text) == "string" and not Secret(text) then
@@ -307,16 +341,32 @@ local function NamesAt(px, py, me)
                 local name = strtrim((piece:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""):gsub("|T.-|t", "")
                     :gsub("|A.-|a", "")))
                 if name ~= "" and name ~= me then
-                    counts[name] = (counts[name] or 0) + 1
+                    local color = lineColor
                     if hex then
-                        colors[name] = { tonumber(hex:sub(1, 2), 16) / 255, tonumber(hex:sub(3, 4), 16) / 255,
+                        color = { tonumber(hex:sub(1, 2), 16) / 255, tonumber(hex:sub(3, 4), 16) / 255,
                             tonumber(hex:sub(5, 6), 16) / 255 }
-                    else
-                        colors[name] = colors[name] or lineColor
                     end
+                    pieces[#pieces + 1] = { name = name, color = color }
                 end
             end
         end
+    end
+    local i = 1
+    while i <= #pieces do
+        local name, color = pieces[i].name, pieces[i].color
+        i = i + 1
+        -- A title with objectives under it: one name
+        local lines = {}
+        while pieces[i] and Objective(pieces[i].name) do
+            lines[#lines + 1] = Objective(pieces[i].name)
+            i = i + 1
+        end
+        if #lines > 0 then
+            if Objective(name) then table.insert(lines, 1, Objective(name)) name = "" end
+            name = name .. "\n" .. table.concat(lines, "\n")
+        end
+        counts[name] = (counts[name] or 0) + 1
+        colors[name] = colors[name] or color
     end
     return counts, colors
 end
@@ -382,8 +432,11 @@ end
 -- (through any chain of them) are one dot, its centre their middle. Two
 -- dots of one herb closer than a dot's reach read as one, with the name
 -- listed twice: counted. Each point looks only in its own cell of a grid
--- that size and the eight round it.
+-- that size and the eight round it. A group of more points than a dot
+-- covers is an area (a quest's): its place the point read nearest its
+-- middle, inside it whatever its shape.
 local NONE = {}
+local AREA = 8       -- points: more is an area, not a dot
 local function GroupName(j, name)
     local hits = j.byName[name]
     local near = N.step * 1.6 * j.yards
@@ -429,17 +482,26 @@ local function GroupName(j, name)
         g.east, g.north = g.east + hit.east, g.north + hit.north
         g.color = g.color or hit.color
     end
+    for k, hit in ipairs(hits) do
+        local g = groups[Root(k)]
+        if g.n > AREA then
+            local d = (hit.x - g.x / g.n) ^ 2 + (hit.y - g.y / g.n) ^ 2
+            if not g.best or d < g.bestD then g.best, g.bestD = hit, d end
+        end
+    end
     for _, g in ipairs(order) do
         local x, y = g.x / g.n, g.y / g.n
+        local east, north = g.east / g.n, g.north / g.n
+        if g.best then x, y, east, north = g.best.x, g.best.y, g.best.east, g.best.north end
         if j.debug then
             local kind, need = N.Kind(name)
             local col = g.color and string.format("%02x%02x%02x", g.color[1] * 255, g.color[2] * 255, g.color[3] * 255)
             IF.Print(string.format("  %s x%d (%s): %d point(s) at %.0f,%.0f; game colour %s; needs %s, skill %s (bonus %s) -> %s",
-                name, g.count, N.Type(name), g.n, x, y, col or "none", tostring(need), tostring(kind and N.Skill(kind)),
+                name:gsub("\n", " | "), g.count, N.Type(name), g.n, x, y, col or "none", tostring(need), tostring(kind and N.Skill(kind)),
                 tostring(kind and N.SkillBonus(kind)), tostring(N.State(name))))
         end
         j.found[#j.found + 1] = { name = name, count = g.count, x = x, y = y, gameColor = g.color,
-            east = g.east / g.n, north = g.north / g.n }
+            east = east, north = north, area = g.best ~= nil }
     end
 end
 

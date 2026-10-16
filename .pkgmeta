@@ -6,7 +6,7 @@ move-folders:
   ImprovedForever/ImprovedForever_Controller: ImprovedForever_Controller
   ImprovedForever/ImprovedForever_Wheel: ImprovedForever_Wheel
   ImprovedForever/ImprovedForever_Vibration: ImprovedForever_Vibration
-  ImprovedForever/ImprovedForever_Gather: ImprovedForever_Gather
+  ImprovedForever/ImprovedForever_Minimap: ImprovedForever_Minimap
   ImprovedForever/ImprovedForever_Map: ImprovedForever_Map
   ImprovedForever/ImprovedForever_Auction: ImprovedForever_Auction
   ImprovedForever/ImprovedForever_Junk: ImprovedForever_Junk

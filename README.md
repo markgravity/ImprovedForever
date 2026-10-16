@@ -29,7 +29,7 @@ the core, **Improved Forever**:
 | `ImprovedForever` | The core: button glyphs, the configuration panel, the Bindings tab (every press on one drawing of the controller, and its keyboard / mouse press), bag clean-up, touchpad corners, the game data (QuestieDB's, recipes) and the item verdict every module shares. Required. Holds the former Controller module. |
 | `ImprovedForever_Wheel` | Wheels on R3 combos, the recent action slot. |
 | `ImprovedForever_Vibration` | Vibration on game events and spell casts. |
-| `ImprovedForever_Gather` | Names beside the minimap's gathering dots, alerts. |
+| `ImprovedForever_Minimap` | Names beside the minimap's dots (herbs, ore, quests, NPCs, party members: you choose), gathering alerts. Formerly Gather. |
 | `ImprovedForever_Map` | The peek map. |
 | `ImprovedForever_Chat` | The chat with the controller: pick a line, then an item or other link in it. |
 | `ImprovedForever_Auction` | The controller auction window, prices over time, tasks. |

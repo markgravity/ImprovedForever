@@ -17,6 +17,11 @@ if [ -L "$dest/ImprovedForever_Destroy" ]; then
     rm "$dest/ImprovedForever_Destroy"
     echo "removed the old ImprovedForever_Destroy link"
 fi
+# (Gather is Minimap since 0.7.0)
+if [ -L "$dest/ImprovedForever_Gather" ]; then
+    rm "$dest/ImprovedForever_Gather"
+    echo "removed the old ImprovedForever_Gather link"
+fi
 # (Controller is the core's since 0.8.0)
 if [ -L "$dest/ImprovedForever_Controller" ]; then
     rm "$dest/ImprovedForever_Controller"

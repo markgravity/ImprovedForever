@@ -247,6 +247,8 @@ end
 local fixed, sources = {}, {}
 
 function B.Add(def)
+    -- (an old Gather loaded beside Minimap: its binding is Minimap's, Core.lua)
+    if IF.oldGather and def.id == "gather" then return def end
     def.order = def.order or 50
     -- (one per id: an old Controller module still loaded adds its own again)
     for i, other in ipairs(fixed) do

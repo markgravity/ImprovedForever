@@ -9,7 +9,7 @@
 3. WorldData.lua (core) rebuilt (tools/make_library_data.py).
 4. The IDs and names written into the code checked against Forever's data:
    Tasks' vendor reagents, Vibration's spells (moves, food and drink),
-   Gather's node names, the Journal's hearthstone.
+   Minimap's node names, the Journal's hearthstone.
 5. The Lua checks: syntax of the data files, tools/loadcheck.lua.
 
 A Lua 5.1 is needed for step 1 (LuaJIT can't load QuestieDB's largest
@@ -150,8 +150,8 @@ def check_code():
         if found != expected:
             problems.append(f"Journal.lua {table}: spells name {sorted(n or '?' for n in found)}, not {sorted(expected)} ({build})")
 
-    # Gather: herb and ore nodes Forever has that NodeScan doesn't know
-    src = (ROOT / "ImprovedForever_Gather" / "NodeScan.lua").read_text()
+    # Minimap: herb and ore nodes Forever has that NodeScan doesn't know
+    src = (ROOT / "ImprovedForever_Minimap" / "NodeScan.lua").read_text()
     known = set()
     for table in ("HERBS", "ORES"):
         m = re.search(r"local " + table + r" = \{(.*?)\n\}", src, re.S)

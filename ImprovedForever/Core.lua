@@ -52,8 +52,19 @@ if addons and addons.DoesAddOnExist and addons.DoesAddOnExist(OLD_CONTROLLER) an
     IF.oldController = true
 end
 
+-- Gather became Minimap in 0.7.0: an old Gather still installed beside it is
+-- turned off for the next login, said once; loaded meanwhile, its module,
+-- tab and binding are left out (Menu.lua, Binds.lua). (Without Minimap
+-- installed, it's left alone, its settings too.)
+local OLD_GATHER = "ImprovedForever_Gather"
+if addons and addons.DoesAddOnExist and addons.DoesAddOnExist(OLD_GATHER)
+    and addons.DoesAddOnExist("ImprovedForever_Minimap") and addons.DisableAddOn then
+    pcall(addons.DisableAddOn, OLD_GATHER)
+    IF.oldGather = true
+end
+
 function IF.AddModule(def)
-    if def.addon == OLD_CONTROLLER then return def end
+    if def.addon == OLD_CONTROLLER or (IF.oldGather and def.addon == OLD_GATHER) then return def end
     if byKey[def.key] then return byKey[def.key] end
     IF.modules[#IF.modules + 1] = def
     byKey[def.key] = def
@@ -130,16 +141,33 @@ loader:SetScript("OnEvent", function()
     IF.db = ImprovedForeverDB
     ImprovedForeverCharDB = ImprovedForeverCharDB or {}
     IF.charDB = ImprovedForeverCharDB
-    -- The Library module became the Wiki: its settings and key binding, and the
-    -- places a binding is kept (wheels, combos), move over
+    -- The Library module became the Wiki, and Gather the Minimap (when it's
+    -- installed): their settings and key bindings, and the places a binding
+    -- is kept (wheels, combos), move over
     local db = IF.db
+    local renames = { library = "wiki" }
+    local A = _G.C_AddOns
+    if A and A.DoesAddOnExist and A.DoesAddOnExist("ImprovedForever_Minimap") then
+        renames.gather = "minimap"
+        -- (an old Gather loaded with it writes its own again: dropped next time)
+        if db.gather ~= nil then
+            if db.minimap == nil then db.minimap = db.gather end
+            db.gather = nil
+        end
+        if db.gatherKey ~= nil then
+            if db.minimapKey == nil then db.minimapKey = db.gatherKey end
+            db.gatherKey = nil
+        end
+    end
     if db.library ~= nil and db.wiki == nil then db.wiki, db.library = db.library, nil end
     local function Rename(t, seen)
         if type(t) ~= "table" or seen[t] then return end
         seen[t] = true
-        if t.library ~= nil and t.wiki == nil then t.wiki, t.library = t.library, nil end
+        for old, new in pairs(renames) do
+            if t[old] ~= nil and t[new] == nil then t[new], t[old] = t[old], nil end
+        end
         for k, v in pairs(t) do
-            if v == "library" then t[k] = "wiki" else Rename(v, seen) end
+            if type(v) == "string" and renames[v] then t[k] = renames[v] else Rename(v, seen) end
         end
     end
     Rename(db.keyBinds, {}); Rename(db.combos, {}); Rename(db.wheelKeys, {})
@@ -150,5 +178,9 @@ loader:SetScript("OnEvent", function()
     if IF.oldController then
         IF.Print("Improved Forever: Controller is now part of the core (its tab: Bindings) and has been"
             .. " turned off; remove it from your AddOns folder or CurseForge.")
+    end
+    if IF.oldGather then
+        IF.Print("Improved Forever: Gather is now Improved Forever: Minimap and has been turned off;"
+            .. " remove it from your AddOns folder or CurseForge.")
     end
 end)

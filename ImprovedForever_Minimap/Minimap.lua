@@ -80,9 +80,92 @@ function MM.LabelColor(node)
     return Telling(node.gameColor) and node.gameColor or KC.white
 end
 
+---------------------------------------------------------------------------
+-- A quest's label: each objective's count with an icon of what it is
+-- (a creature, the item itself, an object, else a note): "[skull] 5/10";
+-- a quest's own mark (no objectives: handed in there) a "?"; an NPC with a
+-- quest for you "!" or "?" and its name
+---------------------------------------------------------------------------
+local ICON = "Interface\\Icons\\"
+local OBJECTIVE_ICONS = {
+    monster = ICON .. "INV_Misc_Bone_HumanSkull_01", item = ICON .. "INV_Misc_Bag_08",
+    object = ICON .. "INV_Box_02", event = ICON .. "INV_Misc_Note_01",
+}
+local TURN_IN = "Interface\\GossipFrame\\ActiveQuestIcon"
+local AVAILABLE = "Interface\\GossipFrame\\AvailableQuestIcon"
+
+local function Icon(path, crop)
+    -- (an icon's border cropped)
+    return crop and ("|T" .. path .. ":12:12:0:0:64:64:5:59:5:59|t") or ("|T" .. path .. ":12:12|t")
+end
+
+-- Words alone, for matching an objective the minimap gives to the log's
+-- ("5/10 Young Night Web Spider slain", "Young Night Web Spider slain: 5/10")
+local function Plain(s)
+    return (s:lower():gsub("%d+%s*/%s*%d+", ""):gsub("[%p%s]+", " ")):match("^%s*(.-)%s*$")
+end
+
+-- An objective's type in the log ("monster", "item", "object", "event"...)
+local function ObjectiveType(questID, subject)
+    local log = C_QuestLog
+    if questID and log and log.GetQuestObjectives then
+        local want = Plain(subject)
+        for _, o in ipairs(log.GetQuestObjectives(questID) or {}) do
+            if type(o.text) == "string" and Plain(o.text) == want then return o.type end
+        end
+    end
+    if subject:find(" slain$") then return "monster" end
+end
+
+-- An item objective's own icon: the item by its name (known once seen or
+-- in the bags), else among the quest's items (the core's game data; one
+-- not cached yet is asked for, known by a later scan)
+local itemIcons = {}
+local function ItemIcon(questID, subject)
+    if itemIcons[subject] then return itemIcons[subject] end
+    local info = C_Item and C_Item.GetItemInfo or GetItemInfo
+    local icon = select(10, info(subject))
+    if not icon then
+        local items = questID and IF.GameData and IF.GameData.QuestItems and IF.GameData.QuestItems(questID)
+        local byID = C_Item and C_Item.GetItemIconByID or GetItemIcon
+        for _, id in ipairs(items or {}) do
+            if info(id) == subject then icon = byID(id) end
+        end
+    end
+    itemIcons[subject] = icon
+    return icon
+end
+
+local function QuestText(node)
+    local title, objectives = N.QuestBlock(node.name)
+    if not title then
+        local npc = IF.GameData and IF.GameData.QuestNpc and IF.GameData.QuestNpc(node.name)
+        if npc then return Icon(npc == "start" and AVAILABLE or TURN_IN) .. " " .. node.name end
+        if N.QuestID(node.name) or not node.name:find("%d+%s*/%s*%d+") then return Icon(TURN_IN) end
+        title, objectives = "", { { subject = node.name, text = node.name } }
+        objectives[1].have, objectives[1].need = node.name:match("(%d+)%s*/%s*(%d+)")
+    end
+    local questID = N.QuestID(title)
+    local parts = {}
+    for _, o in ipairs(objectives) do
+        local kind = ObjectiveType(questID, o.subject)
+        local icon = kind == "item" and ItemIcon(questID, o.subject)
+        local part = icon and Icon(icon, true) or Icon(OBJECTIVE_ICONS[kind] or OBJECTIVE_ICONS.event, true)
+        if o.have and o.need then
+            local count = o.have .. "/" .. o.need
+            -- (one done, greyed)
+            if tonumber(o.have) >= tonumber(o.need) then count = "|cff808080" .. count .. "|r" end
+            part = part .. count
+        end
+        parts[#parts + 1] = part
+    end
+    return table.concat(parts, "  ")
+end
+
 -- A label's words: "Silverleaf x2", "Bruiseweed (100)" for one beyond the
--- player's skill
+-- player's skill; a quest's its objectives (QuestText)
 function MM.LabelText(node)
+    if (node.type or N.Type(node.name)) == "quest" then return QuestText(node) end
     local text = node.count > 1 and (node.name .. " x" .. node.count) or node.name
     if MM.Settings().need and N.State(node.name) == "red" then
         text = text .. " (" .. select(2, N.Kind(node.name)) .. ")"
@@ -145,6 +228,7 @@ local function Rescan(found)
         node.type = N.Type(node.name)
         if MM.Labelled(node.type) then
             node.color = MM.LabelColor(node)
+            node.text = MM.LabelText(node)
             nodes[#nodes + 1] = node
         end
     end
@@ -152,11 +236,14 @@ local function Rescan(found)
 end
 
 -- Where a label can go round its dot (x, y its centre): right, left,
--- above, below; the rectangle it would take
+-- above, below, or on it (an area's: no dot under it); the rectangle it
+-- would take
 local GAP = 2
 local SIDES = { "right", "left", "above", "below" }
+local AREA_SIDES = { "center", "above", "below", "right", "left" }
 local function LabelRect(side, x, y, w, h)
     local half = DOT / 2
+    if side == "center" then return x - w / 2, y - h / 2, w, h end
     if side == "right" then return x + half + GAP, y - h / 2, w, h end
     if side == "left" then return x - half - GAP - w, y - h / 2, w, h end
     if side == "above" then return x - w / 2, y + half, w, h end
@@ -167,6 +254,28 @@ local function Overlap(ax, ay, aw, ah, bx, by, bw, bh)
     local w = math.min(ax + aw, bx + bw) - math.max(ax, bx)
     local h = math.min(ay + ah, by + bh) - math.max(ay, by)
     return (w > 0 and h > 0) and w * h or 0
+end
+
+-- How far a rectangle's farthest corner reaches past a circle round the
+-- middle (0: inside it)
+local function Outside(lx, ly, w, h, r)
+    local fx = math.max(math.abs(lx), math.abs(lx + w))
+    local fy = math.max(math.abs(ly), math.abs(ly + h))
+    return math.max(0, math.sqrt(fx * fx + fy * fy) - r)
+end
+
+-- A rectangle moved towards the middle until it's inside the circle; nil
+-- when it can't be (wider than the circle there)
+local function Fit(lx, ly, w, h, r)
+    for _ = 1, 10 do
+        local out = Outside(lx, ly, w, h, r)
+        if out <= 0 then return lx, ly end
+        local mx, my = lx + w / 2, ly + h / 2
+        local len = math.sqrt(mx * mx + my * my)
+        if len < 1 then return nil end
+        lx, ly = lx - mx / len * (out + 1), ly - my / len * (out + 1)
+    end
+    if Outside(lx, ly, w, h, r) <= 0 then return lx, ly end
 end
 
 -- Each node where it is now: its place at the scan, less how far the
@@ -195,8 +304,9 @@ local function Place()
             p:SetPoint("CENTER", overlay, "CENTER", x, y)
             local color = node.color or KC.white
             p.label:SetTextColor(color[1], color[2], color[3])
-            p.label:SetText(MM.LabelText(node))
-            p.x, p.y = x, y
+            p.label:SetText(node.text)
+            p.x, p.y, p.area = x, y, node.area
+            if not p.area and p.side == "center" then p.side = nil end
             p:Show()
             shown[#shown + 1] = p
         end
@@ -204,16 +314,17 @@ local function Place()
     for i = #nodes + 1, #pins do pins[i]:Hide() end
     -- Each label on the first side clear of the dots and the labels placed
     -- already: the side it had (no flicker), then towards the middle first
+    -- (an area has no dot of its own; a label stays inside the minimap)
     local taken = {}
     for _, p in ipairs(shown) do
-        taken[#taken + 1] = { p.x - DOT / 2, p.y - DOT / 2, DOT, DOT, p }
+        if not p.area then taken[#taken + 1] = { p.x - DOT / 2, p.y - DOT / 2, DOT, DOT, p } end
     end
+    local inner = radius - 2
     for _, p in ipairs(shown) do
         local w, h = p.label:GetStringWidth(), p.label:GetStringHeight()
         local order = { p.side }
-        local inward = p.x > 0 and "left" or "right"
-        order[#order + 1] = inward
-        for _, side in ipairs(SIDES) do order[#order + 1] = side end
+        if not p.area then order[#order + 1] = p.x > 0 and "left" or "right" end
+        for _, side in ipairs(p.area and AREA_SIDES or SIDES) do order[#order + 1] = side end
         local best, bestCost
         for _, side in ipairs(order) do
             local lx, ly = LabelRect(side, p.x, p.y, w, h)
@@ -222,16 +333,21 @@ local function Place()
                 if t[5] ~= p then cost = cost + Overlap(lx, ly, w, h, t[1], t[2], t[3], t[4]) end
             end
             -- (past the minimap's edge counts against it too)
-            local far = math.max(math.abs(lx), math.abs(lx + w))
-            if far > radius then cost = cost + (far - radius) * h end
+            cost = cost + Outside(lx, ly, w, h, inner) * (w + h)
             if not bestCost or cost < bestCost then best, bestCost = side, cost end
             if cost == 0 then break end
         end
         p.side = best
         local lx, ly = LabelRect(best, p.x, p.y, w, h)
-        taken[#taken + 1] = { lx, ly, w, h, p }
-        p.label:ClearAllPoints()
-        p.label:SetPoint("BOTTOMLEFT", overlay, "CENTER", lx, ly)
+        lx, ly = Fit(lx, ly, w, h, inner)
+        if lx then
+            taken[#taken + 1] = { lx, ly, w, h, p }
+            p.label:ClearAllPoints()
+            p.label:SetPoint("BOTTOMLEFT", overlay, "CENTER", lx, ly)
+            p.label:Show()
+        else
+            p.label:Hide()
+        end
     end
 end
 
@@ -362,6 +478,8 @@ end
 -- "Silverleaf x2" in its colour
 local function Label(node)
     local c = MM.LabelColor(node)
+    local title = N.QuestBlock(node.name)
+    if title then return string.format("|cff%02x%02x%02x%s|r", c[1] * 255, c[2] * 255, c[3] * 255, title) end
     local name = node.count > 1 and (node.name .. " x" .. node.count) or node.name
     return string.format("|cff%02x%02x%02x%s|r", c[1] * 255, c[2] * 255, c[3] * 255, name)
 end
