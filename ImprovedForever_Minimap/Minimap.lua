@@ -525,6 +525,8 @@ end
 local GAP = 2
 local SIDES = { "right", "left", "above", "below" }
 local AREA_SIDES = { "center", "above", "below", "right", "left" }
+-- (rows a label may move up or down from its side when that's taken)
+local ROWS = { 0, 1, -1, 2, -2, 3, -3 }
 local function LabelRect(side, x, y, w, h)
     local half = DOT / 2
     if side == "center" then return x - w / 2, y - h / 2, w, h end
@@ -640,9 +642,11 @@ local function Place(_, elapsed)
         end
     end
     for i = #nodes + 1, #pins do pins[i]:Hide() end
-    -- Each label on the first side clear of the dots and the labels placed
-    -- already: the side it had (no flicker), then towards the middle first
-    -- (an area has no dot of its own; a label stays inside the minimap)
+    -- Each label on the first place clear of the dots and the labels placed
+    -- already, whatever their types: the place it had (no flicker), then each
+    -- side, towards the middle first, then each side moved a row up or down
+    -- at a time (an area has no dot of its own; a label stays inside the
+    -- minimap). A label that can't be placed clear of the others is hidden.
     local taken = {}
     for _, p in ipairs(shown) do
         if not p.area then taken[#taken + 1] = { p.x - DOT / 2, p.y - DOT / 2, DOT, DOT, p } end
@@ -650,30 +654,45 @@ local function Place(_, elapsed)
     local inner = radius - 2
     for _, p in ipairs(shown) do
         local w, h = p.label:GetWidth(), p.label:GetHeight()
-        local order = { p.memo.side }
-        if not p.area then order[#order + 1] = p.x > 0 and "left" or "right" end
-        for _, side in ipairs(p.area and AREA_SIDES or SIDES) do order[#order + 1] = side end
-        local best, bestCost
-        for _, side in ipairs(order) do
+        local sides = { p.memo.side }
+        if not p.area then sides[#sides + 1] = p.x > 0 and "left" or "right" end
+        for _, side in ipairs(p.area and AREA_SIDES or SIDES) do sides[#sides + 1] = side end
+        local function Try(side, row)
             local lx, ly = LabelRect(side, p.x, p.y, w, h)
-            local cost = 0
+            lx, ly = Fit(lx, ly + row * (h + GAP), w, h, inner)
+            if not lx then return end
+            local cost, clash = 0, 0
             for _, t in ipairs(taken) do
-                if t[5] ~= p then cost = cost + Overlap(lx, ly, w, h, t[1], t[2], t[3], t[4]) end
+                if t[5] ~= p then
+                    local o = Overlap(lx, ly, w, h, t[1], t[2], t[3], t[4])
+                    cost = cost + o
+                    if t[6] then clash = clash + o end
+                end
             end
-            -- (past the minimap's edge counts against it too)
-            cost = cost + Outside(lx, ly, w, h, inner) * (w + h)
-            if not bestCost or cost < bestCost then best, bestCost = side, cost end
-            if cost == 0 then break end
+            return lx, ly, cost, clash
         end
-        p.memo.side = best
-        local lx, ly = LabelRect(best, p.x, p.y, w, h)
-        lx, ly = Fit(lx, ly, w, h, inner)
-        if lx then
-            taken[#taken + 1] = { lx, ly, w, h, p }
+        local bx, by, bestCost, bestClash, bestSide, bestRow
+        local function Consider(side, row)
+            if not side or bestCost == 0 then return end
+            -- (above moves only up, below only down: never over its dot)
+            if (side == "above" and row < 0) or (side == "below" and row > 0) then return end
+            local lx, ly, cost, clash = Try(side, row)
+            if lx and (not bestCost or cost < bestCost) then
+                bx, by, bestCost, bestClash, bestSide, bestRow = lx, ly, cost, clash, side, row
+            end
+        end
+        Consider(p.memo.side, p.memo.row or 0)
+        for _, row in ipairs(ROWS) do
+            for _, side in ipairs(sides) do Consider(side, row) end
+        end
+        if bx and bestClash == 0 then
+            p.memo.side, p.memo.row = bestSide, bestRow
+            taken[#taken + 1] = { bx, by, w, h, p, true }
             p.label:ClearAllPoints()
-            p.label:SetPoint("BOTTOMLEFT", overlay, "CENTER", lx, ly)
+            p.label:SetPoint("BOTTOMLEFT", overlay, "CENTER", bx, by)
             p.label:Show()
         else
+            p.memo.row = nil
             p.label:Hide()
         end
     end
