@@ -98,7 +98,12 @@ function frameMeta.CreateTexture(self) return Frame(nil, self) end
 function frameMeta.CreateFontString(self) return Frame(nil, self) end
 function frameMeta.CreateMaskTexture(self) return Frame(nil, self) end
 function frameMeta.CreateAnimationGroup(self) return Frame(nil, self) end
-function frameMeta.CreateAnimation(self) return Frame(nil, self) end
+function frameMeta.CreateAnimation(self)
+    local a = Frame(nil, self)
+    self.__anim = self.__anim or a
+    return a
+end
+function frameMeta.GetAnimations(self) return self.__anim end
 
 frameMeta.__call = function() return nil end
 

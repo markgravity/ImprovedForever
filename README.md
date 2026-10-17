@@ -36,6 +36,7 @@ the core, **Improved Forever**:
 | `ImprovedForever_Junk` | Finds and marks junk, sells it with the vendor's Sell All Junk, destroys it from the bags or the loot window. Formerly Destroy. |
 | `ImprovedForever_Wiki` | Everything about an item. |
 | `ImprovedForever_Journal` | A diary of your days, read as a book. |
+| `ImprovedForever_Interface` | The game's HUD rearranged: the target's health across the top, yours bottom left in the same look, the gamepad bar as Hogwarts Legacy's spell diamonds bottom right, the chat as just its lines until used. |
 | `ImprovedForever_QuestTracker` | The objective tracker, rebuilt as the game's own: sorted quests (zone, level, title, distance, completed), an objective complete sound, full controller support. Formerly Improved Quest Tracker. |
 
 ## Features

@@ -60,17 +60,18 @@ local function InRow(f)
 end
 
 ---------------------------------------------------------------------------
--- A game frame faded out: F.Fade(region, hide). Never by its alpha: a
+-- A game frame faded out: F.Fade(region, hide, alpha). Never by its alpha: a
 -- property of the game's frames set from addon code taints them (closing
 -- the game's tracker after it gets SetPreferredGamepadInteractTarget
 -- forbidden). An alpha animation of ours, aimed at it, draws it at 0
--- instead; its own alpha untouched.
+-- instead (or at alpha, 0 to 1: dimmed); its own alpha untouched.
 ---------------------------------------------------------------------------
 local fader = CreateFrame("Frame")
 local fades = {}
 
-function F.Fade(region, hide)
+function F.Fade(region, hide, alpha)
     if not (region and region.GetObjectType) then return end
+    alpha = alpha or 0
     local group = fades[region]
     if not group then
         if not hide then return end
@@ -85,17 +86,28 @@ function F.Fade(region, hide)
             group:CreateAnimation("Alpha")
         end
         local a = group:GetAnimations()
-        a:SetFromAlpha(0)
-        a:SetToAlpha(0)
         a:SetDuration(3600)
         group:SetLooping("REPEAT")
         fades[region] = group
+    end
+    if hide and group.alpha ~= alpha then
+        group:Stop()
+        local a = group:GetAnimations()
+        a:SetFromAlpha(alpha)
+        a:SetToAlpha(alpha)
+        group.alpha = alpha
     end
     if hide and not group:IsPlaying() then
         group:Play()
     elseif not hide and group:IsPlaying() then
         group:Stop()
     end
+end
+
+-- Faded now? (and the alpha it's drawn at): for probes
+function F.Faded(region)
+    local group = fades[region]
+    return group ~= nil and group:IsPlaying(), group and group.alpha
 end
 
 ---------------------------------------------------------------------------
