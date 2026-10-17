@@ -28,10 +28,11 @@ function N.Facing()
 end
 
 -- The player's place in the world, as yards east and north, or nil (in an
--- instance). The world's x runs north, its y west.
+-- instance). The world's x runs north, its y west; UnitPosition gives x
+-- first (measured against the minimap's own dots as the player walks).
 function N.Position()
     if not UnitPosition then return nil end
-    local y, x = UnitPosition("player")
+    local x, y = UnitPosition("player")
     if type(x) ~= "number" or type(y) ~= "number" or Secret(x) or Secret(y) then return nil end
     return -y, x
 end
@@ -158,6 +159,10 @@ local function QuestTitles()
         end
     end
     return questTitles
+end
+
+function N.IsQuestTitle(name)
+    return QuestTitles()[name] ~= nil
 end
 
 -- A quest of the log's ID, by its title (nil: not in the log, or unknown)
@@ -487,6 +492,9 @@ local function GroupName(j, name)
         if g.n > AREA then
             local d = (hit.x - g.x / g.n) ^ 2 + (hit.y - g.y / g.n) ^ 2
             if not g.best or d < g.bestD then g.best, g.bestD = hit, d end
+            -- (an area's points, all: Minimap.lua keeps them in the world)
+            g.points = g.points or {}
+            g.points[#g.points + 1] = { hit.east, hit.north }
         end
     end
     for _, g in ipairs(order) do
@@ -501,7 +509,7 @@ local function GroupName(j, name)
                 tostring(kind and N.SkillBonus(kind)), tostring(N.State(name))))
         end
         j.found[#j.found + 1] = { name = name, count = g.count, x = x, y = y, gameColor = g.color,
-            east = east, north = north, area = g.best ~= nil }
+            east = east, north = north, area = g.best ~= nil, points = g.points }
     end
 end
 
@@ -518,7 +526,8 @@ end
 -- dropped). opts.all: every dot, not only herbs and ore; opts.debug: each
 -- dot printed. done(found) when it's read: each dot's name, count, x / y on
 -- the minimap, gameColor, east / north in yards from found.east / .north,
--- where the player stood when it began (nil: unknown). false: the minimap
+-- where the player stood when it began (nil: unknown); an area (a quest's)
+-- area = true and its points, { east, north } each. false: the minimap
 -- can't be read now
 function N.Start(opts, done)
     opts = opts or {}

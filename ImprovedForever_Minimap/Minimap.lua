@@ -31,6 +31,7 @@ local DEFAULTS = {
 }
 
 function MM.Settings()
+    IF.db.minimapLog = nil   -- (a probe's, since removed)
     IF.db.minimap = IF.db.minimap or {}
     local s = IF.db.minimap
     for k, v in pairs(DEFAULTS) do
@@ -81,23 +82,17 @@ function MM.LabelColor(node)
 end
 
 ---------------------------------------------------------------------------
--- A quest's label: each objective's count with an icon of what it is
--- (a creature, the item itself, an object, else a note): "[skull] 5/10";
--- a quest's own mark (no objectives: handed in there) a "?"; an NPC with a
--- quest for you "!" or "?" and its name
+-- A label's pieces: { atlas or icon (an item's, round), text, color }. A
+-- quest's: each objective's count beside what it is: the creature to slay
+-- (its portrait), the item (its icon); else the game's own soft-target
+-- icon of its kind; an NPC with a quest for you its name. A quest's mark with no
+-- objectives (handed in there) none: the minimap shows its "?" itself
 ---------------------------------------------------------------------------
-local ICON = "Interface\\Icons\\"
-local OBJECTIVE_ICONS = {
-    monster = ICON .. "INV_Misc_Bone_HumanSkull_01", item = ICON .. "INV_Misc_Bag_08",
-    object = ICON .. "INV_Box_02", event = ICON .. "INV_Misc_Note_01",
+local OBJECTIVE_ATLAS = {
+    monster = "Crosshair_Attack_48", item = "Crosshair_pickup_48",
+    object = "Crosshair_interact_48", event = "Crosshair_Quest_48",
 }
-local TURN_IN = "Interface\\GossipFrame\\ActiveQuestIcon"
-local AVAILABLE = "Interface\\GossipFrame\\AvailableQuestIcon"
-
-local function Icon(path, crop)
-    -- (an icon's border cropped)
-    return crop and ("|T" .. path .. ":12:12:0:0:64:64:5:59:5:59|t") or ("|T" .. path .. ":12:12|t")
-end
+local COUNT_COLOR, DONE_COLOR = { 1, 1, 1 }, { 0.5, 0.5, 0.5 }
 
 -- Words alone, for matching an objective the minimap gives to the log's
 -- ("5/10 Young Night Web Spider slain", "Young Night Web Spider slain: 5/10")
@@ -136,12 +131,11 @@ local function ItemIcon(questID, subject)
     return icon
 end
 
-local function QuestText(node)
+local function QuestParts(node)
     local title, objectives = N.QuestBlock(node.name)
     if not title then
-        local npc = IF.GameData and IF.GameData.QuestNpc and IF.GameData.QuestNpc(node.name)
-        if npc then return Icon(npc == "start" and AVAILABLE or TURN_IN) .. " " .. node.name end
-        if N.QuestID(node.name) or not node.name:find("%d+%s*/%s*%d+") then return Icon(TURN_IN) end
+        if N.IsQuestTitle(node.name) then return {} end
+        if not node.name:find("%d+%s*/%s*%d+") then return { { text = node.name, color = node.color } } end
         title, objectives = "", { { subject = node.name, text = node.name } }
         objectives[1].have, objectives[1].need = node.name:match("(%d+)%s*/%s*(%d+)")
     end
@@ -149,23 +143,33 @@ local function QuestText(node)
     local parts = {}
     for _, o in ipairs(objectives) do
         local kind = ObjectiveType(questID, o.subject)
-        local icon = kind == "item" and ItemIcon(questID, o.subject)
-        local part = icon and Icon(icon, true) or Icon(OBJECTIVE_ICONS[kind] or OBJECTIVE_ICONS.event, true)
+        -- (what it is: the creature's portrait, the item's icon; the
+        -- generic icon of its kind only when neither is known)
+        local GD = IF.GameData
+        local npc = (kind == "monster" or not kind) and GD and GD.NpcByName
+            and GD.NpcByName((o.subject:gsub("%s+slain$", "")))
+        local icon = not npc and (kind == "item" or not kind) and ItemIcon(questID, o.subject) or nil
+        if not kind then kind = (npc and "monster") or (icon and "item") or nil end
+        local part = { npc = npc, icon = icon, atlas = OBJECTIVE_ATLAS[kind] or OBJECTIVE_ATLAS.event }
         if o.have and o.need then
-            local count = o.have .. "/" .. o.need
+            part.text = o.have .. "/" .. o.need
             -- (one done, greyed)
-            if tonumber(o.have) >= tonumber(o.need) then count = "|cff808080" .. count .. "|r" end
-            part = part .. count
+            part.color = tonumber(o.have) >= tonumber(o.need) and DONE_COLOR or COUNT_COLOR
         end
         parts[#parts + 1] = part
     end
-    return table.concat(parts, "  ")
+    return parts
+end
+
+-- A label's pieces: a quest's (QuestParts), else its words in its colour
+function MM.LabelParts(node)
+    if (node.type or N.Type(node.name)) == "quest" then return QuestParts(node) end
+    return { { text = MM.LabelText(node), color = node.color } }
 end
 
 -- A label's words: "Silverleaf x2", "Bruiseweed (100)" for one beyond the
--- player's skill; a quest's its objectives (QuestText)
+-- player's skill
 function MM.LabelText(node)
-    if (node.type or N.Type(node.name)) == "quest" then return QuestText(node) end
     local text = node.count > 1 and (node.name .. " x" .. node.count) or node.name
     if MM.Settings().need and N.State(node.name) == "red" then
         text = text .. " (" .. select(2, N.Kind(node.name)) .. ")"
@@ -192,6 +196,112 @@ overlay:SetAllPoints(Minimap)
 overlay:SetFrameLevel(Minimap:GetFrameLevel() + 5)
 overlay:Hide()
 
+-- A label drawn as the minimap's own header (its zone name's bar: the
+-- game's nine-slice, "ui-hud-minimap-button"), its icons the size of the
+-- header's tracking button's, its words the game's small font
+local BAR_H = 16     -- the header's height
+local ICON_SIZE = 13
+local PAD, SPACE = 5, 5   -- inside the bar's ends; between pieces
+
+local function HasAtlas(name)
+    return C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(name) ~= nil
+end
+
+local function Chip(parent)
+    local c = K.NewFrame("Frame", nil, parent)
+    c:SetHeight(BAR_H)
+    local ok = NineSliceUtil and NineSliceUtil.ApplyLayoutByName
+        and pcall(NineSliceUtil.ApplyLayoutByName, c, "UniqueCornersLayout", "ui-hud-minimap-button")
+    if not ok then
+        -- (no nine-slice: a dark bar)
+        local bg = c:CreateTexture(nil, "BACKGROUND")
+        bg:SetAllPoints()
+        bg:SetColorTexture(0, 0, 0, 0.6)
+    end
+    c.icons, c.texts = {}, {}
+    return c
+end
+
+-- An item's icon round, as the minimap's buttons
+local function Round(c, tex)
+    local mask = c:CreateMaskTexture()
+    mask:SetAllPoints(tex)
+    if HasAtlas("CircleMask") then
+        mask:SetAtlas("CircleMask")
+    else
+        mask:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+    end
+    tex.mask = mask
+end
+
+-- The chip's pieces laid out left to right, its width to fit them
+local function Layout(c, parts)
+    local x = PAD
+    for i, part in ipairs(parts) do
+        local tex = c.icons[i]
+        if part.atlas or part.icon or part.npc then
+            if not tex then
+                tex = c:CreateTexture(nil, "ARTWORK")
+                tex:SetSize(ICON_SIZE, ICON_SIZE)
+                Round(c, tex)
+                c.icons[i] = tex
+            end
+            -- A creature's portrait, else an item's icon (both round), else
+            -- the generic atlas
+            tex:SetTexCoord(0, 1, 0, 1)
+            local round = part.npc ~= nil and IF.Book and IF.Book.Portrait(part.npc, tex) or false
+            if not round and part.icon then
+                tex:SetTexture(part.icon)
+                tex:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+                round = true
+            elseif not round then
+                tex:SetAtlas(part.atlas)
+            end
+            if round ~= tex.round then
+                if round then tex:AddMaskTexture(tex.mask) else tex:RemoveMaskTexture(tex.mask) end
+                tex.round = round
+            end
+            tex:ClearAllPoints()
+            tex:SetPoint("LEFT", c, "LEFT", x - 2, 0)
+            tex:Show()
+            x = x - 2 + ICON_SIZE + (part.text and 2 or 0)
+        elseif tex then
+            tex:Hide()
+        end
+        local fs = c.texts[i]
+        if part.text then
+            if not fs then
+                fs = c:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+                c.texts[i] = fs
+            end
+            local color = part.color or KC.white
+            fs:SetText(part.text)
+            fs:SetTextColor(color[1], color[2], color[3])
+            fs:ClearAllPoints()
+            fs:SetPoint("LEFT", c, "LEFT", x, 0)
+            fs:Show()
+            x = x + fs:GetStringWidth()
+        elseif fs then
+            fs:Hide()
+        end
+        x = x + SPACE
+    end
+    for i = #parts + 1, #c.icons do c.icons[i]:Hide() end
+    for i = #parts + 1, #c.texts do c.texts[i]:Hide() end
+    c:SetWidth(x - SPACE + PAD)
+end
+
+-- What a label shows, as one string: laid out again only when it changes
+local function Signature(parts)
+    local out = {}
+    for _, part in ipairs(parts) do
+        local c = part.color or KC.white
+        out[#out + 1] = string.format("%s|%s|%s|%s|%.2f%.2f%.2f", tostring(part.npc), tostring(part.atlas), tostring(part.icon),
+            tostring(part.text), c[1], c[2], c[3])
+    end
+    return table.concat(out, ";")
+end
+
 local pins = {}
 local function Pin(i)
     local p = pins[i]
@@ -199,8 +309,7 @@ local function Pin(i)
     -- (an empty frame the size of the game's dot, over it)
     p = K.NewFrame("Frame", nil, overlay)
     p:SetSize(DOT, DOT)
-    p.label = p:CreateFontString(nil, "OVERLAY")
-    p.label:SetFont("Fonts\\FRIZQT__.TTF", 10, "OUTLINE")
+    p.label = Chip(p)
     pins[i] = p
     return p
 end
@@ -220,18 +329,170 @@ local function GatherOnly()
     return true
 end
 
+-- Each dot followed from scan to scan, in the world: a scan reads a dot off
+-- points a step apart round the player, so its middle wobbles by up to
+-- half a step as the player walks. Its places so far are averaged (the
+-- last MEAN), and the side its label took kept with it.
+local MEAN = 8
+local tracks = {}    -- { key, e, n (yards in the world), k (places averaged), side }
+
+-- (a quest's counts left out: one that goes up is the same area)
+local function TrackKey(name)
+    return (name:gsub("%d+%s*/%s*%d+", "#"))
+end
+
+local function Follow(node, found, reach, fresh)
+    if not found.east then return end
+    local key = TrackKey(node.name)
+    local e, n = found.east + node.east, found.north + node.north
+    local best, bestD
+    for _, t in ipairs(tracks) do
+        if not t.taken and t.key == key then
+            local d = (t.e - e) ^ 2 + (t.n - n) ^ 2
+            if d <= reach * reach and (not bestD or d < bestD) then best, bestD = t, d end
+        end
+    end
+    local t = best or { key = key, e = e, n = n, k = 0 }
+    t.taken = true
+    t.k = math.min(t.k + 1, MEAN)
+    t.e, t.n = t.e + (e - t.e) / t.k, t.n + (n - t.n) / t.k
+    node.east, node.north = t.e - found.east, t.n - found.north
+    node.track = t
+    fresh[#fresh + 1] = t
+end
+
+-- A quest's area, kept in the world. A scan reads only the part in view,
+-- so its middle moves as the player walks; instead every point read goes
+-- into a grid of CELL-yard cells in the world, kept from scan to scan, and
+-- the label sits on the cell nearest the middle of all of them: it stays
+-- put, moving only as more of the area comes into view. (Place moves it to
+-- the area's nearest cell in view when that one isn't.)
+local CELL = 4
+local AREA_KEEP = 120  -- seconds an area not read again is kept
+local MAX_CELLS = 4000
+local areas = {}       -- { key, cells = { [id] = { east, north } }, sumE, sumN, count, e, n, seen, side }
+
+local function CellID(e, n)
+    return math.floor(e / CELL) * 1000000 + math.floor(n / CELL)
+end
+
+-- (a cell or one next to it known: the scan's points are a step apart,
+-- shifted with the player, so a known area's land beside its cells)
+local function Near(cells, e, n)
+    local ce, cn = math.floor(e / CELL), math.floor(n / CELL)
+    for dx = -1, 1 do
+        for dy = -1, 1 do
+            if cells[(ce + dx) * 1000000 + cn + dy] then return true end
+        end
+    end
+    return false
+end
+
+-- The label's cell: the one nearest the middle of all, kept until that
+-- middle has moved STICK yards from it (more of the area seen as the
+-- player walks moves it a little every scan: a label hopping cell to
+-- cell). Place glides it to a new one.
+local STICK = 10
+
+local function Anchor(a)
+    local me, mn = a.sumE / a.count, a.sumN / a.count
+    if a.e and a.cells[CellID(a.e, a.n)] and (a.e - me) ^ 2 + (a.n - mn) ^ 2 <= STICK * STICK then return end
+    local bestD
+    for _, c in pairs(a.cells) do
+        local d = (c[1] - me) ^ 2 + (c[2] - mn) ^ 2
+        if not bestD or d < bestD then bestD, a.e, a.n = d, c[1], c[2] end
+    end
+end
+
+local function AddCell(a, id, e, n)
+    if a.cells[id] or a.count >= MAX_CELLS then return false end
+    local ce, cn = (math.floor(e / CELL) + 0.5) * CELL, (math.floor(n / CELL) + 0.5) * CELL
+    a.cells[id] = { ce, cn }
+    a.sumE, a.sumN, a.count = a.sumE + ce, a.sumN + cn, a.count + 1
+    return true
+end
+
+-- The area a scan's group of points is part of (areas of its name it
+-- touches made one: a scan can read one area as two groups), grown by them
+local function FollowArea(node, found)
+    local key = TrackKey(node.name)
+    local points = {}
+    for _, p in ipairs(node.points) do
+        local e, n = found.east + p[1], found.north + p[2]
+        points[#points + 1] = { CellID(e, n), e, n }
+    end
+    local touched = {}
+    for _, a in ipairs(areas) do
+        if a.key == key then
+            for _, p in ipairs(points) do
+                if Near(a.cells, p[2], p[3]) then
+                    touched[#touched + 1] = a
+                    break
+                end
+            end
+        end
+    end
+    table.sort(touched, function(x, y) return x.count > y.count end)
+    local a = touched[1]
+    if not a then
+        a = { key = key, cells = {}, sumE = 0, sumN = 0, count = 0 }
+        areas[#areas + 1] = a
+    end
+    -- (the others it touches folded into it)
+    for i = 2, #touched do
+        local other = touched[i]
+        for id, c in pairs(other.cells) do AddCell(a, id, c[1], c[2]) end
+        other.merged = a
+    end
+    a.seen = GetTime()
+    for _, p in ipairs(points) do AddCell(a, p[1], p[2], p[3]) end
+    Anchor(a)
+    node.east, node.north = a.e - found.east, a.n - found.north
+    node.track = a
+    return a
+end
+
 -- The dots of a scan of the types labelled, each with its type and colour,
 -- and where the player stood when it began
 local function Rescan(found)
     nodes = {}
+    -- (a dot read again lands within two steps of where it was)
+    local radius = Minimap:GetWidth() / 2
+    local view = C_Minimap and C_Minimap.GetViewRadius and C_Minimap.GetViewRadius() or radius
+    local reach = N.step * 2 * view / radius
+    local fresh, labelled = {}, {}
     for _, node in ipairs(found) do
         node.type = N.Type(node.name)
         if MM.Labelled(node.type) then
             node.color = MM.LabelColor(node)
-            node.text = MM.LabelText(node)
-            nodes[#nodes + 1] = node
+            node.parts = MM.LabelParts(node)
+            node.sig = Signature(node.parts)
+            if #node.parts > 0 then
+                -- (one label an area, however many groups it was read as)
+                local area = node.area and node.points and found.east and FollowArea(node, found)
+                if not area then Follow(node, found, reach, fresh) end
+                if not (area and labelled[area]) then nodes[#nodes + 1] = node end
+                if area then labelled[area] = true end
+            end
         end
     end
+    for _, t in ipairs(fresh) do t.taken = nil end
+    tracks = fresh
+    -- (an area folded into another later in the scan: its label the other's)
+    local seen, kept = {}, {}
+    for _, node in ipairs(nodes) do
+        local t = node.track
+        while t and t.merged do t = t.merged end
+        node.track = t or node.track
+        if not (node.area and t and seen[t]) then kept[#kept + 1] = node end
+        if node.area and t then seen[t] = true end
+    end
+    nodes = kept
+    kept = {}
+    for _, a in ipairs(areas) do
+        if not a.merged and GetTime() - a.seen < AREA_KEEP then kept[#kept + 1] = a end
+    end
+    areas = kept
     scanEast, scanNorth = found.east, found.north
 end
 
@@ -280,7 +541,19 @@ end
 
 -- Each node where it is now: its place at the scan, less how far the
 -- player has walked since, turned with a turning minimap
-local function Place()
+-- A followed dot's place glides to a new one (an area's label moved on,
+-- a dot's average) over a few frames rather than jumping: GLIDE a second
+local GLIDE = 8
+
+-- (a place in the world within r of the minimap's middle: the player at
+-- e, n, the minimap turned c, s, units a yard)
+local function InView(we, wn, e, n, c, s, units, r)
+    local ce, cn = we - e, wn - n
+    local cx, cy = (ce * c + cn * s) * units, (-ce * s + cn * c) * units
+    return cx * cx + cy * cy <= r * r
+end
+
+local function Place(_, elapsed)
     local radius = Minimap:GetWidth() / 2
     local view = C_Minimap and C_Minimap.GetViewRadius and C_Minimap.GetViewRadius() or radius
     local units = radius / view
@@ -296,17 +569,49 @@ local function Place()
     for i, node in ipairs(nodes) do
         local p = Pin(i)
         local east, north = node.east - de, node.north - dn
+        local t = node.track
+        if t and e and t.e then
+            -- Where it is in the world: an area's anchor, else (out of view)
+            -- its cell nearest it in view, kept while that stays in view
+            local te, tn = t.e, t.n
+            local inside = edge - 8
+            if t.cells and not InView(te, tn, e, n, c, s, units, inside) then
+                local v = t.inView
+                if not (v and t.cells[CellID(v[1], v[2])] and InView(v[1], v[2], e, n, c, s, units, inside)) then
+                    v = nil
+                    local bestD
+                    for _, cell in pairs(t.cells) do
+                        if InView(cell[1], cell[2], e, n, c, s, units, inside) then
+                            local d = (cell[1] - te) ^ 2 + (cell[2] - tn) ^ 2
+                            if not bestD or d < bestD then bestD, v = d, cell end
+                        end
+                    end
+                    t.inView = v
+                end
+                if v then te, tn = v[1], v[2] end
+            elseif t.cells then
+                t.inView = nil
+            end
+            local k = math.min(1, (elapsed or 0) * GLIDE)
+            t.ge = t.ge and t.ge + (te - t.ge) * k or te
+            t.gn = t.gn and t.gn + (tn - t.gn) * k or tn
+            east, north = t.ge - e, t.gn - n
+        end
         local x, y = (east * c + north * s) * units, (-east * s + north * c) * units
         if x * x + y * y > edge * edge then
             p:Hide()
         else
             p:ClearAllPoints()
             p:SetPoint("CENTER", overlay, "CENTER", x, y)
-            local color = node.color or KC.white
-            p.label:SetTextColor(color[1], color[2], color[3])
-            p.label:SetText(node.text)
+            if p.sig ~= node.sig then
+                Layout(p.label, node.parts)
+                p.sig = node.sig
+            end
             p.x, p.y, p.area = x, y, node.area
-            if not p.area and p.side == "center" then p.side = nil end
+            -- (its side kept with the dot, not the pin: the pins go to the
+            -- dots in a scan's order, which changes)
+            p.memo = node.track or p
+            if not p.area and p.memo.side == "center" then p.memo.side = nil end
             p:Show()
             shown[#shown + 1] = p
         end
@@ -321,8 +626,8 @@ local function Place()
     end
     local inner = radius - 2
     for _, p in ipairs(shown) do
-        local w, h = p.label:GetStringWidth(), p.label:GetStringHeight()
-        local order = { p.side }
+        local w, h = p.label:GetWidth(), p.label:GetHeight()
+        local order = { p.memo.side }
         if not p.area then order[#order + 1] = p.x > 0 and "left" or "right" end
         for _, side in ipairs(p.area and AREA_SIDES or SIDES) do order[#order + 1] = side end
         local best, bestCost
@@ -337,7 +642,7 @@ local function Place()
             if not bestCost or cost < bestCost then best, bestCost = side, cost end
             if cost == 0 then break end
         end
-        p.side = best
+        p.memo.side = best
         local lx, ly = LabelRect(best, p.x, p.y, w, h)
         lx, ly = Fit(lx, ly, w, h, inner)
         if lx then

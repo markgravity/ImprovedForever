@@ -316,6 +316,27 @@ local function Available(questID)
     return true
 end
 
+-- An NPC's ID by its name (a quest's objective gives only names): the first
+-- of that name with a look (WorldData.lua's displays), else the first;
+-- indexed once first asked
+local npcByName
+function GD.NpcByName(name)
+    if not npcByName then
+        npcByName = {}
+        local data = IF.WorldData or {}
+        local looks = data.displays or {}
+        for id, row in pairs(data.npcs or {}) do
+            local npc = row:match("^([^|]+)")
+            local had = npc and npcByName[npc]
+            if npc and (not had or (looks[id] and not looks[had]) or (not looks[had] and id < had)
+                or (looks[id] and looks[had] and id < had)) then
+                npcByName[npc] = id
+            end
+        end
+    end
+    return npcByName[name]
+end
+
 -- A quest's items (the ones it needs: our copy's items' related quests,
 -- filled out from the quests' objectives), indexed once first asked ->
 -- { itemID } or nil
