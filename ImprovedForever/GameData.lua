@@ -360,16 +360,20 @@ function GD.QuestItems(questID)
 end
 
 -- "end": an NPC a quest in the log is handed in to; "start": one with a
--- quest the character can take; nil: neither (or an NPC not known)
+-- quest the character can take; nil: neither (or an NPC not known). And
+-- those quests' IDs
 function GD.QuestNpc(name)
     local q = NpcQuests()[name]
     if not q then return nil end
+    local ids = {}
     for _, id in ipairs(q.ends) do
-        if InLog(id) then return "end" end
+        if InLog(id) then ids[#ids + 1] = id end
     end
+    if #ids > 0 then return "end", ids end
     for _, id in ipairs(q.starts) do
-        if Available(id) then return "start" end
+        if Available(id) then ids[#ids + 1] = id end
     end
+    if #ids > 0 then return "start", ids end
     return nil
 end
 

@@ -146,12 +146,14 @@ function N.Color(name)
 end
 
 ---------------------------------------------------------------------------
--- What a dot is, by its name: "herb", "ore", "quest" (a quest of the log's,
--- its area or objective as the minimap marks it, or an NPC with a quest to
--- give or take: the core's game data), "party" (a party or raid member) or
--- "npc" (the rest: the NPCs and creatures tracking shows)
+-- What a dot is, by its name: "herb", "ore", "objective" (a quest's area
+-- and objectives as the minimap marks them, or a creature or object a quest
+-- of the log's still needs), "quest" (a quest's own mark, where it's handed
+-- in, or an NPC with a quest to give or take: the core's game data),
+-- "party" (a party or raid member) or "npc" (the rest: the NPCs and
+-- creatures tracking shows)
 ---------------------------------------------------------------------------
-N.TYPES = { "herb", "ore", "quest", "npc", "party" }
+N.TYPES = { "herb", "ore", "objective", "quest", "npc", "party" }
 
 -- The quests in the log, by title -> its quest ID (true: unknown)
 -- and their objectives' words, lower case ("wilted peacebloom: 0/8")
@@ -246,7 +248,9 @@ function N.Type(name)
     if kind then return kind end
     local t = types[name]
     if t then return t end
-    if name:find("\n") or QuestTitles()[name] or name:find("%d+%s*/%s*%d+") or N.IsQuestTarget(name) then
+    if name:find("\n") or name:find("%d+%s*/%s*%d+") or N.IsQuestTarget(name) then
+        t = "objective"
+    elseif QuestTitles()[name] then
         t = "quest"
     elseif N.GroupUnit(name) then
         t = "party"

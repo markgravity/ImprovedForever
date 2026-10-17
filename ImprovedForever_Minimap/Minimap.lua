@@ -23,7 +23,7 @@ local DEFAULTS = {
     colors = true,       -- herbs and ore coloured by the skill they give
     need = true,         -- a red one's label says the skill it needs: "Bruiseweed (100)"
     -- the dots labelled, by type (NodeScan.lua's N.TYPES)
-    herb = true, ore = true, quest = true, npc = false, party = false,
+    herb = true, ore = true, objective = true, quest = true, npc = false, party = false,
     alert = false,
     alertFor = "skill",  -- skill (gives skill), gather (can gather), any (any herb / ore), all (any dot)
     alertWith = "both",  -- both, vibe, sound, show (the message only)
@@ -34,6 +34,8 @@ function MM.Settings()
     IF.db.minimapLog = nil   -- (a probe's, since removed)
     IF.db.minimap = IF.db.minimap or {}
     local s = IF.db.minimap
+    -- (quests were one type before objectives were their own)
+    if s.objective == nil and s.quest ~= nil then s.objective = s.quest end
     for k, v in pairs(DEFAULTS) do
         if s[k] == nil then s[k] = v end
     end
@@ -71,7 +73,7 @@ local PARTY_COLOR = { 0.67, 0.67, 1 }
 function MM.LabelColor(node)
     local t = node.type or N.Type(node.name)
     if t == "herb" or t == "ore" then return MM.SkillColor(node) or KC.white end
-    if t == "quest" then return QUEST_COLOR end
+    if t == "quest" or t == "objective" then return QUEST_COLOR end
     if t == "party" then
         local unit = N.GroupUnit(node.name)
         local class = unit and select(2, UnitClass(unit))
@@ -131,10 +133,10 @@ local function ItemIcon(questID, subject)
     return icon
 end
 
-local function QuestParts(node)
+local function ObjectiveParts(node)
     local title, objectives = N.QuestBlock(node.name)
     if not title then
-        if N.IsQuestTitle(node.name) then return {} end
+        -- (a creature or object a quest needs: its name)
         if not node.name:find("%d+%s*/%s*%d+") then return { { text = node.name, color = node.color } } end
         title, objectives = "", { { subject = node.name, text = node.name } }
         objectives[1].have, objectives[1].need = node.name:match("(%d+)%s*/%s*(%d+)")
@@ -161,9 +163,27 @@ local function QuestParts(node)
     return parts
 end
 
--- A label's pieces: a quest's (QuestParts), else its words in its colour
+-- A quest's label, beside its NPC or its mark: the quest's title (the one
+-- handed in there, else the one to take; "+2": as many more)
+local function QuestTitle(id)
+    local log = C_QuestLog
+    return log and log.GetTitleForQuestID and log.GetTitleForQuestID(id)
+        or (IF.GameData and IF.GameData.QuestName(id))
+end
+
+local function QuestParts(node)
+    if N.IsQuestTitle(node.name) then return { { text = node.name, color = node.color } } end
+    local _, ids = IF.GameData.QuestNpc(node.name)
+    local title = ids and QuestTitle(ids[1])
+    if not title then return { { text = node.name, color = node.color } } end
+    return { { text = title .. (#ids > 1 and ("  +" .. (#ids - 1)) or ""), color = node.color } }
+end
+
+-- A label's pieces: an objective's or a quest's, else its words in its colour
 function MM.LabelParts(node)
-    if (node.type or N.Type(node.name)) == "quest" then return QuestParts(node) end
+    local t = node.type or N.Type(node.name)
+    if t == "objective" then return ObjectiveParts(node) end
+    if t == "quest" then return QuestParts(node) end
     return { { text = MM.LabelText(node), color = node.color } }
 end
 
@@ -460,7 +480,7 @@ local function Rescan(found)
     local radius = Minimap:GetWidth() / 2
     local view = C_Minimap and C_Minimap.GetViewRadius and C_Minimap.GetViewRadius() or radius
     local reach = N.step * 2 * view / radius
-    local fresh, labelled = {}, {}
+    local fresh, labelled, titles = {}, {}, {}
     for _, node in ipairs(found) do
         node.type = N.Type(node.name)
         if MM.Labelled(node.type) then
@@ -471,7 +491,10 @@ local function Rescan(found)
                 -- (one label an area, however many groups it was read as)
                 local area = node.area and node.points and found.east and FollowArea(node, found)
                 if not area then Follow(node, found, reach, fresh) end
-                if not (area and labelled[area]) then nodes[#nodes + 1] = node end
+                -- (a quest's title once: its NPC and its mark both name it)
+                local title = node.type == "quest" and node.sig
+                if not (area and labelled[area]) and not (title and titles[title]) then nodes[#nodes + 1] = node end
+                if title then titles[title] = true end
                 if area then labelled[area] = true end
             end
         end

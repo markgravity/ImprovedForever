@@ -89,9 +89,13 @@ local ITEMS = {
         tip = "Ore veins, in their skill colour. They show on the minimap while Find Minerals is on.",
     }, Show("ore", "Ore")),
     Item({
+        key = "objective", group = "labels", section = "Show", label = "Objectives",
+        tip = "Your quests' areas the minimap marks, each objective's count beside what it is (the"
+            .. " creature, the item), and the creatures and objects a quest still needs.",
+    }, Show("objective", "Objectives")),
+    Item({
         key = "quest", group = "labels", section = "Show", label = "Quests",
-        tip = "In yellow: the quests the minimap marks (their areas and objectives), the NPCs a quest of"
-            .. " yours is handed in to, and the NPCs with a quest for you.",
+        tip = "In yellow, beside its NPC: the quest to hand in there, or the quest an NPC has for you.",
     }, Show("quest", "Quests")),
     Item({
         key = "npc", group = "labels", section = "Show", label = "NPCs",
