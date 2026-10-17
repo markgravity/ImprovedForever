@@ -72,10 +72,23 @@ local ORES = {
 local SKILL_LINE = { herb = 182, ore = 186 }    -- Herbalism, Mining
 local SKILL_NAME = { herb = "Herbalism", ore = "Mining" }
 
--- "herb" / "ore" and the skill it needs, or nil
+-- "herb" / "ore" and the skill it needs, or nil. A name ending in one's is
+-- that one (Forever's own: "Wilted Peacebloom", a Peacebloom)
+local variants = {}  -- name -> { kind, need } or false
 function N.Kind(name)
     if HERBS[name] then return "herb", HERBS[name] end
     if ORES[name] then return "ore", ORES[name] end
+    local v = variants[name]
+    if v == nil then
+        v = false
+        for kind, list in pairs({ herb = HERBS, ore = ORES }) do
+            for base, need in pairs(list) do
+                if #name > #base and name:sub(-#base - 1) == " " .. base then v = { kind, need } end
+            end
+        end
+        variants[name] = v
+    end
+    if v then return v[1], v[2] end
 end
 
 -- The player's skill in a kind's profession (nil: not learnt)
@@ -141,16 +154,24 @@ end
 N.TYPES = { "herb", "ore", "quest", "npc", "party" }
 
 -- The quests in the log, by title -> its quest ID (true: unknown)
-local questTitles
+-- and their objectives' words, lower case ("wilted peacebloom: 0/8")
+local questTitles, objectives
 local function QuestTitles()
     if questTitles then return questTitles end
-    questTitles = {}
+    questTitles, objectives = {}, {}
     local log = C_QuestLog
     if log and log.GetNumQuestLogEntries and log.GetInfo then
         for i = 1, log.GetNumQuestLogEntries() or 0 do
             local info = log.GetInfo(i)
             local title = info and not info.isHeader and info.title
-            if type(title) == "string" and not Secret(title) then questTitles[title] = info.questID or true end
+            if type(title) == "string" and not Secret(title) then
+                questTitles[title] = info.questID or true
+                for _, o in ipairs(info.questID and log.GetQuestObjectives and log.GetQuestObjectives(info.questID) or {}) do
+                    if type(o.text) == "string" and not Secret(o.text) and not o.finished then
+                        objectives[#objectives + 1] = o.text:lower()
+                    end
+                end
+            end
         end
     elseif GetNumQuestLogEntries and GetQuestLogTitle then
         for i = 1, GetNumQuestLogEntries() or 0 do
@@ -163,6 +184,17 @@ end
 
 function N.IsQuestTitle(name)
     return QuestTitles()[name] ~= nil
+end
+
+-- A dot a quest of the log still needs: a creature or object its objectives
+-- name ("Wilted Peacebloom" for "Wilted Peacebloom: 0/8")
+function N.IsQuestTarget(name)
+    QuestTitles()
+    local lower = name:lower()
+    for _, text in ipairs(objectives) do
+        if text:find(lower, 1, true) then return true end
+    end
+    return false
 end
 
 -- A quest of the log's ID, by its title (nil: not in the log, or unknown)
@@ -214,7 +246,7 @@ function N.Type(name)
     if kind then return kind end
     local t = types[name]
     if t then return t end
-    if name:find("\n") or QuestTitles()[name] or name:find("%d+%s*/%s*%d+") then
+    if name:find("\n") or QuestTitles()[name] or name:find("%d+%s*/%s*%d+") or N.IsQuestTarget(name) then
         t = "quest"
     elseif N.GroupUnit(name) then
         t = "party"
@@ -351,7 +383,8 @@ local function NamesAt(px, py, me)
                         color = { tonumber(hex:sub(1, 2), 16) / 255, tonumber(hex:sub(3, 4), 16) / 255,
                             tonumber(hex:sub(5, 6), 16) / 255 }
                     end
-                    pieces[#pieces + 1] = { name = name, color = color }
+                    -- (an NPC's title, "<Warlock Trainer>": a line of its, not a dot)
+                    if not name:find("^<.*>$") then pieces[#pieces + 1] = { name = name, color = color } end
                 end
             end
         end
@@ -441,7 +474,7 @@ end
 -- covers is an area (a quest's): its place the point read nearest its
 -- middle, inside it whatever its shape.
 local NONE = {}
-local AREA = 8       -- points: more is an area, not a dot
+local AREA = 8       -- points: more (and a quest's title and objectives) is an area
 local function GroupName(j, name)
     local hits = j.byName[name]
     local near = N.step * 1.6 * j.yards
@@ -489,7 +522,9 @@ local function GroupName(j, name)
     end
     for k, hit in ipairs(hits) do
         local g = groups[Root(k)]
-        if g.n > AREA then
+        -- (a quest's area: its title and objectives; a single name, however
+        -- wide the minimap's reach round its dot, a dot)
+        if g.n > AREA and name:find("\n") then
             local d = (hit.x - g.x / g.n) ^ 2 + (hit.y - g.y / g.n) ^ 2
             if not g.best or d < g.bestD then g.best, g.bestD = hit, d end
             -- (an area's points, all: Minimap.lua keeps them in the world)
