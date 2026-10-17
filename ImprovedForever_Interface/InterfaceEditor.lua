@@ -23,8 +23,9 @@ local ITEMS = {
     Item({
         key = "target", group = "frames", label = "Target health on top",
         tip = "The target's health across the top of the screen, its name over it, its casts under it, in "
-            .. "place of the game's target frame. The health is coloured by what it is: a player by its class, "
-            .. "else red if hostile, yellow if neutral, green if friendly, grey if tapped by others. With the "
+            .. "place of the game's target frame. The bar is filled and coloured as the target's nameplate is; "
+            .. "its level sits at the left (coloured by how hard it is, a skull when too high), and an elite, "
+            .. "rare or boss shows the nameplate's dragon at the right and a gold or silver border. With the "
             .. "mouse over it, its numbers.",
     }, Toggle("target", "Target health on top", function() IN.UnitFrames.Apply() end)),
     Item({

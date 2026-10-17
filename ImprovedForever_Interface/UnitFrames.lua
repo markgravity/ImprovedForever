@@ -86,6 +86,7 @@ local function Bar(parent, w, h, atlas)
     frame:SetAllPoints()
     bar.box = box
     bar.bg = bg
+    bar.frame = frame
     bar.text = Text(border, "TextStatusBarText")
     bar.text:SetPoint("CENTER")
     return bar
@@ -193,13 +194,18 @@ end
 
 ---------------------------------------------------------------------------
 -- The target's health across the top centre: its name over a bar 1.5
--- times the casting bar, coloured by what the target is; its casts under
--- it
+-- times the casting bar, filled and coloured as its nameplate is; its
+-- level in the game's small circle at the bar's left (coloured by how hard
+-- it is, a skull when too high to say), what it is at the right (the
+-- nameplate's elite / rare dragon) and in the border's tint; its casts
+-- under it
 ---------------------------------------------------------------------------
 local SCALE = 1.5
 local BAR_W, BAR_H = 214 * SCALE, 16 * SCALE
 local NAME_H = 22
 local CAST_H, CAST_GAP = 16, 4
+local BADGE = 30
+local NAMEPLATE_FILL = "nameplates-bar-fill"
 
 local target = UnitButton("ImprovedForeverTargetBar", "target", BAR_W, NAME_H + BAR_H + CAST_GAP + CAST_H)
 target:SetPoint("TOP", UIParent, "TOP", 0, -36)
@@ -211,22 +217,38 @@ do
     t.name:SetPoint("TOPLEFT")
     t.name:SetPoint("TOPRIGHT")
     t.name:SetHeight(NAME_H - 2)
-    t.health = Bar(t, BAR_W, BAR_H, HEALTH_FILL)
+    t.health = Bar(t, BAR_W, BAR_H, NAMEPLATE_FILL)
     t.health.box:SetPoint("TOP", 0, -NAME_H)
+
+    -- (over the bar's ends: the level, the classification)
+    local ends = CreateFrame("Frame", nil, t.health.box)
+    ends:SetAllPoints()
+    ends:SetFrameLevel(t.health:GetFrameLevel() + 4)
+    t.classIcon = ends:CreateTexture(nil, "ARTWORK")
+    t.classIcon:SetSize(BADGE + 6, BADGE + 4)
+    t.classIcon:SetPoint("CENTER", t.health.box, "RIGHT", -2, 0)
+    t.classIcon:Hide()
+    t.badge = Atlas(ends, "OVERLAY", "UI-HUD-UnitFrame-SmallCircle", 1)
+    t.badge:SetSize(BADGE, BADGE)
+    t.badge:SetPoint("CENTER", t.health.box, "LEFT", 2, 0)
+    t.level = Text(ends, "GameFontNormal")
+    t.level:SetDrawLayer("OVERLAY", 2)
+    t.level:SetPoint("CENTER", t.badge, "CENTER", 0, -0.5)
+    t.skull = Atlas(ends, "OVERLAY", "UI-HUD-UnitFrame-Target-HighLevelTarget_Icon", 2)
+    t.skull:SetPoint("CENTER", t.badge, "CENTER")
+    t.skull:Hide()
 end
 
--- The health's colour by what the target is: a player by its class, else
--- by its reaction to you (the game's FACTION_BAR_COLORS: hostile red,
--- unfriendly orange, neutral yellow, friendly green), grey when tapped by
--- others. A secret answer: red if you can attack it, else green.
-local REACTION = {
-    { 0.8, 0.3, 0.22 }, { 0.8, 0.3, 0.22 }, { 0.75, 0.27, 0 }, { 0.9, 0.7, 0 },
-    { 0, 0.6, 0.1 }, { 0, 0.6, 0.1 }, { 0, 0.6, 0.1 }, { 0, 0.6, 0.1 },
-}
-
-local function UnitColor(unit)
-    if Flag(UnitIsTapDenied, unit) then return 0.6, 0.6, 0.6 end
-    if Flag(UnitIsPlayer, unit) then
+-- The health's colour, as the game's nameplate works it out
+-- (CompactUnitFrame_UpdateHealthColor with the nameplates' options): grey
+-- dead, a player by its class, light grey tapped by others, red fighting
+-- you, a friendly player light blue, else its selection colour (hostile
+-- red, neutral yellow, friendly green...). An answer that can't be read:
+-- the next rule.
+local function NameplateColor(unit)
+    local player = Flag(UnitIsPlayer, unit)
+    if Flag(UnitIsDead, unit) and not player then return 0.5, 0.5, 0.5 end
+    if player then
         local ok, c = pcall(function()
             local _, class = UnitClass(unit)
             local color = RAID_CLASS_COLORS[class]
@@ -234,16 +256,46 @@ local function UnitColor(unit)
         end)
         if ok and c then return c[1], c[2], c[3] end
     end
-    local ok, c = pcall(function()
-        local reaction = UnitReaction(unit, "player")
-        local color = FACTION_BAR_COLORS and FACTION_BAR_COLORS[reaction]
-        if color then return { color.r, color.g, color.b } end
-        return REACTION[reaction]
+    if Flag(UnitIsTapDenied, unit) then return 0.9, 0.9, 0.9 end
+    local friend = Flag(function(u) return UnitIsFriend("player", u) end, unit)
+    local threat = Flag(function(u) return UnitThreatSituation("player", u) ~= nil end, unit)
+    if threat and not friend then return 1, 0, 0 end
+    if player and friend then return 0.667, 0.667, 1 end
+    local ok, r, g, b = pcall(UnitSelectionColor, unit, true)
+    if ok and r then return r, g, b end
+    return 1, 0, 0
+end
+
+-- What it is: the nameplate's icon and the border's tint
+local CLASSIFICATION = {
+    worldboss = { icon = "nameplates-icon-elite-gold", tint = { 1, 0.6, 0.25 } },
+    elite = { icon = "nameplates-icon-elite-gold", tint = { 1, 0.82, 0.35 } },
+    rareelite = { icon = "nameplates-icon-elite-silver", tint = { 0.8, 0.88, 1 } },
+    rare = { icon = "UI-HUD-UnitFrame-Target-PortraitOn-Boss-Rare-Star", tint = { 0.8, 0.88, 1 } },
+}
+
+local function Classification(unit)
+    local ok, c = pcall(function() return CLASSIFICATION[UnitClassification(unit)] end)
+    return ok and c or nil
+end
+
+-- Its level, coloured by how hard it is for you; a skull when it's too
+-- high to say
+local function Level(t, unit)
+    local ok, level, r, g, b = pcall(function()
+        local l = UnitLevel(unit)
+        if not l or l <= 0 then return nil end
+        local color = (GetCreatureDifficultyColor or GetQuestDifficultyColor)(l)
+        return l, color.r, color.g, color.b
     end)
-    if ok and c then return c[1], c[2], c[3] end
-    local attack = Flag(function(u) return UnitCanAttack("player", u) end, unit)
-    if attack then return REACTION[1][1], REACTION[1][2], REACTION[1][3] end
-    return REACTION[5][1], REACTION[5][2], REACTION[5][3]
+    local skull = ok and not level
+    t.skull:SetShown(skull)
+    if ok and level then
+        t.level:SetText(level)
+        t.level:SetTextColor(r, g, b)
+    else
+        t.level:SetText("")
+    end
 end
 
 function target:Refresh()
@@ -252,8 +304,17 @@ function target:Refresh()
     Try(self.name.SetText, self.name, UnitName(unit))
     NameColor(self)
     FillHealth(self)
-    self.health:SetStatusBarDesaturated(true)
-    self.health:SetStatusBarColor(UnitColor(unit))
+    self.health:SetStatusBarColor(NameplateColor(unit))
+    Level(self, unit)
+    local c = Classification(unit)
+    if c then
+        self.classIcon:SetAtlas(c.icon)
+        self.classIcon:Show()
+        self.health.frame:SetVertexColor(c.tint[1], c.tint[2], c.tint[3])
+    else
+        self.classIcon:Hide()
+        self.health.frame:SetVertexColor(1, 1, 1)
+    end
 end
 
 ---------------------------------------------------------------------------
@@ -502,8 +563,9 @@ end
 -- Events: each frame refreshed when its unit changes
 ---------------------------------------------------------------------------
 local function Listen(frame, unitEvents, events)
-    for _, e in ipairs(unitEvents) do frame:RegisterUnitEvent(e, frame.unit) end
-    for _, e in ipairs(events or {}) do frame:RegisterEvent(e) end
+    -- (an event this client hasn't: left out, not an error)
+    for _, e in ipairs(unitEvents) do pcall(frame.RegisterUnitEvent, frame, e, frame.unit) end
+    for _, e in ipairs(events or {}) do pcall(frame.RegisterEvent, frame, e) end
     frame:SetScript("OnEvent", function(self) self:Refresh() end)
     frame:SetScript("OnShow", function(self) self:Refresh() end)
 end
@@ -521,7 +583,8 @@ end
 
 Listen(player, Join(UNIT, POWER_EVENTS), { "PLAYER_LEVEL_UP", "PLAYER_REGEN_DISABLED", "PLAYER_REGEN_ENABLED",
     "PLAYER_ENTERING_WORLD", "CVAR_UPDATE" })
-Listen(target, { "UNIT_HEALTH", "UNIT_MAXHEALTH", "UNIT_NAME_UPDATE", "UNIT_FLAGS", "UNIT_FACTION" },
+Listen(target, { "UNIT_HEALTH", "UNIT_MAXHEALTH", "UNIT_NAME_UPDATE", "UNIT_FLAGS", "UNIT_FACTION", "UNIT_LEVEL",
+    "UNIT_CLASSIFICATION_CHANGED", "UNIT_THREAT_LIST_UPDATE", "UNIT_THREAT_SITUATION_UPDATE" },
     { "PLAYER_TARGET_CHANGED", "CVAR_UPDATE" })
 
 ---------------------------------------------------------------------------
