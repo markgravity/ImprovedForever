@@ -28,6 +28,13 @@ local ITEMS = {
             .. "mouse over it, its numbers.",
     }, Toggle("target", "Target health on top", function() IN.UnitFrames.Apply() end)),
     Item({
+        key = "cards", group = "frames", label = "Minion and party cards",
+        tip = "Your pet (Minions) and your party (Party) as cards standing on the experience line, either side "
+            .. "of the middle, in place of the game's pet and party frames: each its model, its class colour round "
+            .. "it, its level, name, health and power; faint when out of range. Click one to target it, right "
+            .. "click for its menu. Hidden in a raid (the game's raid frames show).",
+    }, Toggle("cards", "Minion and party cards", function() IN.PartyCards.Apply() end)),
+    Item({
         key = "xp", group = "frames", label = "Experience line",
         tip = "Your experience as a thin line along the screen's bottom edge, the rested part beyond it, in "
             .. "place of the game's experience bar (its reputation bar at the top level stays). The mouse over "

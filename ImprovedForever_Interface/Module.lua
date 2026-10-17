@@ -1,5 +1,6 @@
 -- Improved Forever: Interface. The game's HUD rearranged: its player and
--- target frames hidden, ours in their place (UnitFrames.lua), the
+-- target frames hidden, ours in their place (UnitFrames.lua), your pet
+-- and party as cards on the experience line (PartyCards.lua), the
 -- experience bar a line along the bottom edge (XPBar.lua), the gamepad
 -- bar as two diamonds bottom right (GamepadBar.lua), the chat as only its
 -- lines while not in use (ChatView.lua, ChatFade.lua), set up in its tab
@@ -19,6 +20,7 @@ IF.AddCommand("chatprobe", function() IN.ChatFade.Probe() end, ": what keeps the
 local DEFAULTS = {
     player = true,      -- the player frame bottom left (and the pet's beside it)
     target = true,      -- the target's health on top, its name over it
+    cards = true,       -- your pet and party as cards on the experience line
     chatDim = true,     -- the chat as only its lines while not in use
     xp = true,          -- the experience as a line along the screen's bottom edge
     pad = true,         -- the gamepad bar as Hogwarts Legacy's spell diamonds, bottom right

@@ -24,9 +24,11 @@ local GetRegions = M.GetRegions
 local rmt = getmetatable(probe:CreateTexture())
 local R = (rmt and type(rmt.__index) == "table") and rmt.__index or {}
 
--- Which of several frames showing one unit: group frames first (by the
--- names LibGetFrame knows), the player / target frames last
+-- Which of several frames showing one unit: the Interface module's cards
+-- first (the game's party frames are faded under them), then group frames
+-- (by the names LibGetFrame knows), the player / target frames last
 local PREFER = {
+    "^ImprovedForeverPartyCard", "^ImprovedForeverMinionCard",
     "^CompactParty", "^CompactRaid", "^XPerl_Raid_Grp", "^XPerl_party", "^ERF", "^ElvUF_Raid", "^ElvUF_Party",
     "^oUF_.-Raid", "^oUF_.-Party", "^Cell", "^Grid2Layout", "^Vd", "^HealBot_HealUnit", "^SUFHeader",
     "^PitBull4_Groups", "^Dander", "^PartyFrame", "^PartyMemberFrame",
@@ -44,11 +46,14 @@ local function Rank(name)
     return 50
 end
 
--- (never reached into: restricted, or ours)
+-- (never reached into: restricted, or ours but the Interface module's
+-- party and minion cards)
 local function Skipped(frame)
     if IsForbidden and IsForbidden(frame) then return true end
     local name = GetName(frame)
-    return type(name) == "string" and (name:find("NamePlate") or name:find("^ImprovedForever")) and true or false
+    if type(name) ~= "string" then return false end
+    if name:find("^ImprovedForeverPartyCard") or name:find("^ImprovedForeverMinionCard") then return false end
+    return (name:find("NamePlate") or name:find("^ImprovedForever")) and true or false
 end
 
 ---------------------------------------------------------------------------

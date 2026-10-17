@@ -87,14 +87,19 @@ end
 -- A label's pieces: { atlas or icon (an item's, round), text, color }. A
 -- quest's: each objective's count beside what it is: the creature to slay
 -- (its portrait), the item (its icon); else the game's own soft-target
--- icon of its kind; an NPC with a quest for you its name. A quest's mark with no
--- objectives (handed in there) none: the minimap shows its "?" itself
+-- icon of its kind; a creature or object a quest needs, what it is and its
+-- name; a quest's mark or NPC, the quest giver's mark ("?" / "!") and the
+-- quest's title, so none reads as a herb's
 ---------------------------------------------------------------------------
 local OBJECTIVE_ATLAS = {
     monster = "Crosshair_Attack_48", item = "Crosshair_pickup_48",
     object = "Crosshair_interact_48", event = "Crosshair_Quest_48",
 }
 local COUNT_COLOR, DONE_COLOR = { 1, 1, 1 }, { 0.5, 0.5, 0.5 }
+
+local function HasAtlas(name)
+    return C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(name) ~= nil
+end
 
 -- Words alone, for matching an objective the minimap gives to the log's
 -- ("5/10 Young Night Web Spider slain", "Young Night Web Spider slain: 5/10")
@@ -136,8 +141,14 @@ end
 local function ObjectiveParts(node)
     local title, objectives = N.QuestBlock(node.name)
     if not title then
-        -- (a creature or object a quest needs: its name)
-        if not node.name:find("%d+%s*/%s*%d+") then return { { text = node.name, color = node.color } } end
+        -- (a creature or object a quest needs: what it is, its name)
+        if not node.name:find("%d+%s*/%s*%d+") then
+            local GD = IF.GameData
+            local npc = GD and GD.NpcByName and GD.NpcByName(node.name)
+            local icon = not npc and ItemIcon(nil, node.name) or nil
+            local atlas = OBJECTIVE_ATLAS[npc and "monster" or "object"]
+            return { { npc = npc, icon = icon, atlas = atlas, text = node.name, color = node.color } }
+        end
         title, objectives = "", { { subject = node.name, text = node.name } }
         objectives[1].have, objectives[1].need = node.name:match("(%d+)%s*/%s*(%d+)")
     end
@@ -171,12 +182,25 @@ local function QuestTitle(id)
         or (IF.GameData and IF.GameData.QuestName(id))
 end
 
+-- (its mark before it, as the quest giver's: "?" to hand in, "!" to take,
+-- the game's quest icon when neither is known)
+local QUEST_ATLAS = { ["end"] = "QuestTurnin", start = "QuestNormal" }
+local function QuestAtlas(kind)
+    local atlas = QUEST_ATLAS[kind]
+    return atlas and HasAtlas(atlas) and atlas or OBJECTIVE_ATLAS.event
+end
+
 local function QuestParts(node)
-    if N.IsQuestTitle(node.name) then return { { text = node.name, color = node.color } } end
-    local _, ids = IF.GameData.QuestNpc(node.name)
+    if N.IsQuestTitle(node.name) then
+        local id = N.QuestID(node.name)
+        local log = C_QuestLog
+        local done = id and log and log.IsComplete and log.IsComplete(id)
+        return { { atlas = QuestAtlas(done and "end"), text = node.name, color = node.color } }
+    end
+    local kind, ids = IF.GameData.QuestNpc(node.name)
     local title = ids and QuestTitle(ids[1])
-    if not title then return { { text = node.name, color = node.color } } end
-    return { { text = title .. (#ids > 1 and ("  +" .. (#ids - 1)) or ""), color = node.color } }
+    if not title then return { { atlas = QuestAtlas(kind), text = node.name, color = node.color } } end
+    return { { atlas = QuestAtlas(kind), text = title .. (#ids > 1 and ("  +" .. (#ids - 1)) or ""), color = node.color } }
 end
 
 -- A label's pieces: an objective's or a quest's, else its words in its colour
@@ -222,10 +246,6 @@ overlay:Hide()
 local BAR_H = 16     -- the header's height
 local ICON_SIZE = 13
 local PAD, SPACE = 5, 5   -- inside the bar's ends; between pieces
-
-local function HasAtlas(name)
-    return C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(name) ~= nil
-end
 
 local function Chip(parent)
     local c = K.NewFrame("Frame", nil, parent)

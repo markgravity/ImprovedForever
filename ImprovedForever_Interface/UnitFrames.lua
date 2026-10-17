@@ -5,7 +5,8 @@
 --   its casts under it;
 -- * the player's health and power bottom left, its round portrait on
 --   their left (the ring of the game's unit frame), its level on it, a
---   combat mark by its name; its pet's, smaller, beside it.
+--   combat mark by its name (its pet: a card at the bottom centre,
+--   PartyCards.lua).
 -- Ours are secure unit buttons (a click targets, a right click opens the
 -- unit's menu), shown by the game's unit watch, so they work in a fight.
 -- The game's are never hidden or changed (a property of the game's frames
@@ -435,9 +436,8 @@ local function Ring(parent, size, ring, inner)
 end
 
 -- (the player frame's art: 198 x 71, its 60 px portrait's centre 37, 34.5
--- in; the pet's, the target of target's: 120 x 49, its 37 px one's 23.5 in)
+-- in)
 local PLAYER_RING = { atlas = "UI-HUD-UnitFrame-Player-PortraitOn", x = 37, y = 34.5, r = 35 }
-local PET_RING = { atlas = "UI-HUD-UnitFrame-TargetofTarget-PortraitOn", x = 23.5, y = 23.5, r = 23 }
 
 ---------------------------------------------------------------------------
 -- The player's bottom left, as the target's: its portrait on the left
@@ -499,50 +499,6 @@ function player:Refresh()
 end
 
 ---------------------------------------------------------------------------
--- The pet's beside it, the same, two thirds the size
----------------------------------------------------------------------------
-local PET_W, PET_H, PET_POWER_H, PET_NAME_H = BAR_W * 2 / 3, BAR_H * 2 / 3, POWER_H * 2 / 3, 18
-local PET_RING_SIZE = PET_NAME_H + PET_H + 2 + PET_POWER_H + 6
-local PET_OVERLAP = 4
-local pet = UnitButton("ImprovedForeverPetFrame", "pet", PET_RING_SIZE - PET_OVERLAP + PET_W, PET_RING_SIZE)
-pet:SetPoint("BOTTOMLEFT", player, "BOTTOMRIGHT", 16, 0)
-pet:Hide()
-
-do
-    local p = pet
-    p.ring = Ring(p, PET_RING_SIZE, PET_RING, 37 / 46)
-    p.ring:SetPoint("LEFT")
-    p.portrait = p.ring.face
-    local bars = CreateFrame("Frame", nil, p)
-    bars:SetSize(PET_W, PET_NAME_H + PET_H + 2 + PET_POWER_H)
-    bars:SetPoint("RIGHT")
-    p.ring:SetFrameLevel(bars:GetFrameLevel() + 5)
-    p.name = Text(bars, "GameFontNormal", "LEFT")
-    p.name:SetPoint("TOPLEFT", PET_OVERLAP + 4, 0)
-    p.name:SetPoint("TOPRIGHT", -4, 0)
-    p.name:SetHeight(PET_NAME_H - 2)
-    p.health = Bar(bars, PET_W, PET_H, HEALTH_FILL)
-    p.health.box:SetPoint("TOP", 0, -PET_NAME_H)
-    p.power = Bar(bars, PET_W, PET_POWER_H, POWER_FILL .. "Mana")
-    p.power.box:SetPoint("TOP", p.health.box, "BOTTOM", 0, -2)
-    local small = _G.TextStatusBarTextSmall or _G.SystemFont_Shadow_Small
-    if small then
-        p.health.text:SetFontObject(small)
-        p.power.text:SetFontObject(small)
-    end
-end
-
-function pet:Refresh()
-    local unit = self.unit
-    if not UnitExists(unit) then return end
-    SetPortraitTexture(self.portrait, unit)
-    Try(self.name.SetText, self.name, UnitName(unit))
-    NameColor(self)
-    FillHealth(self)
-    FillPower(self)
-end
-
----------------------------------------------------------------------------
 -- Events: each frame refreshed when its unit changes
 ---------------------------------------------------------------------------
 local function Listen(frame, unitEvents, events)
@@ -565,7 +521,6 @@ end
 
 Listen(player, Join(UNIT, POWER_EVENTS), { "PLAYER_LEVEL_UP", "PLAYER_REGEN_DISABLED", "PLAYER_REGEN_ENABLED",
     "PLAYER_ENTERING_WORLD", "CVAR_UPDATE" })
-Listen(pet, Join(UNIT, POWER_EVENTS), { "UNIT_PET", "PLAYER_ENTERING_WORLD", "CVAR_UPDATE" })
 Listen(target, { "UNIT_HEALTH", "UNIT_MAXHEALTH", "UNIT_NAME_UPDATE", "UNIT_FLAGS", "UNIT_FACTION" },
     { "PLAYER_TARGET_CHANGED", "CVAR_UPDATE" })
 
@@ -614,6 +569,10 @@ end
 
 UF.Cover = Cover
 UF.EditMode = EditMode
+-- (the pieces the party cards are made of too, PartyCards.lua)
+UF.Try, UF.Flag, UF.Text, UF.Atlas, UF.Bar = Try, Flag, Text, Atlas, Bar
+UF.FillHealth, UF.FillPower, UF.UnitButton, UF.NameColor = FillHealth, FillPower, UnitButton, NameColor
+UF.Listen, UF.Join, UF.UNIT, UF.POWER_EVENTS = Listen, Join, UNIT, POWER_EVENTS
 
 -- What the settings ask, now (Edit Mode: the game's shown to be moved,
 -- ours drawn at 0)
@@ -632,7 +591,6 @@ local function Watch()
     Cover(TargetFrame, hideTarget)
     local alpha = edit and 0 or 1
     player:SetAlpha(alpha)
-    pet:SetAlpha(alpha)
     target:SetAlpha(alpha)
 end
 
@@ -643,7 +601,7 @@ IN.Watcher("unit frames", 0.1, Watch)
 ---------------------------------------------------------------------------
 local pending
 
-local function Watched(frame, on)
+function UF.Watched(frame, on)
     if on and not frame.watched then
         RegisterUnitWatch(frame)
         frame.watched = true
@@ -662,8 +620,7 @@ function UF.Apply()
     pending = nil
     local s = Settings()
     player:SetShown(s.player)
-    Watched(pet, s.player)
-    Watched(target, s.target)
+    UF.Watched(target, s.target)
     Watch()
 end
 
