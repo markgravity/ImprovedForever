@@ -197,8 +197,8 @@ end
 -- times the casting bar, filled and coloured as its nameplate is; its
 -- level in the game's small circle at the bar's left (coloured by how hard
 -- it is, a skull when too high to say), what it is at the right (the
--- nameplate's elite / rare dragon) and in the border's tint; its casts
--- under it
+-- nameplate's elite / rare dragon) and in the border's tint; under it,
+-- the quests it counts for (as its tooltip has them), then its casts
 ---------------------------------------------------------------------------
 local SCALE = 1.5
 local BAR_W, BAR_H = 214 * SCALE, 16 * SCALE
@@ -237,6 +237,46 @@ do
     t.skull = Atlas(ends, "OVERLAY", "UI-HUD-UnitFrame-Target-HighLevelTarget_Icon", 2)
     t.skull:SetPoint("CENTER", t.badge, "CENTER")
     t.skull:Hide()
+
+    t.quest = t:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    t.quest:SetPoint("TOP", t.health.box, "BOTTOM", 0, -3)
+    t.quest:SetWidth(BAR_W * 1.6)  -- (one line: room past the bar, cut with "..." past that)
+    t.quest:SetJustifyH("CENTER")
+    t.quest:SetWordWrap(false)
+end
+
+-- The quests the target counts for, as its tooltip lists them (the game's
+-- tooltip data: a quest's title, then its objectives), on one line: each
+-- quest's title (gold), its objectives after it (white, grey once done),
+-- quests apart. Read whole or not at all (a line the game keeps secret:
+-- none shown).
+local TITLE = Enum.TooltipDataLineType and Enum.TooltipDataLineType.QuestTitle or 17
+local OBJECTIVE = Enum.TooltipDataLineType and Enum.TooltipDataLineType.QuestObjective or 8
+local QUEST_GAP, OBJECTIVE_GAP = "    ", "  "
+
+local function QuestText(unit)
+    if not (C_TooltipInfo and C_TooltipInfo.GetUnit) then return "" end
+    local ok, text = pcall(function()
+        local data = C_TooltipInfo.GetUnit(unit)
+        local quests, current = {}, nil
+        for _, line in ipairs(data and data.lines or {}) do
+            if line.type == TITLE and line.leftText then
+                current = { "|cffffd100" .. line.leftText .. ":|r" }
+                quests[#quests + 1] = current
+            elseif line.type == OBJECTIVE and line.leftText then
+                if not current then
+                    current = {}
+                    quests[#quests + 1] = current
+                end
+                current[#current + 1] = (line.completed and "|cff808080" or "|cffffffff") .. line.leftText .. "|r"
+            end
+        end
+        for i, quest in ipairs(quests) do
+            quests[i] = table.concat(quest, OBJECTIVE_GAP)
+        end
+        return table.concat(quests, QUEST_GAP)
+    end)
+    return ok and text or ""
 end
 
 -- The health's colour, as the game's nameplate works it out
@@ -306,6 +346,7 @@ function target:Refresh()
     FillHealth(self)
     self.health:SetStatusBarColor(NameplateColor(unit))
     Level(self, unit)
+    self.quest:SetText(QuestText(unit))
     local c = Classification(unit)
     if c then
         self.classIcon:SetAtlas(c.icon)
@@ -338,7 +379,8 @@ local FILL = {
 local INTERRUPTED_HOLD = 0.6
 
 local cast = Bar(target, BAR_W, CAST_H, FILL.cast)
-cast.box:SetPoint("TOP", target.health.box, "BOTTOM", 0, -CAST_GAP)
+-- (under the quests, when it has any)
+cast.box:SetPoint("TOP", target.quest, "BOTTOM", 0, -CAST_GAP)
 cast.box:Hide()
 cast.text:SetFontObject(_G.TextStatusBarTextSmall or _G.SystemFont_Shadow_Small or "TextStatusBarText")
 cast.icon = cast.box:CreateTexture(nil, "ARTWORK")
@@ -585,7 +627,7 @@ Listen(player, Join(UNIT, POWER_EVENTS), { "PLAYER_LEVEL_UP", "PLAYER_REGEN_DISA
     "PLAYER_ENTERING_WORLD", "CVAR_UPDATE" })
 Listen(target, { "UNIT_HEALTH", "UNIT_MAXHEALTH", "UNIT_NAME_UPDATE", "UNIT_FLAGS", "UNIT_FACTION", "UNIT_LEVEL",
     "UNIT_CLASSIFICATION_CHANGED", "UNIT_THREAT_LIST_UPDATE", "UNIT_THREAT_SITUATION_UPDATE" },
-    { "PLAYER_TARGET_CHANGED", "CVAR_UPDATE" })
+    { "PLAYER_TARGET_CHANGED", "CVAR_UPDATE", "QUEST_LOG_UPDATE" })
 
 ---------------------------------------------------------------------------
 -- The game's frames drawn at 0 while ours show, and the mouse they'd

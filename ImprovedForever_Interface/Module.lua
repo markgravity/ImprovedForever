@@ -14,6 +14,9 @@ IF.AddModule({ key = "interface", label = "Interface", icon = IF.TEX .. "ic_mod_
 local IN = {}
 IF.Interface = IN
 
+-- /if padprobe: what the game's gamepad bar holds (GamepadBar.lua)
+IF.AddCommand("padprobe", function() IN.GamepadBar.Probe() end, ": what the gamepad bar's buttons hold")
+
 -- /if chatprobe: what keeps the game's chat shown (ChatFade.lua)
 IF.AddCommand("chatprobe", function() IN.ChatFade.Probe() end, ": what keeps the game's chat shown")
 

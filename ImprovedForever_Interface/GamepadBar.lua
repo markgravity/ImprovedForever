@@ -11,7 +11,9 @@
 -- get, and ours mirrors the buttons of whichever bar it has active (its
 -- top / L2 / R2 / both bar, or one standing in: a vehicle's, a stance
 -- bar...): their icon, its tint (unusable, out of range), count,
--- cooldown, pressed and toggled state, spell alert. Its two class action
+-- cooldown, pressed and toggled state, spell alert; a spell, item or macro
+-- dropped on ours with the mouse goes into the slot it shows, and one
+-- dragged off is picked up (out of combat). Its two class action
 -- buttons (L1 + L2, R1 + R2) too, beside the diamonds, their two-glyph
 -- prompt over them.
 -- A cooldown can be a secret (Forever restricts them at times): the
@@ -41,7 +43,7 @@ local FACE_KEYS = { "PAD3", "PAD4", "PAD2", "PAD1" }
 local DPAD_KEYS = { "PADDLEFT", "PADDUP", "PADDRIGHT", "PADDDOWN" }
 
 local FACE = { size = 56, spread = 60, glyph = 22 }
-local DPAD = { size = 44, spread = 46, glyph = 18 }
+local DPAD = { size = 44, spread = 52, glyph = 18 }
 local MARGIN_X, MARGIN_Y = 40, 40
 local GAP = 34          -- (between the two diamonds)
 
@@ -68,6 +70,31 @@ dpadCenter:SetPoint("CENTER", faceCenter, "CENTER", -(Extent(FACE) + GAP + Exten
 -- press's glyph
 ---------------------------------------------------------------------------
 local CIRCLE = "Interface\\CharacterFrame\\TempPortraitAlphaMask"
+
+-- The game's action slot ours shows, when it is one (the top bar's own
+-- face buttons, drawn on SpecialActionIcon, aren't)
+local function Slot(b)
+    local native = b.native
+    if not (native and native.action) then return nil end
+    local special = native.SpecialActionIcon
+    if special and special:IsShown() then return nil end
+    return native.action
+end
+
+local function Drop(b)
+    local slot = Slot(b)
+    if not slot or IF.InCombat() or not GetCursorInfo() then return end
+    PlaceAction(slot)
+end
+
+-- (bars locked: only with the pick-up modifier, as the game's)
+local function DragOff(b)
+    local slot = Slot(b)
+    if not slot or IF.InCombat() or not HasAction(slot) then return end
+    local locked = GetCVarBool and GetCVarBool("lockActionBars")
+    if locked and not IsModifiedClick("PICKUPACTION") then return end
+    PickupAction(slot)
+end
 
 local function Button(center, d, dir, key)
     local b = CreateFrame("Frame", nil, holder)
@@ -105,6 +132,13 @@ local function Button(center, d, dir, key)
     b.glow:SetSize(d.size * 80 / 46, d.size * 80 / 46)
     b.glow:SetBlendMode("ADD")
     b.glow:Hide()
+    -- (toggled on: the same glow, its own texture: GetChecked can be a
+    -- secret, handed to SetAlphaFromBoolean as it is)
+    b.checkGlow = over:CreateTexture(nil, "OVERLAY", nil, 1)
+    b.checkGlow:SetAtlas("gamepad-actionbar-circleslot-border-selected")
+    b.checkGlow:SetAllPoints(b.glow)
+    b.checkGlow:SetBlendMode("ADD")
+    b.checkGlow:SetAlpha(0)
     b.count = over:CreateFontString(nil, "OVERLAY", "NumberFontNormal")
     b.count:SetPoint("BOTTOMRIGHT", b.icon, "BOTTOMRIGHT", 2, -2)
 
@@ -122,6 +156,15 @@ local function Button(center, d, dir, key)
         if pcall(GameTooltip.SetAction, GameTooltip, action) then GameTooltip:Show() end
     end)
     b:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+    -- (the mouse: what it holds dropped into the slot shown, the slot's
+    -- action dragged off, as the game's buttons do; out of combat)
+    b:RegisterForDrag("LeftButton")
+    b:SetScript("OnReceiveDrag", Drop)
+    b:SetScript("OnMouseUp", function(self)
+        if GetCursorInfo() then Drop(self) end
+    end)
+    b:SetScript("OnDragStart", DragOff)
     return b
 end
 
@@ -131,14 +174,32 @@ for i, dir in ipairs(DIRS) do
     buttons[4 + i] = Button(faceCenter, FACE, dir, FACE_KEYS[i])
 end
 
--- The class actions: L1 + L2 at the D-pad diamond's upper left, R1 + R2 at
--- the face diamond's upper right; their prompt (both glyphs) over them,
--- not one beside
+-- The class actions, on one row with the face diamond's top button: L1 +
+-- L2 left of the D-pad diamond's top, R1 + R2 right of the face
+-- diamond's, each just clear of the rings beside it (a ring is drawn
+-- 64 / 46 of its button); their prompt (both glyphs) over them
 local CLASS = { size = DPAD.size, spread = DPAD.spread, glyph = 16 }
-local function ClassButton(center, d, x, keys)
-    local b = Button(center, CLASS, { x, 1 }, nil)
+local CLEAR = 4
+
+local function Ring(d)
+    return d.size * 64 / 46 / 2
+end
+
+-- How far out from its diamond's middle, at height y over it, a class
+-- button clears the diamond's top and side buttons
+local function ClassX(d, y)
+    local need = Ring(d) + Ring(CLASS) + CLEAR
+    local dy = y - d.spread
+    local x = math.sqrt(math.max(need * need - dy * dy, 0))
+    -- (the side button: need from (spread, 0))
+    local side = d.spread + math.sqrt(math.max(need * need - y * y, 0))
+    return math.max(x, side)
+end
+
+local function ClassButton(center, d, sign, y, keys)
+    local b = Button(center, CLASS, { sign, 1 }, nil)
     b:ClearAllPoints()
-    b:SetPoint("CENTER", center, "CENTER", x * d.spread, d.spread)
+    b:SetPoint("CENTER", center, "CENTER", sign * ClassX(d, y), y)
     b.key:ClearAllPoints()
     b.key:SetPoint("BOTTOMRIGHT", b, "TOP", -1, 2)
     b.key2 = b.key:GetParent():CreateTexture(nil, "OVERLAY", nil, 2)
@@ -147,8 +208,12 @@ local function ClassButton(center, d, x, keys)
     b.keyName, b.keyName2 = keys[1], keys[2]
     return b
 end
-local classLeft = ClassButton(dpadCenter, DPAD, -1, { "PADLSHOULDER", "PADLTRIGGER" })
-local classRight = ClassButton(faceCenter, FACE, 1, { "PADRSHOULDER", "PADRTRIGGER" })
+-- (the row: the face diamond's top; the D-pad diamond's middle sits lower
+-- by the difference of their spreads)
+local CLASS_Y = FACE.spread
+local classLeft = ClassButton(dpadCenter, DPAD, -1, CLASS_Y + (FACE.spread - DPAD.spread),
+    { "PADLSHOULDER", "PADLTRIGGER" })
+local classRight = ClassButton(faceCenter, FACE, 1, CLASS_Y, { "PADRSHOULDER", "PADRTRIGGER" })
 
 local function Glyph(tex, key)
     local atlas = key and IF.GlyphAtlas(key)
@@ -221,14 +286,40 @@ local function Cooldown(b, native)
     end
 end
 
+-- What the game's button shows: its own picture when it has one (the top
+-- bar's face buttons are the game's own: interact, inspect, back, jump,
+-- drawn on SpecialActionIcon: an atlas, a cursor, a raid marker), else its
+-- action's icon. Copied onto ours: (texture or atlas, its coords).
+local function Has(v)
+    return Secret(v) or v ~= nil
+end
+
+local function Picture(native)
+    if not (native and native:IsShown()) then return false end
+    local special = native.SpecialActionIcon
+    if special and special:IsShown() then
+        local atlas = special.GetAtlas and special:GetAtlas()
+        if Has(atlas) then return true, nil, atlas end
+        local texture = special:GetTexture()
+        if Has(texture) then return true, texture, nil, { special:GetTexCoord() } end
+    end
+    local icon = native.icon
+    if not (icon and icon:IsShown()) then return false end
+    local texture = icon:GetTexture()
+    if Has(texture) then return true, texture, nil, nil, icon end
+    return false
+end
+
+local FULL = { 0, 0, 0, 1, 1, 0, 1, 1 }
+
 local function Mirror(b, native)
     b.native = native
-    local icon = native and native:IsShown() and native.icon
-    local texture = icon and icon:IsShown() and icon:GetTexture()
-    if not texture then
+    local has, texture, atlas, coords, icon = Picture(native)
+    if not has then
         b.icon:SetTexture(nil)
         b.count:SetText("")
         b.glow:Hide()
+        b.checkGlow:SetAlpha(0)
         b.border:SetAtlas("gamepad-actionbar-circleslot-border-normal")
         if b.cdStart then
             b.cooldown:Clear()
@@ -236,18 +327,65 @@ local function Mirror(b, native)
         end
         return
     end
-    b.icon:SetTexture(texture)
-    b.icon:SetVertexColor(icon:GetVertexColor())
-    b.icon:SetDesaturated(icon:IsDesaturated())
+    if Has(atlas) then
+        b.icon:SetAtlas(atlas)
+    else
+        b.icon:SetTexture(texture)
+        b.icon:SetTexCoord(unpack(coords or FULL))
+    end
+    if icon then
+        b.icon:SetVertexColor(icon:GetVertexColor())
+        b.icon:SetDesaturated(icon:IsDesaturated())
+    else
+        b.icon:SetVertexColor(1, 1, 1)
+        b.icon:SetDesaturated(false)
+    end
     local count = native.Count
     pcall(b.count.SetText, b.count, count and count:IsShown() and count:GetText() or "")
     Cooldown(b, native)
-    local pressed = native.GetButtonState and native:GetButtonState() == "PUSHED"
-    local checked = native.GetChecked and native:GetChecked()
-    b.border:SetAtlas(pressed and "gamepad-actionbar-circleslot-border-pressed"
+    local ok, pressed = pcall(function() return native:GetButtonState() == "PUSHED" end)
+    b.border:SetAtlas(ok and pressed and "gamepad-actionbar-circleslot-border-pressed"
         or "gamepad-actionbar-circleslot-border-normal")
+    local checked = native.GetChecked and native:GetChecked()
+    if not pcall(b.checkGlow.SetAlphaFromBoolean, b.checkGlow, checked, 1, 0) then
+        b.checkGlow:SetAlpha(0)
+    end
     local alert = native.SpellActivationAlert
-    b.glow:SetShown((checked and true or false) or (alert and alert:IsShown() and true or false))
+    b.glow:SetShown(alert ~= nil and alert:IsShown() and true or false)
+end
+
+-- /if padprobe: what the game's active bar holds, logged in the saved
+-- variables (ImprovedForeverDB.padProbe; /reload, then read it)
+function GB.Probe()
+    local pu = PageUnit()
+    local log = { date("%H:%M:%S") .. " pad probe" }
+    IF.db.padProbe = log
+    if not pu then
+        IF.Print("pad probe: no gamepad bar")
+        return
+    end
+    local bars = pu.actionBars or {}
+    local names = {}
+    for key, bar in pairs(bars) do names[bar] = key end
+    local active = pu.activeBar
+    log[#log + 1] = "active " .. tostring(names[active] or active) .. ", page " .. tostring(pu.PageTracker and pu.PageTracker.currentPage)
+    for key, bar in pairs(bars) do
+        log[#log + 1] = string.format("bar %s shown=%s visible=%s", key, tostring(bar:IsShown()), tostring(bar:IsVisible()))
+    end
+    for i = 1, 8 do
+        local n = Native(active, i)
+        if not n then
+            log[#log + 1] = i .. ": no button"
+        else
+            local icon, special = n.icon, n.SpecialActionIcon
+            log[#log + 1] = string.format("%d: %s shown=%s action=%s has=%s icon=%s/%s/%.2f special=%s/%s",
+                i, tostring(n:GetName()), tostring(n:IsShown()), tostring(n.action),
+                tostring(n.action and HasAction(n.action)), tostring(icon and icon:IsShown()),
+                tostring(icon and icon:GetTexture()), icon and icon:GetAlpha() or -1,
+                tostring(special and special:IsShown()), tostring(special and (special:GetAtlas() or special:GetTexture())))
+        end
+    end
+    IF.Print("pad probe: " .. #log .. " lines; /reload to save them")
 end
 
 ---------------------------------------------------------------------------
