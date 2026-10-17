@@ -1,11 +1,13 @@
 -- Minions and party as cards standing on the experience line along the
 -- screen's bottom edge (XPBar.lua): your pet on the left of the middle
--- ("Minions"), your party's four on the right ("Party"), each a card: the
--- unit's model (its round portrait when it's too far to be drawn), a
--- border in its class colour (a minion's gold, grey when dead or offline),
--- its level in the game's small circle at the top left; along its foot,
--- on a dark band, its name over its health and power bars (their percent
--- on them). Faint when out of range.
+-- ("Minions"), your party's four on the right ("Party"), each a card in
+-- the look of the rest of the bottom: the avatar the player's has too
+-- (UnitFrames.lua: the unit's model in the game's tooltip border, a strip
+-- along its top in its class colour (a minion's gold, grey when dead or
+-- offline), its level at the top left); along its foot, on a dark band,
+-- its name over its health and power in our bars (the casting bar's
+-- frame, as the player's).
+-- Faint when out of range.
 -- Each card is a secure unit button (a click targets, a right click opens
 -- the unit's menu) in a place of its own, shown by the game's state
 -- driver (the pet's unit watch; a party member's: there and not in a
@@ -20,100 +22,44 @@ local PC = {}
 IN.PartyCards = PC
 
 local CARD_W, CARD_H, GAP, GROUP_GAP = 76, 100, 8, 40
-local HEALTH_H, POWER_H, BAR_GAP, INSET = 10, 8, 2, 3
-local NAME_H = 13
+local HEALTH_H, POWER_H, BAR_GAP, INSET = 14, 11, 0, 4
+local NAME_H = 14
 local BOTTOM = 4        -- (the cards' bottom: on top of the experience line, LINE_H in XPBar.lua)
-local ZOOM = 0.45
 local HEALTH_FILL = "UI-HUD-UnitFrame-Target-PortraitOn-Bar-Health"
 local POWER_FILL = "UI-HUD-UnitFrame-Target-PortraitOn-Bar-"
-local GOLD = { 1, 0.82, 0 }
-local GREY = { 0.45, 0.45, 0.45 }
 
-local Try, Flag, Text, Atlas = UF.Try, UF.Flag, UF.Text, UF.Atlas
+local Try, Flag, Text, Bar = UF.Try, UF.Flag, UF.Text, UF.Bar
 
 ---------------------------------------------------------------------------
--- A card
+-- A card: the avatar (UnitFrames.lua, as the player's), along its foot on
+-- a dark band its name over its health and power
 ---------------------------------------------------------------------------
-local function Edge(parent, layer)
-    local t = parent:CreateTexture(nil, layer)
-    t:SetColorTexture(1, 1, 1, 1)
-    return t
-end
-
--- A bar inside a card: the unit frames' fill on a dark track, its
--- percent on it in a small font (the text Fill writes, UnitFrames.lua)
-local function MiniBar(parent, atlas, h)
-    local bar = CreateFrame("StatusBar", nil, parent)
-    bar:SetHeight(h)
-    bar:SetStatusBarTexture(atlas)
-    bar:SetMinMaxValues(0, 1)
-    bar:SetValue(1)
-    local track = bar:CreateTexture(nil, "BACKGROUND")
-    track:SetAllPoints()
-    track:SetColorTexture(0, 0, 0, 0.7)
-    bar.text = bar:CreateFontString(nil, "OVERLAY", "SystemFont_Shadow_Small")
-    bar.text:SetPoint("CENTER", 0, 0.5)
-    local tiny = _G.SystemFont_Tiny or _G.SystemFont_Shadow_Small
-    if tiny then bar.text:SetFontObject(tiny) end
-    bar.text:SetShadowOffset(1, -1)
-    return bar
-end
-
 local function Card(name, unit)
     local b = UF.UnitButton(name, unit, CARD_W, CARD_H)
     b:Hide()
+    b.avatar = UF.Avatar(b, CARD_W, CARD_H)
+    b.avatar:SetAllPoints()
+    b.portrait = b.avatar.portrait
 
-    local bg = b:CreateTexture(nil, "BACKGROUND")
-    bg:SetAllPoints()
-    bg:SetColorTexture(0.04, 0.04, 0.06, 0.92)
-
-    b.portrait = b:CreateTexture(nil, "ARTWORK")
-    b.portrait:SetPoint("CENTER", 0, 6)
-    b.portrait:SetSize(CARD_W - 16, CARD_W - 16)
-    b.model = CreateFrame("PlayerModel", nil, b)
-    b.model:SetPoint("TOPLEFT", 3, -3)
-    b.model:SetPoint("BOTTOMRIGHT", -3, 3)
-
-    -- (over the model: its border, the level, the name and bars)
-    local over = CreateFrame("Frame", nil, b)
-    over:SetAllPoints()
-    over:SetFrameLevel(b.model:GetFrameLevel() + 2)
+    local over = b.avatar.over
     local shade = over:CreateTexture(nil, "BACKGROUND")
     shade:SetPoint("BOTTOMLEFT", INSET, INSET)
     shade:SetPoint("BOTTOMRIGHT", -INSET, INSET)
-    shade:SetHeight(POWER_H + BAR_GAP + HEALTH_H + NAME_H + 3)
-    shade:SetColorTexture(0, 0, 0, 0.6)
-    b.edges = {}
-    local function E(p1, p2, w, h)
-        local t = Edge(over, "BORDER")
-        t:SetPoint(p1)
-        t:SetPoint(p2)
-        if w then t:SetWidth(w) end
-        if h then t:SetHeight(h) end
-        b.edges[#b.edges + 1] = t
-    end
-    E("TOPLEFT", "TOPRIGHT", nil, 2)
-    E("BOTTOMLEFT", "BOTTOMRIGHT", nil, 2)
-    E("TOPLEFT", "BOTTOMLEFT", 2, nil)
-    E("TOPRIGHT", "BOTTOMRIGHT", 2, nil)
+    shade:SetHeight(POWER_H + HEALTH_H + NAME_H + 4)
+    shade:SetColorTexture(0, 0, 0, 0.65)
 
-    b.gem = Atlas(over, "OVERLAY", "UI-HUD-UnitFrame-SmallCircle", 1)
-    b.gem:SetSize(24, 24)
-    b.gem:SetPoint("CENTER", b, "TOPLEFT", 6, -6)
-    b.level = Text(over, "GameFontHighlightSmall")
-    b.level:SetDrawLayer("OVERLAY", 2)
-    b.level:SetPoint("CENTER", b.gem, "CENTER", 0, -0.5)
-    -- (along its foot: the power bar, the health bar over it, the name
-    -- over that)
-    b.power = MiniBar(over, POWER_FILL .. "Mana", POWER_H)
-    b.power:SetPoint("BOTTOMLEFT", INSET, INSET)
-    b.power:SetPoint("BOTTOMRIGHT", -INSET, INSET)
-    b.health = MiniBar(over, HEALTH_FILL, HEALTH_H)
-    b.health:SetPoint("BOTTOMLEFT", b.power, "TOPLEFT", 0, BAR_GAP)
-    b.health:SetPoint("BOTTOMRIGHT", b.power, "TOPRIGHT", 0, BAR_GAP)
+    b.power = Bar(over, CARD_W - 2 * INSET + 2, POWER_H, POWER_FILL .. "Mana")
+    b.power.box:SetPoint("BOTTOM", 0, INSET - 1)
+    b.health = Bar(over, CARD_W - 2 * INSET + 2, HEALTH_H, HEALTH_FILL)
+    b.health.box:SetPoint("BOTTOM", b.power.box, "TOP", 0, BAR_GAP)
+    local small = _G.TextStatusBarTextSmall or _G.SystemFont_Shadow_Small
+    if small then
+        b.health.text:SetFontObject(small)
+        b.power.text:SetFontObject(small)
+    end
     b.name = Text(over, "GameFontNormalSmall")
-    b.name:SetPoint("BOTTOMLEFT", b.health, "TOPLEFT", 1, 1)
-    b.name:SetPoint("BOTTOMRIGHT", b.health, "TOPRIGHT", -1, 1)
+    b.name:SetPoint("BOTTOMLEFT", b.health.box, "TOPLEFT", 2, 1)
+    b.name:SetPoint("BOTTOMRIGHT", b.health.box, "TOPRIGHT", -2, 1)
     b.name:SetHeight(NAME_H)
     return b
 end
@@ -122,14 +68,9 @@ end
 -- offline
 local function CardColor(b)
     local unit = b.unit
-    if Flag(UnitIsDeadOrGhost, unit) or (b.isParty and not Flag(UnitIsConnected, unit)) then return GREY end
-    if not b.isParty then return GOLD end
-    local ok, c = pcall(function()
-        local _, class = UnitClass(unit)
-        local color = RAID_CLASS_COLORS[class]
-        return color and { color.r, color.g, color.b }
-    end)
-    return ok and c or GOLD
+    if Flag(UnitIsDeadOrGhost, unit) or (b.isParty and not Flag(UnitIsConnected, unit)) then return UF.GREY end
+    if not b.isParty then return UF.GOLD end
+    return UF.ClassColor(unit) or UF.GOLD
 end
 
 -- Out of range: faint (a secret answer: as in range)
@@ -142,41 +83,20 @@ local function Near(unit)
     return not ok or near
 end
 
--- Its model, drawn only when the unit is (else its portrait)
-local function RefreshModel(b)
-    local unit = b.unit
-    local visible = Flag(UnitIsVisible, unit)
-    b.model:SetShown(visible)
-    b.portrait:SetShown(not visible)
-    SetPortraitTexture(b.portrait, unit)
-    if visible then
-        b.model:SetUnit(unit)
-        b.model:SetPortraitZoom(ZOOM)
-    end
-    b.modelVisible = visible
-end
-
 local function Refresh(b)
     local unit = b.unit
     if not UnitExists(unit) then return end
-    if Flag(UnitIsVisible, unit) ~= b.modelVisible then RefreshModel(b) end
+    UF.AvatarUnit(b.avatar, unit)
     Try(b.name.SetText, b.name, UnitName(unit))
     UF.NameColor(b)
-    local ok, level = pcall(function()
-        local l = UnitLevel(unit)
-        return (l and l > 0) and tostring(l) or "??"
-    end)
-    b.level:SetText(ok and level or "")
     local c = CardColor(b)
-    for _, edge in ipairs(b.edges) do edge:SetVertexColor(c[1], c[2], c[3], 1) end
-    b.portrait:SetDesaturated(c == GREY)
+    UF.AvatarLook(b.avatar, unit, c, c == UF.GREY)
     UF.FillHealth(b)
     UF.FillPower(b)
     b:SetAlpha(Near(unit) and 1 or 0.55)
 end
 
-local MODEL_EVENTS = { UNIT_MODEL_CHANGED = true, UNIT_PORTRAIT_UPDATE = true, GROUP_ROSTER_UPDATE = true,
-    UNIT_PET = true, PLAYER_ENTERING_WORLD = true }
+local MODEL_EVENTS = UF.MODEL_EVENTS
 
 local function Listen(b)
     for _, e in ipairs(UF.Join(UF.UNIT, UF.POWER_EVENTS)) do b:RegisterUnitEvent(e, b.unit) end
@@ -187,11 +107,11 @@ local function Listen(b)
     b.Refresh = Refresh
     b:SetScript("OnEvent", function(self, event)
         if not UnitExists(self.unit) then return end
-        if MODEL_EVENTS[event] then RefreshModel(self) end
+        if MODEL_EVENTS[event] then UF.AvatarUnit(self.avatar, self.unit, true) end
         Refresh(self)
     end)
     b:SetScript("OnShow", function(self)
-        RefreshModel(self)
+        UF.AvatarUnit(self.avatar, self.unit, true)
         Refresh(self)
     end)
 end

@@ -31,9 +31,10 @@ local ITEMS = {
     Item({
         key = "cards", group = "frames", label = "Minion and party cards",
         tip = "Your pet (Minions) and your party (Party) as cards standing on the experience line, either side "
-            .. "of the middle, in place of the game's pet and party frames: each its model, its class colour round "
-            .. "it, its level, name, health and power; faint when out of range. Click one to target it, right "
-            .. "click for its menu. Hidden in a raid (the game's raid frames show).",
+            .. "of the middle, in place of the game's pet and party frames: each its model in the tooltip's "
+            .. "bronze frame, a strip in its class colour, its level, name, health and power; faint when out "
+            .. "of range. Click one to target it, right click for its menu. Hidden in a raid (the game's raid "
+            .. "frames show).",
     }, Toggle("cards", "Minion and party cards", function() IN.PartyCards.Apply() end)),
     Item({
         key = "xp", group = "frames", label = "Experience line",
@@ -44,7 +45,7 @@ local ITEMS = {
     Item({
         key = "pad", group = "pad", label = "Spell diamonds",
         tip = "The gamepad action bar laid out as Hogwarts Legacy's spells: bottom right, the face buttons' "
-            .. "slots as a big diamond, the D-pad's as a smaller one beside it. Holding L2 / R2 (or both) "
+            .. "slots as a big diamond of diamond tiles, the D-pad's as a smaller one beside it. Holding L2 / R2 (or both) "
             .. "swaps them to that set in place; the pips under them show which set is up. The game's bar "
             .. "still does every press: its slots are set as before (the Bindings tab, its own editor).",
     }, Toggle("pad", "Spell diamonds", function() IN.GamepadBar.Apply() end)),

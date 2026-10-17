@@ -97,6 +97,7 @@ function frameMeta.GetRegions() return end
 function frameMeta.CreateTexture(self) return Frame(nil, self) end
 function frameMeta.CreateFontString(self) return Frame(nil, self) end
 function frameMeta.CreateMaskTexture(self) return Frame(nil, self) end
+function frameMeta.CreateLine(self) return Frame(nil, self) end
 function frameMeta.CreateAnimationGroup(self) return Frame(nil, self) end
 function frameMeta.CreateAnimation(self)
     local a = Frame(nil, self)

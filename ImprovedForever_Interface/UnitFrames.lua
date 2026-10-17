@@ -3,10 +3,10 @@
 -- and border round the unit frames' fills), the percent on them:
 -- * the target's health across the top centre, coloured by what it is,
 --   its casts under it;
--- * the player's health and power bottom left, its round portrait on
---   their left (the ring of the game's unit frame), its level on it, a
---   combat mark by its name (its pet: a card at the bottom centre,
---   PartyCards.lua).
+-- * the player's health and power bottom left, its avatar on their left
+--   (its model in the game's tooltip border, as the minion and party
+--   cards), its level on it, a combat mark by its name (its pet: a card at
+--   the bottom centre, PartyCards.lua).
 -- Ours are secure unit buttons (a click targets, a right click opens the
 -- unit's menu), shown by the game's unit watch, so they work in a fight.
 -- The game's are never hidden or changed (a property of the game's frames
@@ -506,67 +506,143 @@ castEvents:SetScript("OnEvent", function(_, event)
 end)
 
 ---------------------------------------------------------------------------
--- A round portrait: the unit's face in the ring of the game's own unit
--- frame art, cut out of it (the atlas's part round its portrait, a circle
--- mask taking off the name and bar boxes it touches). ring = { atlas, x,
--- y, r }: the portrait's centre and the ring's outer radius in the atlas's
--- pixels; inner: the portrait's share of the ring's width.
+-- An avatar (the player's, a minion's or a party member's card,
+-- PartyCards.lua): the unit's model in the game's tooltip border (its
+-- bronze frame, its centre left out), its round portrait when it's too far
+-- to be drawn, a strip along its top in its colour, its level in the
+-- game's small circle at the top left. a.over: a frame over the model,
+-- under the border (a card's band and bars go on it).
 ---------------------------------------------------------------------------
-local MASK = "Interface\\CharacterFrame\\TempPortraitAlphaMask"
+local AVATAR_INSET, STRIP_H, ZOOM = 4, 3, 0.45
+local BRONZE = { 0.62, 0.5, 0.32 }     -- (the border's own, should the game's layout be missing)
 
-local function Ring(parent, size, ring, inner)
-    local holder = CreateFrame("Frame", nil, parent)
-    holder:SetSize(size, size)
-    local face = holder:CreateTexture(nil, "BACKGROUND")
-    face:SetSize(size * inner, size * inner)
-    face:SetPoint("CENTER")
-    local art = holder:CreateTexture(nil, "ARTWORK")
-    art:SetAllPoints()
-    local info = C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(ring.atlas)
-    local file = info and (info.file or info.filename)
-    if file then
-        local function U(px) return info.leftTexCoord + (info.rightTexCoord - info.leftTexCoord) * px / info.width end
-        local function V(px) return info.topTexCoord + (info.bottomTexCoord - info.topTexCoord) * px / info.height end
-        art:SetTexture(file)
-        art:SetTexCoord(U(ring.x - ring.r), U(ring.x + ring.r), V(ring.y - ring.r), V(ring.y + ring.r))
-        local mask = holder:CreateMaskTexture()
-        mask:SetTexture(MASK, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
-        mask:SetAllPoints()
-        art:AddMaskTexture(mask)
+-- The game's tooltip layout (NineSliceUtil, applied to our frame), its
+-- centre left out; without it, thin bronze edges of ours
+local function Border(frame)
+    local ok = NineSliceUtil and NineSliceUtil.ApplyLayoutByName
+        and pcall(NineSliceUtil.ApplyLayoutByName, frame, "TooltipDefaultLayout")
+    if ok and frame.TopEdge then
+        if frame.Center then frame.Center:Hide() end
+        return
     end
-    holder.face = face
-    return holder
+    for _, e in ipairs({ { "TOPLEFT", "TOPRIGHT", nil, 1 }, { "BOTTOMLEFT", "BOTTOMRIGHT", nil, 1 },
+        { "TOPLEFT", "BOTTOMLEFT", 1, nil }, { "TOPRIGHT", "BOTTOMRIGHT", 1, nil } }) do
+        local t = frame:CreateTexture(nil, "BORDER")
+        t:SetColorTexture(BRONZE[1], BRONZE[2], BRONZE[3], 1)
+        t:SetPoint(e[1])
+        t:SetPoint(e[2])
+        if e[3] then t:SetWidth(e[3]) end
+        if e[4] then t:SetHeight(e[4]) end
+    end
 end
 
--- (the player frame's art: 198 x 71, its 60 px portrait's centre 37, 34.5
--- in)
-local PLAYER_RING = { atlas = "UI-HUD-UnitFrame-Player-PortraitOn", x = 37, y = 34.5, r = 35 }
+local function Avatar(parent, w, h)
+    local a = CreateFrame("Frame", nil, parent)
+    a:SetSize(w, h)
+    local bg = a:CreateTexture(nil, "BACKGROUND")
+    bg:SetPoint("TOPLEFT", 2, -2)
+    bg:SetPoint("BOTTOMRIGHT", -2, 2)
+    bg:SetColorTexture(0.03, 0.03, 0.04, 0.9)
+
+    a.portrait = a:CreateTexture(nil, "ARTWORK")
+    local side = math.min(w, h) - 20
+    a.portrait:SetSize(side, side)
+    a.portrait:SetPoint("CENTER", 0, 4)
+    a.model = CreateFrame("PlayerModel", nil, a)
+    a.model:SetPoint("TOPLEFT", AVATAR_INSET, -AVATAR_INSET - STRIP_H)
+    a.model:SetPoint("BOTTOMRIGHT", -AVATAR_INSET, AVATAR_INSET)
+
+    a.over = CreateFrame("Frame", nil, a)
+    a.over:SetAllPoints()
+    a.over:SetFrameLevel(a.model:GetFrameLevel() + 2)
+    a.strip = a.over:CreateTexture(nil, "ARTWORK")
+    a.strip:SetPoint("TOPLEFT", AVATAR_INSET, -AVATAR_INSET)
+    a.strip:SetPoint("TOPRIGHT", -AVATAR_INSET, -AVATAR_INSET)
+    a.strip:SetHeight(STRIP_H)
+    a.strip:SetColorTexture(1, 1, 1, 1)
+
+    local frame = CreateFrame("Frame", nil, a.over)
+    frame:SetAllPoints()
+    frame:SetFrameLevel(a.over:GetFrameLevel() + 6)
+    Border(frame)
+    local top = CreateFrame("Frame", nil, frame)
+    top:SetAllPoints()
+    top:SetFrameLevel(frame:GetFrameLevel() + 2)
+    a.gem = Atlas(top, "OVERLAY", "UI-HUD-UnitFrame-SmallCircle", 1)
+    a.gem:SetSize(24, 24)
+    a.gem:SetPoint("CENTER", a, "TOPLEFT", 6, -6)
+    a.level = Text(top, "GameFontHighlightSmall")
+    a.level:SetDrawLayer("OVERLAY", 2)
+    a.level:SetPoint("CENTER", a.gem, "CENTER", 0, -0.5)
+    return a
+end
+
+-- Its model, drawn only when the unit is (else its portrait); again when
+-- that changes, or always (force: the unit or its looks changed)
+local function AvatarUnit(a, unit, force)
+    local visible = Flag(UnitIsVisible, unit)
+    if not force and visible == a.modelVisible then return end
+    a.model:SetShown(visible)
+    a.portrait:SetShown(not visible)
+    SetPortraitTexture(a.portrait, unit)
+    if visible then
+        a.model:SetUnit(unit)
+        a.model:SetPortraitZoom(ZOOM)
+    end
+    a.modelVisible = visible
+end
+
+-- Its strip's colour (grey: its portrait greyed too) and its level
+local function AvatarLook(a, unit, color, grey)
+    a.strip:SetVertexColor(color[1], color[2], color[3], 1)
+    a.portrait:SetDesaturated(grey and true or false)
+    local ok, level = pcall(function()
+        local l = UnitLevel(unit)
+        return (l and l > 0) and tostring(l) or "??"
+    end)
+    a.level:SetText(ok and level or "")
+end
+
+-- A unit's class colour, or nil
+local function ClassColor(unit)
+    local ok, c = pcall(function()
+        local _, class = UnitClass(unit)
+        local color = RAID_CLASS_COLORS[class]
+        return color and { color.r, color.g, color.b }
+    end)
+    return ok and c or nil
+end
+
+-- The events that change a model
+local MODEL_EVENTS = { UNIT_MODEL_CHANGED = true, UNIT_PORTRAIT_UPDATE = true, GROUP_ROSTER_UPDATE = true,
+    UNIT_PET = true, PLAYER_ENTERING_WORLD = true }
 
 ---------------------------------------------------------------------------
--- The player's bottom left, as the target's: its portrait on the left
--- (its level in a circle on it, as the game's), then its name (a combat
--- mark before it) over its health, its power under it (the same width,
--- two thirds the height)
+-- The player's bottom left, as the target's: its avatar on the left (as
+-- big as the minion and party cards), then along its foot its name (a
+-- combat mark before it) over its health, its power under it (the same
+-- width, two thirds the height)
 ---------------------------------------------------------------------------
 local POWER_H = 16
-local RING = NAME_H + BAR_H + 2 + POWER_H + 8
-local OVERLAP = 6
+-- (the avatar the cards' size, PartyCards.lua; the bars along its foot)
+local AVATAR_W, AVATAR_H = 78, 100
+local AVATAR_GAP = 6
 local PLAYER_X, PLAYER_Y = 20, 20
-local player = UnitButton("ImprovedForeverPlayerFrame", "player", RING - OVERLAP + BAR_W, RING)
+local GOLD = { 1, 0.82, 0 }
+local GREY = { 0.45, 0.45, 0.45 }
+local player = UnitButton("ImprovedForeverPlayerFrame", "player", AVATAR_W + AVATAR_GAP + BAR_W, AVATAR_H)
 player:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", PLAYER_X, PLAYER_Y)
 player:Hide()
 
 do
     local p = player
-    p.ring = Ring(p, RING, PLAYER_RING, 60 / 70)
-    p.ring:SetPoint("LEFT")
-    p.portrait = p.ring.face
+    p.avatar = Avatar(p, AVATAR_W, AVATAR_H)
+    p.avatar:SetPoint("LEFT")
     local bars = CreateFrame("Frame", nil, p)
     bars:SetSize(BAR_W, NAME_H + BAR_H + 2 + POWER_H)
-    bars:SetPoint("RIGHT")
-    p.ring:SetFrameLevel(bars:GetFrameLevel() + 5)
+    bars:SetPoint("BOTTOMRIGHT")
     p.combat = Atlas(bars, "OVERLAY", "UI-HUD-UnitFrame-Player-CombatIcon")
-    p.combat:SetPoint("TOPLEFT", OVERLAP + 4, -3)
+    p.combat:SetPoint("TOPLEFT", 4, -3)
     p.name = Text(bars, "GameFontNormalLarge", "LEFT")
     p.name:SetHeight(NAME_H - 2)
     p.health = Bar(bars, BAR_W, BAR_H, HEALTH_FILL)
@@ -574,28 +650,20 @@ do
     p.power = Bar(bars, BAR_W, POWER_H, POWER_FILL .. "Mana")
     p.power.box:SetPoint("TOP", p.health.box, "BOTTOM", 0, -2)
     p.power.text:SetFontObject(_G.TextStatusBarTextSmall or _G.SystemFont_Shadow_Small or "TextStatusBarText")
-    -- (the level: the game's small circle over the portrait's bottom left)
-    local top = CreateFrame("Frame", nil, p.ring)
-    top:SetAllPoints()
-    top:SetFrameLevel(p.ring:GetFrameLevel() + 2)
-    p.levelCircle = Atlas(top, "OVERLAY", "UI-HUD-UnitFrame-SmallCircle", 1)
-    p.levelCircle:SetPoint("CENTER", p.ring, "BOTTOMLEFT", RING * 0.17, RING * 0.17)
-    p.level = Text(top, "WhiteLargeNumberFont")
-    p.level:SetDrawLayer("OVERLAY", 2)
-    p.level:SetPoint("CENTER", p.levelCircle, "CENTER", 0, -0.5)
 end
 
-function player:Refresh()
+function player:Refresh(event)
     local unit = self.unit
-    SetPortraitTexture(self.portrait, unit)
+    AvatarUnit(self.avatar, unit, event == nil or MODEL_EVENTS[event])
+    local dead = Flag(UnitIsDeadOrGhost, unit)
+    AvatarLook(self.avatar, unit, dead and GREY or ClassColor(unit) or GOLD, dead)
     Try(self.name.SetText, self.name, UnitName(unit))
     NameColor(self)
-    Try(self.level.SetText, self.level, UnitLevel(unit))
     -- (the name after the combat mark while in a fight)
     local fighting = Flag(UnitAffectingCombat, unit)
     self.combat:SetShown(fighting)
     self.name:ClearAllPoints()
-    self.name:SetPoint("TOPLEFT", (fighting and 24 or 4) + OVERLAP, 0)
+    self.name:SetPoint("TOPLEFT", fighting and 24 or 4, 0)
     self.name:SetPoint("TOPRIGHT", -4, 0)
     FillHealth(self)
     FillPower(self)
@@ -608,7 +676,7 @@ local function Listen(frame, unitEvents, events)
     -- (an event this client hasn't: left out, not an error)
     for _, e in ipairs(unitEvents) do pcall(frame.RegisterUnitEvent, frame, e, frame.unit) end
     for _, e in ipairs(events or {}) do pcall(frame.RegisterEvent, frame, e) end
-    frame:SetScript("OnEvent", function(self) self:Refresh() end)
+    frame:SetScript("OnEvent", function(self, event) self:Refresh(event) end)
     frame:SetScript("OnShow", function(self) self:Refresh() end)
 end
 
@@ -678,6 +746,8 @@ UF.EditMode = EditMode
 UF.Try, UF.Flag, UF.Text, UF.Atlas, UF.Bar = Try, Flag, Text, Atlas, Bar
 UF.FillHealth, UF.FillPower, UF.UnitButton, UF.NameColor = FillHealth, FillPower, UnitButton, NameColor
 UF.Listen, UF.Join, UF.UNIT, UF.POWER_EVENTS = Listen, Join, UNIT, POWER_EVENTS
+UF.Avatar, UF.AvatarUnit, UF.AvatarLook, UF.ClassColor = Avatar, AvatarUnit, AvatarLook, ClassColor
+UF.MODEL_EVENTS, UF.GOLD, UF.GREY = MODEL_EVENTS, GOLD, GREY
 
 -- What the settings ask, now (Edit Mode: the game's shown to be moved,
 -- ours drawn at 0)
