@@ -14,12 +14,21 @@
 --   page:activate(line, book) (Cross);  page:alt(line, book) (Square)
 --   page:verb(line), page:altVerb(line) -> the legend's word for Cross, Square
 --   page:tip(line, book) -> true: it drew the tooltip (book:PlaceTip() first)
+--   page:field() -> { text, hint }: a field typed in, in the title's place
+--     (a search); page:typed(text, book) when it changes. With the pad its
+--     letters on the page's top while it types (Cross a letter, Square
+--     deletes, Triangle a space; Circle done), the list under them; with
+--     the mouse the keyboard types in it
+--   page:filter() -> { text, build }: L3 (the mouse: a button) opens the
+--     page's filters, a dropdown over it (Dropdown.lua: build() its entries)
 -- A line: { header, info }, or an entry: { kind ("item", "npc", "object",
 -- "quest", "place", "recipe"...), name, line (the words under it), icon,
 -- round, portrait (an npc id: its face), item (an id: its name, quality and
 -- tooltip), describe (an item's quality and type under it), tip (an item id
 -- for the tooltip), go (a list's key), getName (its name worked out each
 -- time: names come in late) }.
+-- opts.search: { text, open(book) }: Triangle on a page without a field
+-- (the mouse: a button) opens the module's search.
 -- Never in combat.
 local IF = ImprovedForever
 
@@ -50,6 +59,19 @@ local HEADS = math.floor(AREA_H / HEAD_H)
 local HEADING_FONT = "Fonts\\MORPHEUS.TTF"
 local PARA_GAP = 10
 local NONE_ICON = "Interface\\Icons\\INV_Misc_QuestionMark"
+
+-- A page's field typed with the pad: its letters on the page's top, a key a
+-- letter (or { char, label, width }), the list under them
+local KEY_ROWS = {
+    { "1", "2", "3", "4", "5", "6", "7", "8", "9", "0" },
+    { "Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P" },
+    { "A", "S", "D", "F", "G", "H", "J", "K", "L", { "DEL", "Del", 1 } },
+    { "Z", "X", "C", "V", "B", "N", "M", { " ", "Space", 3 } },
+}
+local KEY_COLS, KEY_GAP, KEY_H = 10, 12, 30
+local KEY_W = (AREA_W - (KEY_COLS - 1) * KEY_GAP) / KEY_COLS
+local KEYS_H = #KEY_ROWS * (KEY_H + KEY_GAP) + 8
+local MAX_TYPED = 30
 
 -- The spellbook's ink (SPELLBOOK_FONT_COLOR), and darker accents of it
 local INK = { 0.23, 0.16, 0.09 }
@@ -335,8 +357,9 @@ end
 -- A list laid out in pages: headers across, entries two a row; a section
 -- going on over a page has its header again there. (pages, list, y: going
 -- on from the notes)
-local function ListLayout(lines, pages, list, startY)
+local function ListLayout(lines, pages, list, startY, areaH)
     pages, list = pages or {}, list or {}
+    areaH = areaH or AREA_H
     local current = pages[#pages]
     local y, col, header = startY or 0, 0, nil
     local function newPage()
@@ -353,12 +376,12 @@ local function ListLayout(lines, pages, list, startY)
         if line.header then
             if col > 0 then y, col = y + CELL_H, 0 end
             header = nil
-            if y + HEAD_H + CELL_H > AREA_H then newPage() end
+            if y + HEAD_H + CELL_H > areaH then newPage() end
             header = line
             current.items[#current.items + 1] = { header = line.header, info = line.info, y = y }
             y = y + HEAD_H
         else
-            if col == 0 and y + CELL_H > AREA_H then newPage() end
+            if col == 0 and y + CELL_H > areaH then newPage() end
             local c = { line = line, page = #pages, col = col, x = col * (CELL_W + GAP), y = y }
             current.items[#current.items + 1] = c
             list[#list + 1] = c
@@ -421,6 +444,28 @@ function BK.New(opts)
     title:SetPoint("RIGHT", page, "RIGHT", -RIGHT - 150, 0)
     title:SetJustifyH("LEFT")
     title:SetWordWrap(false)
+    -- (a page's field in its place: typed with the keyboard, or the pad's
+    -- letters below; a caret after the text while the pad types)
+    local field = K.NewFrame("EditBox", nil, page)
+    field:SetPoint("TOPLEFT", head, "TOPRIGHT", 16, 6)
+    field:SetPoint("RIGHT", page, "RIGHT", -RIGHT - 150, 0)
+    field:SetHeight(30)
+    Ink(field, "SystemFont_Huge2", "GameFontNormalHuge")
+    field:SetAutoFocus(false)
+    field:SetMaxLetters(MAX_TYPED)
+    field:Hide()
+    local fieldHint = Text(field, "SystemFont_Huge2", "GameFontNormalHuge")
+    fieldHint:SetPoint("LEFT", 0, 0)
+    fieldHint:SetPoint("RIGHT", 0, 0)
+    fieldHint:SetJustifyH("LEFT")
+    fieldHint:SetWordWrap(false)
+    fieldHint:SetAlpha(0.4)
+    local caret = field:CreateTexture(nil, "OVERLAY")
+    caret:SetColorTexture(INK[1], INK[2], INK[3], 0.8)
+    caret:SetSize(2, 24)
+    caret:Hide()
+    local measure = Text(field, "SystemFont_Huge2", "GameFontNormalHuge")
+    measure:Hide()
     local kind = Text(page, "SystemFont_Med1", "GameFontNormal")
     kind:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -5)
     kind:SetPoint("RIGHT", page, "RIGHT", -RIGHT, 0)
@@ -502,6 +547,7 @@ function BK.New(opts)
         c:RegisterForClicks("LeftButtonUp", "RightButtonUp")
         c:SetScript("OnClick", function(self, button)
             if not self.index then return end
+            if dropdown:IsShown() then return dropdown:Close() end
             if button == "RightButton" then
                 book:Pick(self.index)
                 book:Alt()
@@ -510,7 +556,7 @@ function BK.New(opts)
             end
         end)
         c:SetScript("OnEnter", function(self)
-            if self.index and not IF.Input.Pad() then book:Pick(self.index) end
+            if self.index and not IF.Input.Pad() and not dropdown:IsShown() then book:Pick(self.index) end
         end)
         cells[i] = c
     end
@@ -538,11 +584,41 @@ function BK.New(opts)
         heads[i] = h
     end
 
+    -- The pad's letters: a key each, ink on the parchment, the game's cursor
+    -- left of the one under it
+    local keys = {}
+    for row, list in ipairs(KEY_ROWS) do
+        local u = 0
+        for _, def in ipairs(list) do
+            local char, label, w = def, def, 1
+            if type(def) == "table" then char, label, w = def[1], def[2], def[3] end
+            local k = K.NewFrame("Button", nil, page)
+            k:SetSize(KEY_W * w + KEY_GAP * (w - 1), KEY_H)
+            k.char, k.row, k.u, k.w = char, row, u, w
+            k.bg = k:CreateTexture(nil, "BACKGROUND", nil, 1)
+            k.bg:SetAllPoints()
+            k.bg:SetColorTexture(INK[1], INK[2], INK[3], 1)
+            k.text = Heading(k, #label > 1 and 15 or 18)
+            k.text:SetPoint("CENTER", 0, 0)
+            k.text:SetText(label)
+            k:SetScript("OnClick", function(self) book:TypeKey(self) end)
+            k:Hide()
+            keys[#keys + 1] = k
+            u = u + w
+        end
+    end
+    local keyCursor = IF.Focus.Cursor(page)
+
     -- The notes' paragraphs, made as they're needed
     local paragraphs = Pool(function() return Body(page) end)
     -- (a paragraph's height before it's placed)
-    local measure = Body(page)
-    measure:Hide()
+    local measureBody = Body(page)
+    measureBody:Hide()
+
+    -- The page's filters (page:filter()): a dropdown over the page, under
+    -- the title bar
+    local dropdown = IF.Dropdown(window, { maxHeight = 470 })
+    dropdown.frame:SetPoint("TOP", window, "TOP", 0, -58)
 
     local legend = IF.InputLegend(window)
     legend:SetPoint("TOP", window, "BOTTOM", 0, -4)
@@ -553,11 +629,12 @@ function BK.New(opts)
     legend.row:SetPoint("LEFT", page, "BOTTOMLEFT", LEFT - 8, 38)
 
     -- A page laid out: its paragraphs (and who wrote them), then its lines
-    local function PageLayout(texts, signed, lines)
+    local function PageLayout(texts, signed, lines, areaH)
+        areaH = areaH or AREA_H
         local current = { items = {} }
         local pages, y = { current }, 0
         local function place(what, text, h)
-            if y > 0 and y + h > AREA_H then
+            if y > 0 and y + h > areaH then
                 current = { items = {} }
                 pages[#pages + 1] = current
                 y = 0
@@ -566,11 +643,11 @@ function BK.New(opts)
             y = y + h
         end
         for _, text in ipairs(texts) do
-            measure:SetText(text)
-            place("para", text, math.ceil(measure:GetStringHeight()) + PARA_GAP)
+            measureBody:SetText(text)
+            place("para", text, math.ceil(measureBody:GetStringHeight()) + PARA_GAP)
         end
         if signed then place("sign", signed, 34) end
-        return ListLayout(lines or {}, pages, {}, y)
+        return ListLayout(lines or {}, pages, {}, y, areaH)
     end
 
     -----------------------------------------------------------------------
@@ -580,20 +657,26 @@ function BK.New(opts)
     -----------------------------------------------------------------------
     local function Top() return book.stack[#book.stack] end
 
+    -- A page with a field, its letters up: the pad typing in it
+    local function Typing(p)
+        return p and p.field and p.typing and IF.Input.Pad() or false
+    end
+
     -- (laid out again each time, the picked entry and page kept: names come
-    -- in late)
+    -- in late; under the letters while the pad types)
     local function View(p)
         local key = p.tab
         local old = p.views[key]
         local pages, list
+        local top = Typing(p) and KEYS_H or 0
         if key == "notes" then
             local texts, signed, lines = p:notes()
-            pages, list = PageLayout(texts or {}, signed, lines)
+            pages, list = PageLayout(texts or {}, signed, lines, AREA_H - top)
         else
-            pages, list = PageLayout({ p.about and p:about(key) or nil }, nil, p.list and p:list(key) or {})
+            pages, list = PageLayout({ p.about and p:about(key) or nil }, nil, p.list and p:list(key) or {}, AREA_H - top)
         end
         local view = { pages = pages, cells = list, sel = old and math.min(old.sel, math.max(1, #list)) or 1,
-            page = old and old.page or 1 }
+            page = old and old.page or 1, top = top }
         p.views[key] = view
         return view
     end
@@ -657,7 +740,96 @@ function BK.New(opts)
                 return book:Pick(pick.index)
             end
         end
+        -- (up past the first row: the field's letters)
+        if not down and p.field and IF.Input.Pad() then
+            p.typing = true
+            book:Render()
+        end
     end
+
+    -----------------------------------------------------------------------
+    -- Typing in a page's field: the pad's letters (D-pad, Cross), the
+    -- keyboard's (the field's own)
+    -----------------------------------------------------------------------
+    local keyAt = 1                      -- the key under the cursor
+    local keyCol = 0                     -- (its column, kept going up / down)
+
+    local function Typed(p, text)
+        text = text:sub(1, MAX_TYPED)
+        if text == (p:field().text or "") then return end
+        p:typed(text, book)
+        p.views = {}
+        book:Render()
+    end
+
+    -- A key pressed: its letter (a word's first one a capital, as names
+    -- are), a space, or the last letter deleted
+    function book:TypeKey(k)
+        local p = Top()
+        if not (p and p.field) then return end
+        local text = p:field().text or ""
+        if k.char == "DEL" then
+            -- (a whole character: the keyboard may have typed one of several bytes)
+            text = text:gsub("[%z\1-\127\192-\255][\128-\191]*$", "")
+        elseif k.char == " " then
+            if text == "" or text:sub(-1) == " " then return end
+            text = text .. " "
+        else
+            local first = text == "" or text:sub(-1) == " "
+            text = text .. (first and k.char or k.char:lower())
+        end
+        Typed(p, text)
+    end
+
+    local function KeyMove(name)
+        local cur = keys[keyAt]
+        if name == "LEFT" or name == "RIGHT" then
+            local nextKey = keys[keyAt + (name == "RIGHT" and 1 or -1)]
+            if nextKey and nextKey.row == cur.row then
+                keyAt = keyAt + (name == "RIGHT" and 1 or -1)
+                keyCol = nextKey.u
+            end
+            return book:Render()
+        end
+        local row = cur.row + (name == "DOWN" and 1 or -1)
+        if row > #KEY_ROWS then
+            -- (down past the letters: the list, when it has something)
+            local p = Top()
+            local view = p and View(p)
+            if view and #view.cells > 0 then
+                p.typing = false
+                p.views = {}
+                return book:Pick(1)
+            end
+            return
+        end
+        for i, k in ipairs(keys) do
+            if k.row == row and k.u <= keyCol and keyCol < k.u + k.w then
+                keyAt = i
+                return book:Render()
+            end
+        end
+    end
+
+    -- Circle while the pad types: done (its list), or back when it has none
+    local function DoneTyping()
+        local p = Top()
+        local view = View(p)
+        if #view.cells == 0 then return book:Back() end
+        p.typing = false
+        p.views = {}
+        book:Pick(1)
+    end
+
+    field:SetScript("OnTextChanged", function(self, user)
+        local p = Top()
+        if user and p and p.field then Typed(p, self:GetText() or "") end
+    end)
+    field:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
+    field:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
+    -- (the hint gone while the keyboard types in it)
+    field:SetScript("OnEditFocusGained", function() fieldHint:Hide() end)
+    field:SetScript("OnEditFocusLost", function(self) fieldHint:SetShown((self:GetText() or "") == "") end)
 
     -- L1 / R1: the page before / after (its first entry)
     local function Turn(dir)
@@ -694,10 +866,18 @@ function BK.New(opts)
     -- A page on top (Circle: back to the one under it)
     function book:Push(p)
         if not p then return end
+        dropdown:Close()
         p.tab, p.views = p.tab or "notes", p.views or {}
         self.stack[#self.stack + 1] = p
         if #self.stack > 1 then Sound("IG_ABILITY_PAGE_TURN") end
+        -- (a field: typed in at once, its letters up; with the mouse the
+        -- keyboard's in it)
+        if p.field then
+            p.typing = p.typing ~= false
+            keyAt, keyCol = 1, 0
+        end
         self:Render()
+        if p.field and not IF.Input.Pad() then field:SetFocus() end
     end
 
     -- The page on top
@@ -706,6 +886,8 @@ function BK.New(opts)
     -- Circle: from a list its notes, from the notes the page before, or the
     -- book closed
     function book:Back()
+        if field:HasFocus() then field:ClearFocus() end
+        dropdown:Close()
         local p = Top()
         if p and p.tab ~= "notes" then
             p.tab = "notes"
@@ -748,6 +930,20 @@ function BK.New(opts)
     local switch              -- (L2 / R2 to the other window: below, IF.Focus.Switch)
 
     local function Hints(p, view, line)
+        if dropdown:IsShown() then
+            return { { glyph = "DPAD", text = "Move" }, { "PAD1", "A", "Select", pad = true },
+                { "PADLSTICK", "LS", "Done" }, { "PAD2", "B", "Close", pad = true } }
+        end
+        local filter = p.filter and p:filter()
+        if Typing(p) then
+            local typing = { { glyph = "DPAD", text = "Move" }, { "PAD1", "A", "Type", pad = true },
+                { "PAD3", "X", "Delete", pad = true }, { "PAD4", "Y", "Space", pad = true } }
+            if filter then typing[#typing + 1] = { "PADLSTICK", "LS", filter.text or "Filters" } end
+            local hint = switch:Hint()
+            if hint then typing[#typing + 1] = hint end
+            typing[#typing + 1] = { "PAD2", "B", #view.cells > 0 and "Done" or #book.stack > 1 and "Back" or "Close" }
+            return typing
+        end
         local defs = { { glyph = "DPAD", text = "Move" } }
         if view and #view.pages > 1 then
             defs[#defs + 1] = { { "PADLSHOULDER", "PADRSHOULDER" }, { "LB", "RB" }, "Turn Page" }
@@ -758,6 +954,14 @@ function BK.New(opts)
         local alt = line and p.altVerb and p:altVerb(line)
         if alt then defs[#defs + 1] = { "PAD3", "X", alt, pad = true } end
         if line and not line.go then defs[#defs + 1] = { "PADRSTICK", "RS", TipsOn() and "Hide Tooltip" or "Tooltip" } end
+        -- (Triangle: back to the field's letters; else the module's search.
+        -- With the mouse its field is clicked, the search a button)
+        if p.field then
+            defs[#defs + 1] = { "PAD4", "Y", "Type", pad = true }
+        elseif opts.search then
+            defs[#defs + 1] = { "PAD4", "Y", opts.search.text or "Search" }
+        end
+        if filter then defs[#defs + 1] = { "PADLSTICK", "LS", filter.text or "Filters" } end
         local hint = switch:Hint()
         if hint then defs[#defs + 1] = hint end
         defs[#defs + 1] = { "PAD2", "B", p.tab ~= "notes" and (opts.notes or "Notes")
@@ -781,7 +985,7 @@ function BK.New(opts)
             or line.kind == "trainer" or line.kind == "place" or line.go ~= nil
         local name, sub = line.name, line.line
         if line.kind == "item" and line.item then
-            name = ItemInfo(line.item) or ("Item " .. line.item)
+            name = ItemInfo(line.item) or line.name or ("Item " .. line.item)
             -- (a creature's loot, its wares: what each is, "Uncommon Cloth")
             sub = line.describe and BK.ItemKind(line.item) or line.line or "a container"
         elseif line.getName then
@@ -802,17 +1006,63 @@ function BK.New(opts)
         c.name:SetPoint("RIGHT", c, "RIGHT", -4, 0)
     end
 
+    local drawTop = 0                    -- (the list under the letters while the pad types)
     local function At(frame, x, y)
         frame:ClearAllPoints()
-        frame:SetPoint("TOPLEFT", page, "TOPLEFT", LEFT + x, -TOP - y)
+        frame:SetPoint("TOPLEFT", page, "TOPLEFT", LEFT + x, -TOP - drawTop - y)
         frame:Show()
+    end
+
+    -- The field: its text (the keyboard's as it types), its hint while
+    -- empty, the caret while the pad types
+    local function RenderField(p)
+        local f = p.field and p:field()
+        title:SetShown(not f)
+        if not f then
+            if field:HasFocus() then field:ClearFocus() end
+            field:Hide()
+            caret:Hide()
+            return
+        end
+        field:Show()
+        local text = f.text or ""
+        if field:GetText() ~= text then field:SetText(text) end
+        fieldHint:SetText(f.hint or "")
+        fieldHint:SetShown(text == "" and not field:HasFocus())
+        local typing = Typing(p) and book.focus == "ours"
+        caret:SetShown(typing)
+        if typing then
+            measure:SetText((text:gsub(" ", "_")))
+            caret:ClearAllPoints()
+            caret:SetPoint("LEFT", field, "LEFT", text == "" and 0 or math.ceil(measure:GetStringWidth()) + 2, 0)
+        end
+    end
+
+    -- The pad's letters, while it types (the key under the cursor lit while
+    -- the book has the pad)
+    local function RenderKeys(p, focused)
+        local typing = Typing(p)
+        for i, k in ipairs(keys) do
+            k:SetShown(typing)
+            if typing then
+                local on = focused and i == keyAt
+                k:ClearAllPoints()
+                k:SetPoint("TOPLEFT", page, "TOPLEFT", LEFT + k.u * (KEY_W + KEY_GAP), -TOP - (k.row - 1) * (KEY_H + KEY_GAP))
+                k.bg:SetAlpha(on and 0.26 or 0.09)
+                k.text:SetAlpha(on and 1 or 0.8)
+                if on then keyCursor:Point(k) end
+            end
+        end
+        if not (typing and focused) then keyCursor:Hide() end
     end
 
     local function RenderTitle(p)
         local t = p:heading() or {}
         head:Set(t.icon, t.round)
         if t.portrait then BK.Portrait(t.portrait, head.icon) end
-        Script(title, t.title, "SystemFont_Huge2", "GameFontNormalHuge")
+        RenderField(p)
+        -- (a line high even when empty: what's under it stays under the field)
+        Script(title, (t.title and t.title ~= "") and t.title or " ", "SystemFont_Huge2", "GameFontNormalHuge")
         kind:SetText(t.kind or "")
         owned:SetText(t.owned or "")
         chapter:SetText(t.chapter or "")
@@ -826,9 +1076,15 @@ function BK.New(opts)
         view.page = math.max(1, math.min(view.page, #view.pages))
         local nc, nh = 0, 0
         paragraphs:Reset()
-        local picked = view.cells[view.sel]
+        local typing = Typing(p)
+        drawTop = view.top or 0
+        -- (the pad typing: the letters lit, not the list; the filters up:
+        -- neither)
+        local menu = dropdown:IsShown()
+        local picked = not typing and not menu and view.cells[view.sel] or nil
         local focused = self.focus == "ours"
         IF.Focus.Glow(window, focused)
+        RenderKeys(p, focused and not menu)
         for _, item in ipairs(view.pages[view.page].items) do
             local on = focused and item == picked
             if item.doc then
@@ -861,6 +1117,7 @@ function BK.New(opts)
         for i = nc + 1, #cells do cells[i]:Hide() end
         for i = nh + 1, #heads do heads[i]:Hide() end
         paragraphs:HideRest()
+        emptyText:SetPoint("TOP", page, "TOP", 0, -TOP - drawTop - 60)
         emptyText:SetShown(p.tab ~= "notes" and #view.cells == 0)
         emptyText:SetText(opts.empty or "Nothing is written here yet.")
         pageNo:SetShown(#view.pages > 1)
@@ -886,11 +1143,22 @@ function BK.New(opts)
     -----------------------------------------------------------------------
     local KEYS = {
         PADDUP = "UP", PADDDOWN = "DOWN", PADDLEFT = "LEFT", PADDRIGHT = "RIGHT",
-        PAD1 = "A", PAD2 = "B", PAD3 = "X", PADLSHOULDER = "LB", PADRSHOULDER = "RB",
-        PADLTRIGGER = "LT", PADRTRIGGER = "RT", PADRSTICK = "RS",
+        PAD1 = "A", PAD2 = "B", PAD3 = "X", PAD4 = "Y", PADLSHOULDER = "LB", PADRSHOULDER = "RB",
+        PADLTRIGGER = "LT", PADRTRIGGER = "RT", PADRSTICK = "RS", PADLSTICK = "LS",
     }
 
     function book:Press(name, down)
+        local p = Top()
+        local typing = Typing(p)
+        -- The filters up: theirs (Circle on its release, as ever)
+        if dropdown:IsShown() then
+            if name == "LT" or name == "RT" then
+                if down then switch:Press(name) end
+            elseif down == (name ~= "B") then
+                dropdown:Press(name)
+            end
+            return self:Render()
+        end
         -- Circle on its release: closing on the press would hand the release
         -- to the window under it (the bags: closed)
         if name == "B" then
@@ -899,10 +1167,44 @@ function BK.New(opts)
                 self.skipRelease = nil
                 return
             end
-            if not down then self:Back() end
+            if not down then
+                if typing then DoneTyping() else self:Back() end
+            end
             return
         end
         if not down then return end
+        -- (L3: the page's filters, typing or not)
+        if name == "LS" then
+            local filter = p and p.filter and p:filter()
+            if filter and filter.build then
+                if field:HasFocus() then field:ClearFocus() end
+                dropdown:Open(filter.build, { onClose = function() book:Render() end })
+                self:Render()
+            end
+            return
+        end
+        -- The pad typing: the D-pad over the letters, Cross one, Square
+        -- deletes, Triangle a space
+        if typing then
+            if name == "UP" or name == "DOWN" or name == "LEFT" or name == "RIGHT" then KeyMove(name)
+            elseif name == "A" then self:TypeKey(keys[keyAt])
+            elseif name == "X" then self:TypeKey({ char = "DEL" })
+            elseif name == "Y" then self:TypeKey({ char = " " })
+            elseif name == "LT" or name == "RT" then switch:Press(name)
+            end
+            return
+        end
+        if name == "Y" then
+            if p and p.field then
+                -- (the mouse: the field's keyboard)
+                if not IF.Input.Pad() then return field:SetFocus() end
+                p.typing = true
+                p.views = {}
+                return self:Render()
+            end
+            if opts.search and opts.search.open then opts.search.open(self) end
+            return
+        end
         if name == "UP" or name == "DOWN" or name == "LEFT" or name == "RIGHT" then Move(name)
         elseif name == "LB" then Turn(-1)
         elseif name == "RB" then Turn(1)
@@ -940,7 +1242,10 @@ function BK.New(opts)
     -- (on its release, as Circle)
     local escape = K.NewFrame("Button", (opts.name or "ImprovedForeverBook") .. "Escape")
     escape:RegisterForClicks("AnyUp")
-    escape:SetScript("OnClick", function() book:Back() end)
+    escape:SetScript("OnClick", function()
+        if dropdown:IsShown() then return dropdown:Close() end
+        book:Back()
+    end)
 
     local function BindEscape(on)
         if IF.InCombat() then return end
@@ -1000,6 +1305,7 @@ function BK.New(opts)
 
     window:SetScript("OnUpdate", function()
         switch:Update()
+        if caret:IsShown() then caret:SetAlpha(GetTime() % 1 < 0.55 and 1 or 0) end
     end)
 
     -- (the pad or the mouse taken up: the cursor, tooltip and legend for it)
@@ -1053,6 +1359,8 @@ function BK.New(opts)
         NativeFocus(false)
         if not suspended then wipe(book.stack) end
         if GameTooltip:GetOwner() == page then GameTooltip:Hide() end
+        if field:HasFocus() then field:ClearFocus() end
+        dropdown:Close()
         if not IF.InCombat() then ClearOverrideBindings(window) end
         if opts.onHide then opts.onHide(book) end
     end)

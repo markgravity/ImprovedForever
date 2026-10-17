@@ -24,7 +24,9 @@ local ITEMS = {
         tip = "R3 held on an item (in the bags, the loot window or the auction window) opens its page: what it is,"
             .. " what drops it, who sells it, the recipes that make it or use it, its quests and auction prices."
             .. " It reads as a traveller's notes: Cross on an entry under them opens that list, then another"
-            .. " item's page or a waypoint; L2 / R2 turn the page, Circle goes back."
+            .. " item's page or a waypoint; L2 / R2 turn the page, Circle goes back. Triangle searches it by name"
+            .. " (items, creatures, quests, chests and nodes), typed with the letters on the page; L3 there"
+            .. " filters it: kind, rarity, level, type, weapon or armor type, slot."
             .. " A short R3 press still shows or hides the tooltip.",
         -- (the mouse's way, while it's the one in hand)
         note = function()
@@ -33,7 +35,7 @@ local ITEMS = {
             return (key and (IF.Binds.KeyText(key) .. " an item (in the bags, the loot window, a chat link...) to open"
                 .. " its page") or "Bind a click or a key to open an item's page") .. " (the Bindings tab: Misc)."
                 .. " In it: click an entry to open it, right-click to show it on the map, the wheel or the arrows"
-                .. " turn the page, Esc goes back."
+                .. " turn the page, Esc goes back; Search looks one up by name, its Filters narrow it."
         end,
     }, OnOff(function() return S().enabled end, function(on) S().enabled = on end, "Wiki")),
     Item({

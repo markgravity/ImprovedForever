@@ -22,6 +22,11 @@ if [ -L "$dest/ImprovedForever_Gather" ]; then
     rm "$dest/ImprovedForever_Gather"
     echo "removed the old ImprovedForever_Gather link"
 fi
+# (Library is Wiki)
+if [ -L "$dest/ImprovedForever_Library" ]; then
+    rm "$dest/ImprovedForever_Library"
+    echo "removed the old ImprovedForever_Library link"
+fi
 # (Controller is the core's since 0.8.0)
 if [ -L "$dest/ImprovedForever_Controller" ]; then
     rm "$dest/ImprovedForever_Controller"

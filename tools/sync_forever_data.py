@@ -3,7 +3,8 @@
 1. QuestieDB (vendor/QuestieDB) moved to its latest master: drops, vendors,
    quests, NPCs and objects for Forever, with its corrections (its own
    exporter, tools/export-forever.lua, run with a Lua 5.1).
-2. RecipeData.lua (core) rebuilt from Forever's own client tables on wago.tools
+2. RecipeData.lua (core) and WikiItems.lua (the Wiki's search) rebuilt from
+   Forever's own client tables on wago.tools
    (tools/make_library.py: the newest 1.16+ build, whatever product it's
    listed under).
 3. WorldData.lua (core) rebuilt (tools/make_library_data.py).
@@ -168,7 +169,7 @@ def check_code():
 
 
 def check_lua():
-    for f in ("ImprovedForever/RecipeData.lua", "ImprovedForever/WorldData.lua"):
+    for f in ("ImprovedForever/RecipeData.lua", "ImprovedForever/WorldData.lua", "ImprovedForever_Wiki/WikiItems.lua"):
         run(["luajit", "-bl", f, "/dev/null"])
     run(["luajit", "tools/loadcheck.lua", "each"])
 
@@ -193,7 +194,8 @@ def main():
     step("Lua checks")
     check_lua()
     step("Changed")
-    run(["git", "status", "--short", "--", "ImprovedForever/RecipeData.lua", "ImprovedForever/WorldData.lua", "vendor"])
+    run(["git", "status", "--short", "--", "ImprovedForever/RecipeData.lua", "ImprovedForever/WorldData.lua",
+         "ImprovedForever_Wiki/WikiItems.lua", "vendor"])
     if problems:
         sys.exit(2)
 

@@ -7,7 +7,7 @@
 -- by zone (Cross: a waypoint at the nearest spawn; a container: its page),
 -- the recipes by profession (Cross: the other item's page), the quests;
 -- Circle goes back to the notes, then to the item before. A creature's, a
--- chest's, a quest's page likewise. LB.Page(kind, id) is a page for any book
+-- chest's, a quest's page likewise. Triangle: the search (WikiSearch.lua). LB.Page(kind, id) is a page for any book
 -- (the Journal's too).
 -- Never in combat.
 local IF = ImprovedForever
@@ -822,6 +822,9 @@ function Page:tip(line, book)
     return true
 end
 
+-- (the search's page does what a page does with its entries: WikiSearch.lua)
+LB.PageClass = Page
+
 -- A page of the Wiki, for its own book or another's (the Journal's):
 -- kind "item" (an id or a link), "npc", "object" or "quest"; nil: nothing
 -- known of it
@@ -859,6 +862,8 @@ local book = BK.New({
     name = "ImprovedForeverWiki", title = "Wiki", portrait = "Interface\\Icons\\INV_Misc_Book_09",
     other = AuctionBehind,
     label = function(f) return f == AuctionBehind() and "Auction House" or nil end,
+    -- (Triangle: the search's page, WikiSearch.lua)
+    search = { text = "Search", open = function() LB.Search() end },
     onHide = function()
         if LB.origin == "auction" and BY and BY.Render then BY.Render() end
     end,

@@ -588,6 +588,22 @@ function LB.Quest(questID)
     }
 end
 
+-- A creature's, a chest's or node's, a quest's list line, by its id (the
+-- search's: WikiSearch.lua); kind "npc", "object" or "quest"; nil: not known
+function LB.Entry(kind, id)
+    local Q = LB.Q()
+    if not Q then return nil end
+    if kind == "npc" then
+        local e = NpcEntry(Q, id, ICONS.npc)
+        if not e then return nil end
+        -- (where it is: the line says, as the zones' headers would)
+        if e.zone and e.zone > 0 then e.line = Join({ e.line, ZoneName(e.zone) }) end
+        return LB.Faction(e)
+    end
+    if kind == "object" then return ObjectEntry(Q, id) end
+    if kind == "quest" then return QuestEntry(Q, id) end
+end
+
 function LB.Quests(itemID)
     local Q = LB.Q()
     if not Q then return nil end
