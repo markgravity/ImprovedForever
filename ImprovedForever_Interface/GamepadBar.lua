@@ -917,6 +917,46 @@ end
 
 GB.Mirror, GB.SetBorder, GB.SLOT = Mirror, SetBorder, SLOT
 
+-- Where these are on screen, in screen pixels (left, bottom, right, top:
+-- every tile and its glyphs), or nil while hidden: another addon's frame
+-- kept clear of them (the Quest Tracker module's tracker)
+function GB.Rect()
+    if not holder:IsShown() then return nil end
+    local l, b, r, t
+    local function Add(region)
+        if not (region and region:IsShown()) then return end
+        local rl, rb, rw, rh = region:GetRect()
+        if not (rl and rb and rw and rh) then return end
+        local k = region:GetEffectiveScale()
+        rl, rb, rw, rh = rl * k, rb * k, rw * k, rh * k
+        l, b = math.min(l or rl, rl), math.min(b or rb, rb)
+        r, t = math.max(r or rl + rw, rl + rw), math.max(t or rb + rh, rb + rh)
+    end
+    for _, button in ipairs(buttons) do
+        Add(button)
+        Add(button.key)
+    end
+    for _, button in ipairs({ classLeft, classRight }) do
+        Add(button)
+        Add(button.key)
+        Add(button.key2)
+    end
+    if not l then return nil end
+    return l, b, r, t
+end
+
+-- Another addon's tile beside these (the Wheel module's recent slot,
+-- ImprovedForever_Wheel/RecentSlot.lua): left of the D-pad's diamond,
+-- level with its middle, the D-pad's tile size. While these show: the
+-- frame to anchor its middle to, x, y from it, the tile's sizes (GB.Dims);
+-- else nil.
+local SIDE_GAP = 14
+local sideDims = GB.Dims(DPAD.size, DPAD.glyph)
+function GB.SideSpot()
+    if not holder:IsShown() then return nil end
+    return dpadCenter, -(Extent(DPAD) + SIDE_GAP + sideDims.width / 2), 0, sideDims
+end
+
 function GB.Apply()
     shown = nil
     Watch()

@@ -47,6 +47,53 @@ label:SetPoint("BOTTOM", slot, "TOP", 0, 4)
 label:SetWidth(110)
 label:SetWordWrap(false)
 
+-- The Interface module's spell diamonds shown (ImprovedForever_Interface,
+-- GamepadBar.lua): the slot one of their tiles instead (their look and
+-- effects: cooldown, cast and food rings, GB.Mirror over a stand-in for a
+-- game button), placed left of their D-pad's diamond. Returns their bar's
+-- module, the frame to anchor to, x, y and the tile's sizes, or nil.
+local function Diamonds()
+    local IN = IF.Interface
+    local GB = IN and IN.GamepadBar
+    if not (GB and GB.SideSpot and GB.Tile and GB.Mirror and GB.StandIn) then return nil end
+    local anchor, x, y, d = GB.SideSpot()
+    if not anchor then return nil end
+    return GB, anchor, x, y, d
+end
+
+local tile, standIn, tileCount
+local diamond = false
+
+-- (the round look or the tile; the slot the tile's size)
+local function Look(GB, d)
+    diamond = GB ~= nil
+    if diamond and not tile then
+        tile = GB.Tile(slot, slot, d, { 0, 0 })
+        tile:EnableMouse(false)
+    end
+    bg:SetShown(not diamond)
+    frame:SetShown(not diamond)
+    count:SetShown(not diamond)
+    if tile then tile:SetShown(diamond) end
+    if diamond then slot:SetSize(d.width, d.width) end
+end
+
+-- A stand-in for the recent action (its spell's or item's cooldown and
+-- cast; greyed when none of its item is left)
+local function StandIn(GB, recent, n)
+    local spellID, itemID, spellName
+    if recent.type == "item" then
+        itemID = tonumber((recent.value or ""):match("^item:(%d+)"))
+    elseif recent.type == "spell" then
+        spellName = recent.value
+        local info = C_Spell and C_Spell.GetSpellInfo and C_Spell.GetSpellInfo(spellName)
+        spellID = recent.spellID or (type(info) == "table" and info.spellID) or nil
+    end
+    local s = GB.StandIn(recent.icon or 134400, spellID, itemID, spellName)
+    if n == 0 then s.icon.r, s.icon.g, s.icon.b = 0.4, 0.4, 0.4 end
+    return s
+end
+
 -- The same size as the game's own gamepad action buttons, measured on
 -- screen (other addons may resize them): the first shown action button
 -- under its bar
@@ -116,6 +163,10 @@ end
 
 local size
 local function Resize(force)
+    if diamond then
+        size = nil
+        return
+    end
     local bar = _G.GamepadMainActionBarFrame
     if not (sample and sample:IsShown() and sample:IsVisible()) then
         sample = bar and bar:IsShown() and FindButton(bar, 0) or nil
@@ -175,7 +226,10 @@ local function Place()
     local main = _G.GamepadMainActionBarFrame
     local layout = Layout()
     local where
-    if layout.x then
+    local _, anchor, ax, ay = Diamonds()
+    if anchor and not slot.editing then
+        where = { "CENTER", anchor, ax, ay, "CENTER" }
+    elseif layout.x then
         where = { "CENTER", "BOTTOMLEFT", layout.x, layout.y }
     elseif main and main:IsShown() then
         local right, y = BarsRight(main)
@@ -183,7 +237,7 @@ local function Place()
             local s = slot:GetEffectiveScale()
             where = { "LEFT", "BOTTOMLEFT", math.floor(right / s + 6.5), math.floor(y / s + 0.5) }
         else
-            where = { "LEFT", main, 6, -20 }
+            where = { "LEFT", main, 6, -20, "RIGHT" }
         end
     else
         where = { "BOTTOM", "BOTTOM", 360, 120 }
@@ -195,7 +249,7 @@ local function Place()
     placed = where
     slot:ClearAllPoints()
     if type(where[2]) == "table" then
-        slot:SetPoint(where[1], where[2], "RIGHT", where[3], where[4])
+        slot:SetPoint(where[1], where[2], where[5], where[3], where[4])
     else
         slot:SetPoint(where[1], UIParent, where[2], where[3], where[4])
     end
@@ -243,6 +297,8 @@ local function Refresh(force)
             return
         end
     end
+    local GB, _, _, _, d = Diamonds()
+    Look(GB, d)
     Place()
     slot:Show()
     Resize()
@@ -250,12 +306,17 @@ local function Refresh(force)
     label:SetShown(not Layout().hideName)
     glyphs:SetShown(not Layout().hideGlyphs)
     local recent = IF.RecentAction(wheel)
-    icon:SetShown(recent ~= nil)
+    icon:SetShown(recent ~= nil and not diamond)
+    standIn, tileCount = nil, ""
     if recent then
         K.SetIcon(icon, recent.icon or 134400)
         local n = recent.type == "item" and ItemCount(recent.value)
         count:SetText(n and n > 1 and n or "")
         icon:SetDesaturated(n == 0)
+        if diamond then
+            standIn = StandIn(GB, recent, n)
+            tileCount = n and n > 1 and tostring(n) or ""
+        end
         -- (a group member's: who holds the token now, Group.lua)
         if recent.unit and IF.GroupWheel then
             label:SetText((IF.GroupWheel.Look(recent.unit)))
@@ -283,6 +344,14 @@ slot:SetScript("OnUpdate", function(_, dt)
     if elapsed < 0.05 then return end
     elapsed = 0
     Refresh(false)
+    -- (the Interface module's diamonds shown or not: the look swapped; its
+    -- tile's effects each update, as theirs)
+    local GB = Diamonds()
+    if (GB ~= nil) ~= diamond then Refresh(true) end
+    if diamond and tile and GB then
+        GB.Mirror(tile, standIn)
+        tile.count:SetText(tileCount or "")
+    end
     -- (the game's bars move: its compact layout on / off, a bar shown...)
     if not slot.editing then Place() end
     -- (another addon may resize the game's buttons any time)
