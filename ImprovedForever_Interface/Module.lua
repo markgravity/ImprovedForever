@@ -4,15 +4,21 @@
 -- experience bar a line along the bottom edge (XPBar.lua), the gamepad
 -- bar as two diamonds bottom right (GamepadBar.lua), the chat as only its
 -- lines while not in use (ChatView.lua, ChatFade.lua), set up in its tab
--- (InterfaceEditor.lua). The chat isn't moved: the game's place for it,
--- bottom left, is already over the player's frame (moving it through Edit
--- Mode from addon code taints the layout's frames).
+-- (InterfaceEditor.lua); the chat over the player's frame, saved in the
+-- Edit Mode layout for the game to apply at the next load
+-- (ChatPosition.lua).
 local IF = ImprovedForever
 
 IF.AddModule({ key = "interface", label = "Interface", icon = IF.TEX .. "ic_mod_interface", addon = ... })
 
 local IN = {}
 IF.Interface = IN
+
+-- The bottom padding the HUD's groups share, so their feet line up: the
+-- player's avatar (UnitFrames.lua) and the gamepad bar's face buttons
+-- diamond (GamepadBar.lua: its bottom point), the set pips and glyphs
+-- under it still clear of the experience line
+IN.BOTTOM = 30
 
 -- /if padprobe: what the game's gamepad bar holds (GamepadBar.lua)
 IF.AddCommand("padprobe", function() IN.GamepadBar.Probe() end, ": what the gamepad bar's buttons hold")
@@ -25,6 +31,7 @@ local DEFAULTS = {
     target = true,      -- the target's health on top, its name over it
     cards = true,       -- your pet and party as cards on the experience line
     chatDim = true,     -- the chat as only its lines while not in use
+    chatAbove = true,   -- the chat over the player's frame (saved in the Edit Mode layout)
     xp = true,          -- the experience as a line along the screen's bottom edge
     pad = true,         -- the gamepad bar as Hogwarts Legacy's spell diamonds, bottom right
 }
@@ -56,7 +63,8 @@ function IN.Settings()
     for key, value in pairs(DEFAULTS) do
         if settings[key] == nil then settings[key] = value end
     end
-    -- (0.1.0 moved the chat through Edit Mode: its bookkeeping dropped)
-    settings.chat, settings.chatMoved, settings.chatPlaced = nil, nil, nil
+    -- (an earlier one moved the chat right, another drew your auras: their
+    -- keys gone)
+    settings.chat, settings.auras = nil, nil
     return settings
 end

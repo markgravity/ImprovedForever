@@ -70,7 +70,10 @@ local function ClassSpot(d)
     local rx, ry = a + d.side / 2 + TILE_GAP + CLASS.side / 2, a
     return (rx - ry) / ROOT2, (rx + ry) / ROOT2
 end
-local MARGIN_X, MARGIN_Y = 40, 40
+-- (the face diamond's bottom point on the HUD's shared bottom, IN.BOTTOM:
+-- the holder sits that point's glyph half lower, Extent)
+local MARGIN_X = 40
+local MARGIN_Y = IN.BOTTOM - FACE.glyph / 2
 local GAP = 34          -- (between the two groups)
 
 local holder = CreateFrame("Frame", "ImprovedForeverGamepadBar", UIParent)

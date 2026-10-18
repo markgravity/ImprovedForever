@@ -619,15 +619,18 @@ local MODEL_EVENTS = { UNIT_MODEL_CHANGED = true, UNIT_PORTRAIT_UPDATE = true, G
 
 ---------------------------------------------------------------------------
 -- The player's bottom left, as the target's: its avatar on the left (as
--- big as the minion and party cards), then along its foot its name (a
+-- tall as the gamepad bar's big diamond), then along its foot its name (a
 -- combat mark before it) over its health, its power under it (the same
 -- width, two thirds the height)
 ---------------------------------------------------------------------------
 local POWER_H = 16
--- (the avatar the cards' size, PartyCards.lua; the bars along its foot)
-local AVATAR_W, AVATAR_H = 78, 100
+-- (the avatar as tall as the gamepad bar's face buttons diamond,
+-- GamepadBar.lua: two spreads and a tile's width of a 44 tile, about 154;
+-- the cards' proportions; the bars along its foot)
+local AVATAR_H = 154
+local AVATAR_W = math.floor(AVATAR_H * 0.78 + 0.5)
 local AVATAR_GAP = 6
-local PLAYER_X, PLAYER_Y = 20, 20
+local PLAYER_X, PLAYER_Y = 20, IN.BOTTOM
 local GOLD = { 1, 0.82, 0 }
 local GREY = { 0.45, 0.45, 0.45 }
 local player = UnitButton("ImprovedForeverPlayerFrame", "player", AVATAR_W + AVATAR_GAP + BAR_W, AVATAR_H)
@@ -748,6 +751,9 @@ UF.FillHealth, UF.FillPower, UF.UnitButton, UF.NameColor = FillHealth, FillPower
 UF.Listen, UF.Join, UF.UNIT, UF.POWER_EVENTS = Listen, Join, UNIT, POWER_EVENTS
 UF.Avatar, UF.AvatarUnit, UF.AvatarLook, UF.ClassColor = Avatar, AvatarUnit, AvatarLook, ClassColor
 UF.MODEL_EVENTS, UF.GOLD, UF.GREY = MODEL_EVENTS, GOLD, GREY
+UF.player = player
+-- (its top: the chat goes over it, ChatPosition.lua)
+UF.PLAYER_TOP = PLAYER_Y + AVATAR_H
 
 -- What the settings ask, now (Edit Mode: the game's shown to be moved,
 -- ours drawn at 0)

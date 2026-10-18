@@ -50,6 +50,12 @@ local ITEMS = {
             .. "still does every press: its slots are set as before (the Bindings tab, its own editor).",
     }, Toggle("pad", "Spell diamonds", function() IN.GamepadBar.Apply() end)),
     Item({
+        key = "chatAbove", group = "chat", label = "Chat over your frame",
+        tip = "The chat moved over your player frame, written into your Edit Mode layout (a preset is copied "
+            .. "as \"Improved Forever\"); the game moves it at your next /reload. Done once per layout: moved "
+            .. "again in Edit Mode, it stays where you put it.",
+    }, Toggle("chatAbove", "Chat over your frame", function() IN.ChatPosition.Apply() end)),
+    Item({
         key = "chatDim", group = "chat", label = "Immersive chat",
         tip = "While you aren't using the chat only its lines show, no box, tabs or edit box: each new line "
             .. "bright for a few seconds, then barely there. Typing, the controller on it or the mouse over "
