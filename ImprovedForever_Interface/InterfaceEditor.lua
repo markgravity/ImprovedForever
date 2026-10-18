@@ -88,7 +88,22 @@ local ITEMS = {
             .. "as \"Improved Forever\") and made the active layout again, so the game moves it now. Done once "
             .. "per layout: moved again in Edit Mode, it stays where you put it. To undo it, pick your old "
             .. "layout in Edit Mode.",
-    }, Toggle("chatAbove", "Chat over your frame (test)", function() IN.ChatPosition.Apply() end)),
+    }, Toggle("chatAbove", "Chat over your frame (test)", function() IN.HudLayout.Apply() end)),
+    Item({
+        key = "hudAuras", group = "frames", label = "Buffs along the bottom (test)",
+        tip = "The game's buffs and debuffs moved to the bottom, between the minion and the party cards "
+            .. "(debuffs on the bottom row, buffs over them, growing right), as big as the Cooldown Manager's "
+            .. "icons, each with its effect in short on it (+5 STA), written into your Edit Mode "
+            .. "layout as the chat is. Done once per layout: moved again in Edit Mode, they stay where you put "
+            .. "them.",
+    }, Toggle("hudAuras", "Buffs along the bottom (test)", function() IN.HudLayout.Apply() end)),
+    Item({
+        key = "hudCooldowns", group = "pad", label = "Cooldowns beside the diamonds (test)",
+        tip = "The game's Cooldown Manager (turn it on in the game's options) moved to the bottom, left of the "
+            .. "spell diamonds: your main cooldowns on the bottom row, the utility ones over them, growing "
+            .. "left. Written into your Edit Mode layout as the chat is; its own options choose what it "
+            .. "shows.",
+    }, Toggle("hudCooldowns", "Cooldowns beside the diamonds (test)", function() IN.HudLayout.Apply() end)),
     Item({
         key = "chatDim", group = "chat", label = "Immersive chat",
         tip = "While you aren't using the chat only its lines show, no box, tabs or edit box: each new line "

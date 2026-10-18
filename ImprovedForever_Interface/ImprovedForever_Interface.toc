@@ -14,7 +14,8 @@ UnitFrames.lua
 PartyCards.lua
 XPBar.lua
 GamepadBar.lua
-ChatPosition.lua
+HudLayout.lua
+AuraLabels.lua
 PartyPad.lua
 ChatView.lua
 ChatFade.lua

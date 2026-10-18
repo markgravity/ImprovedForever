@@ -808,7 +808,7 @@ UF.Avatar, UF.AvatarUnit, UF.AvatarLook, UF.ClassColor = Avatar, AvatarUnit, Ava
 UF.Border = Border
 UF.MODEL_EVENTS, UF.GOLD, UF.GREY = MODEL_EVENTS, GOLD, GREY
 -- (the player frame's top, from the screen's bottom: the chat over it,
--- ChatPosition.lua)
+-- HudLayout.lua)
 UF.PLAYER_TOP = PLAYER_Y + AVATAR_H
 UF.player = player
 
