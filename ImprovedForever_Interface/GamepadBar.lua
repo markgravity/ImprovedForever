@@ -518,12 +518,19 @@ local function SlotSpellName(native)
     return ok and name or nil
 end
 
+-- (the interact button's cast: one begun at something to interact with, a
+-- herb, a vein, a corpse to skin, a chest; its spell's name, see
+-- DrawCursor's casts below)
+local interactCast
+
 -- Casting from this slot: its button's cast animation, or (when the game
 -- doesn't play it there: some channels come with another rank's id) your
--- cast or channel by the slot's spell's name
-local function SlotCasting(native)
+-- cast or channel by the slot's spell's name (the interact button: by the
+-- interact cast's)
+local function SlotCasting(native, interact)
     if Casting(native) then return true end
     local slotName = SlotSpellName(native)
+    if interact then slotName = interactCast end
     if not slotName then return false end
     if Secret(slotName) then return false end
     local ok, name = pcall(UnitChannelInfo, "player")
@@ -532,9 +539,9 @@ local function SlotCasting(native)
     return name == slotName
 end
 
-local function CastFill(b, native)
+local function CastFill(b, native, interact)
     b.casting = false
-    if not SlotCasting(native) then
+    if not SlotCasting(native, interact) then
         if b.ring:IsShown() then b.ring:Hide() end
         return
     end
@@ -615,7 +622,7 @@ local function Picture(native)
     local special = native.SpecialActionIcon
     if special and special:IsShown() then
         local atlas = special.GetAtlas and special:GetAtlas()
-        if Has(atlas) then return true, nil, atlas end
+        if Secret(atlas) or (type(atlas) == "string" and atlas ~= "") then return true, nil, atlas end
         local texture = special:GetTexture()
         if Has(texture) then return true, texture, nil, { special:GetTexCoord() } end
     end
@@ -628,9 +635,69 @@ end
 
 local FULL = { 0.07, 0.07, 0.07, 0.93, 0.93, 0.07, 0.93, 0.93 }   -- (an icon's own edge cropped)
 
+-- The interact button (the top bar's right face cluster's first): the game
+-- draws a unit's cursor on it (SetUnitCursorTexture: a herb's, an NPC's),
+-- a picture it can't hand on. Ours draws the same cursor itself, for the
+-- unit the game's would (MainActionBarFrame.lua's interact actions: the
+-- soft interact target in range, else the target to interact with; their
+-- loot icons are readable pictures)
+local function InteractButton()
+    local pu = PageUnit()
+    local top = pu and pu.actionBars and pu.actionBars.topBar
+    return top and top.Right and top.Right.ActionButton1
+end
+
+local function Yes(fn, unit)
+    if not fn then return false end
+    local ok, v = pcall(fn, unit)
+    return ok and not Secret(v) and v and true or false
+end
+
+local function CursorUnit()
+    local soft = Yes(UnitExists, "softinteract") or Yes(UnitIsGameObject, "softinteract")
+    if soft and Yes(UnitIsInInteractRange, "softinteract") then
+        return not Yes(UnitHasLootInteraction, "softinteract") and "softinteract" or nil
+    end
+    if Yes(UnitExists, "target") and not Yes(UnitHasLootInteraction, "target") and Yes(UnitIsInteractable, "target") then
+        return "target"
+    end
+end
+
+-- (a cast of yours begun with something to interact with in reach, its
+-- spell on none of your action slots (gathering, skinning, opening): the
+-- interact button's, its progress shown on it)
+local castWatch = CreateFrame("Frame")
+castWatch:RegisterUnitEvent("UNIT_SPELLCAST_START", "player")
+castWatch:RegisterUnitEvent("UNIT_SPELLCAST_CHANNEL_START", "player")
+castWatch:SetScript("OnEvent", function(_, _, _, _, spellID)
+    interactCast = nil
+    if Secret(spellID) or type(spellID) ~= "number" then return end
+    local near = Yes(UnitExists, "softinteract") or Yes(UnitIsGameObject, "softinteract")
+        or (Yes(UnitExists, "target") and Yes(UnitIsInteractable, "target"))
+    if not near then return end
+    local find = C_ActionBar and C_ActionBar.FindSpellActionButtons
+    local ok, slots = pcall(function() return find and find(spellID) end)
+    if ok and type(slots) == "table" and not Secret(slots) and #slots > 0 then return end
+    local get = C_Spell and C_Spell.GetSpellName or GetSpellInfo
+    local named, name = pcall(get, spellID)
+    if named and type(name) == "string" and not Secret(name) then interactCast = name end
+end)
+
+-- (drawn on ours: true)
+local function DrawCursor(b, native)
+    if native ~= InteractButton() then return false end
+    local unit = CursorUnit()
+    if not unit then return false end
+    local ok, drawn = pcall(SetUnitCursorTexture, b.icon, unit, nil, nil, false)
+    return ok and not Secret(drawn) and drawn and true or false
+end
+
 local function Mirror(b, native)
     b.native = native
+    local interact = native ~= nil and native == InteractButton()
+    local cursor = DrawCursor(b, native)
     local has, texture, atlas, coords, icon = Picture(native)
+    if cursor then has, texture, atlas, coords, icon = true, nil, nil, nil, nil end
     if not has then
         b.icon:SetTexture(nil)
         b.count:SetText("")
@@ -647,7 +714,11 @@ local function Mirror(b, native)
         return
     end
     local d = b.d
-    if Has(atlas) then
+    if cursor then
+        -- (the cursor drawn above, its own coords: upright)
+        b.icon:SetSize(d.width * UPRIGHT_FILL, d.width * UPRIGHT_FILL)
+        b.icon:SetRotation(0)
+    elseif Has(atlas) then
         b.icon:SetAtlas(atlas)
         b.icon:SetSize(d.width * UPRIGHT_FILL, d.width * UPRIGHT_FILL)
         b.icon:SetRotation(0)
@@ -680,7 +751,7 @@ local function Mirror(b, native)
     -- The ring: a cast from the slot, else a buff from its item (food,
     -- drink: shrinking with its time left, its timer on it), else its
     -- cooldown (coloured by its share left, unwinding: the share still to wait)
-    CastFill(b, native)
+    CastFill(b, native, interact)
     if b.casting then
         b.timer:Hide()
     else
