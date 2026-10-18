@@ -19,6 +19,8 @@ IF.Interface = IN
 -- diamond (GamepadBar.lua: its bottom point), the set pips and glyphs
 -- under it still clear of the experience line
 IN.BOTTOM = 30
+-- The experience line's height (XPBar.lua): the cards' dots sit on it
+IN.XP_H = 8
 
 -- The game's colours of a monster's level against yours, its own when it
 -- has them: green, yellow, orange, red (a card's alert, a cooldown's time
@@ -57,6 +59,7 @@ local DEFAULTS = {
     hudAuras = true,    -- your buffs and debuffs along the bottom (in the Edit Mode layout; a test)
     hudCooldowns = true, -- the Cooldown Manager left of the spell diamonds (in the Edit Mode layout; a test)
     chatDim = true,     -- the chat as only its lines while not in use
+    npcDialog = true,   -- talking to an NPC (quests, gossip) as subtitles low in the middle, Spoken's voice with it
     xp = true,          -- the experience as a line along the screen's bottom edge
     pad = true,         -- the gamepad bar as Hogwarts Legacy's spell diamonds, bottom right
     partyPad = false,   -- L1 ours: + the D-pad picks a party spell, + a face button casts it on party 1 to 4 (a test)

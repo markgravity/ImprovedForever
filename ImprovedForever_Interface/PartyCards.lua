@@ -53,7 +53,7 @@ local FLASH, FLASH_LOW = 0.5, 0.25    -- (the alert's flash: seconds each way, i
 -- (its pulse, as a gamepad diamond's cooldown beat in the alert's colour:
 -- each second, a flash fading over PULSE seconds, at PULSE_PEAK)
 local PULSE, PULSE_PEAK = 0.35, 0.45
-local LINE_H = 4        -- (the experience line's height, XPBar.lua: the dots sit on it)
+local LINE_H = IN.XP_H  -- (the experience line's height, XPBar.lua: the dots sit on it)
 local STEM_W, STEM_ALPHA = 2, 0.55
 local HEALTH_FILL = "UI-HUD-UnitFrame-Target-PortraitOn-Bar-Health"
 local POWER_FILL = "UI-HUD-UnitFrame-Target-PortraitOn-Bar-"

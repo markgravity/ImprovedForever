@@ -324,14 +324,17 @@ end
 ---------------------------------------------------------------------------
 local pips = {}
 local PIP, PIP_GAP = 8, 6
--- (centred on the whole: midway between the two diamonds' middles)
+-- (centred on the whole: midway between the two diamonds' middles; just
+-- over the experience line (IN.XP_H), the lit one's bigger size clear of
+-- it. The face diamond's bottom point is on IN.BOTTOM)
 local PIPS_X = -(Extent(FACE) + GAP + Extent(DPAD)) / 2
+local PIPS_Y = IN.XP_H + 4 + (PIP + 3) / 2
 for i = 1, 4 do
     local p = holder:CreateTexture(nil, "ARTWORK")
     p:SetSize(PIP, PIP)
     p:SetTexture(CIRCLE)
-    p:SetPoint("TOP", faceCenter, "CENTER", PIPS_X + (i - 2.5) * (PIP + PIP_GAP),
-        -(FACE.spread + FACE.width / 2 + FACE.glyph / 2 + 4))
+    p:SetPoint("CENTER", faceCenter, "CENTER", PIPS_X + (i - 2.5) * (PIP + PIP_GAP),
+        -(FACE.spread + FACE.width / 2) - (IN.BOTTOM - PIPS_Y))
     pips[i] = p
 end
 local page = holder:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")

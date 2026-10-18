@@ -649,7 +649,7 @@ local AVATAR_W = math.floor(AVATAR_H * 0.78 + 0.5)
 local CARD_HEALTH_H, CARD_POWER_H, CARD_NAME_H, CARD_INSET = 18, 14, 18, 4
 local PLAYER_X, PLAYER_Y = 20, IN.BOTTOM
 -- (its class dot: the cards' role dots' sizes, PartyCards.lua)
-local DOT, DOT_ICON, LINE_H, STEM_W, STEM_ALPHA = 18, 12, 4, 2, 0.55
+local DOT, DOT_ICON, LINE_H, STEM_W, STEM_ALPHA = 18, 12, IN.XP_H, 2, 0.55
 local DOT_MASK = "Interface\\CharacterFrame\\TempPortraitAlphaMask"
 local GOLD = { 1, 0.82, 0 }
 local GREY = { 0.45, 0.45, 0.45 }

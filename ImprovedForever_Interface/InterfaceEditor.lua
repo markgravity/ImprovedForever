@@ -1,6 +1,7 @@
 -- The Interface tab, a tab of settings (IF.SettingsPage, SettingsPage.lua):
 -- each change to the game's HUD on / off. UnitFrames.lua, XPBar.lua,
--- GamepadBar.lua, ChatView.lua and ChatFade.lua do the work.
+-- GamepadBar.lua, ChatView.lua, ChatFade.lua and NpcDialog.lua do the
+-- work.
 local IF = ImprovedForever
 local IN = IF.Interface
 
@@ -110,6 +111,15 @@ local ITEMS = {
             .. "bright for a few seconds, then barely there. Typing, the controller on it or the mouse over "
             .. "it brings the game's chat back.",
     }, Toggle("chatDim", "Immersive chat", function() IN.ChatFade.Apply() end)),
+    Item({
+        key = "npcDialog", group = "chat", label = "NPC dialog as subtitles",
+        tip = "Talking to an NPC (its greeting, quests offered, handed in, rewards, gossip) shown as a line of "
+            .. "dialogue low in the middle of the screen: its face and name, its words, the quests and options "
+            .. "under them, in place of the game's window. The controller works as on the game's window (the "
+            .. "D-pad picks, A answers, B leaves, the right stick scrolls); the mouse clicks the lines. With "
+            .. "Spoken installed, its voice reads the words: how far it is shows under them, with a button to "
+            .. "stop or hear it again.",
+    }, Toggle("npcDialog", "NPC dialog as subtitles", function() IN.NpcDialog.Apply() end)),
 }
 
 local GROUPS = {

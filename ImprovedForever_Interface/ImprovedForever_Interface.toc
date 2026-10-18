@@ -16,6 +16,7 @@ XPBar.lua
 GamepadBar.lua
 HudLayout.lua
 AuraLabels.lua
+NpcDialog.lua
 PartyPad.lua
 ChatView.lua
 ChatFade.lua
