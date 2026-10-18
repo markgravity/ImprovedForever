@@ -63,17 +63,21 @@ local function Gaining()
     local max = MaxLevel()
     local ok, yes = pcall(function()
         if IsXPUserDisabled and IsXPUserDisabled() then return false end
-        return not max or UnitLevel("player") < max
+        local level = UnitLevel("player")
+        if issecretvalue and issecretvalue(level) then return true end
+        return not max or level < max
     end)
     return ok and yes
 end
 
+-- (a secret: none, never worked with)
 local function Values()
     local ok, cur, max, rest = pcall(function()
-        return UnitXP("player"), UnitXPMax("player"), GetXPExhaustion() or 0
+        return UnitXP("player"), UnitXPMax("player"), GetXPExhaustion()
     end)
-    if not ok then return end
-    return cur, max, rest
+    if not ok or issecretvalue and (issecretvalue(cur) or issecretvalue(max) or issecretvalue(rest)) then return end
+    if type(cur) ~= "number" or type(max) ~= "number" then return end
+    return cur, max, rest or 0
 end
 
 local function Refresh()

@@ -19,6 +19,9 @@ local N = {}
 IF.Native = N
 
 local PREFIX = "IF:"
+-- What a macro of ours runs for an action kind a module adds (its text by
+-- the action's value): N.MacroBodies[kind] = fn(value)
+N.MacroBodies = {}
 local PER_BAR = 8
 -- N.Bound's list, the frame it was read in (nil: read again)
 local bound, boundAt
@@ -196,7 +199,8 @@ function N.Set(spec, action, label, icon)
     local pickup, arg = Pickup(kind, value)
     if not pickup then
         local wheel = kind == "wheel" and value
-        local body = wheel and N.WheelBody(wheel) or IF.Override.Macro(action)
+        local made = kind and N.MacroBodies[kind]
+        local body = (made and made(value)) or (wheel and N.WheelBody(wheel)) or IF.Override.Macro(action)
         local name = OurMacro(action, label, body, icon)
         if not name then return false end
         pickup, arg = PickupMacro, name

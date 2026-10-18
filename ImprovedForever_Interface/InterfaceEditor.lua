@@ -13,6 +13,9 @@ local function Toggle(key, label, after)
     end, label)
 end
 
+local FOCUS_ORDER = { "auto", "tank", "healer", "off" }
+local FOCUS_NAMES = { auto = "Automatic", tank = "Tank", healer = "Healer", off = "Off" }
+
 local ITEMS = {
     Item({
         key = "player", group = "frames", label = "Player frame",
@@ -37,6 +40,34 @@ local ITEMS = {
             .. "frames show).",
     }, Toggle("cards", "Minion and party cards", function() IN.PartyCards.Apply() end)),
     Item({
+        key = "cardFocus", group = "frames", label = "Party cards focus",
+        tip = "What the party cards show for your role, a border coloured as a monster's level. Tank: who has "
+            .. "a monster's attention, green to red by their threat, flashing red for the highest. Healer: "
+            .. "who's hurt, green under 90% health to red, flashing red under 35%. Automatic: your assigned "
+            .. "role's (none when you have none). /if cards tank (healer, dps) shows it on stand-ins.",
+        value = function() return IN.Settings().cardFocus end,
+        text = function() return FOCUS_NAMES[IN.Settings().cardFocus] or "" end,
+        options = function()
+            local list = {}
+            for _, key in ipairs(FOCUS_ORDER) do list[#list + 1] = { action = key, name = FOCUS_NAMES[key] } end
+            return list
+        end,
+        choose = function(action)
+            IN.Settings().cardFocus = action
+            IN.PartyCards.Apply()
+        end,
+    }),
+    Item({
+        key = "partyPad", group = "frames", label = "Party targeting (L1, test)",
+        tip = "A test. With the party cards' focus a tank's or a healer's, L1 is ours instead of the game's "
+            .. "friendly targeting. Held: the D-pad picks one of four party spells (kept until you pick "
+            .. "another), and Square, Circle, Triangle and X cast it on party members 1 to 4, your target left "
+            .. "as it is (the button shows on each card; a tank's press casts on the monster that member is "
+            .. "fighting, when there is one). The four spells are a diamond of their own after the party cards, the "
+            .. "picked one lit: drag a spell, item or macro onto a tile, off it to empty it. L1 is taken out "
+            .. "of combat only, while the game has the controller.",
+    }, Toggle("partyPad", "Party targeting (L1, test)", function() IN.PartyCards.Apply() end)),
+    Item({
         key = "xp", group = "frames", label = "Experience line",
         tip = "Your experience as a thin line along the screen's bottom edge, the rested part beyond it, in "
             .. "place of the game's experience bar (its reputation bar at the top level stays). The mouse over "
@@ -49,12 +80,6 @@ local ITEMS = {
             .. "swaps them to that set in place; the pips under them show which set is up. The game's bar "
             .. "still does every press: its slots are set as before (the Bindings tab, its own editor).",
     }, Toggle("pad", "Spell diamonds", function() IN.GamepadBar.Apply() end)),
-    Item({
-        key = "chatAbove", group = "chat", label = "Chat over your frame",
-        tip = "The chat moved over your player frame, written into your Edit Mode layout (a preset is copied "
-            .. "as \"Improved Forever\"); the game moves it at your next /reload. Done once per layout: moved "
-            .. "again in Edit Mode, it stays where you put it.",
-    }, Toggle("chatAbove", "Chat over your frame", function() IN.ChatPosition.Apply() end)),
     Item({
         key = "chatDim", group = "chat", label = "Immersive chat",
         tip = "While you aren't using the chat only its lines show, no box, tabs or edit box: each new line "

@@ -40,11 +40,22 @@ local function Secret(v)
     return type(issecretvalue) == "function" and issecretvalue(v)
 end
 
--- A yes / no about the unit (false when the API has none or says a secret)
+-- A yes / no about the unit (false when the API has none or says a
+-- secret). A secret is never compared, even in a pcall: the attempt is
+-- blocked and taints what runs after it.
 local function Flag(fn, unit)
     if not fn then return false end
-    local ok, yes = pcall(function() return fn(unit) == true end)
-    return ok and yes
+    local ok, v = pcall(fn, unit)
+    if not ok or Secret(v) then return false end
+    return v == true
+end
+
+-- A unit's class colour as { r, g, b }, or nil (none, or a secret class)
+local function ClassColorOf(unit)
+    local ok, _, class = pcall(UnitClass, unit)
+    if not ok or Secret(class) or not class then return nil end
+    local color = RAID_CLASS_COLORS[class]
+    return color and { color.r, color.g, color.b }
 end
 
 local function Atlas(parent, layer, atlas, sub)
@@ -131,6 +142,7 @@ local POWER_FILL = "UI-HUD-UnitFrame-Target-PortraitOn-Bar-"
 local function PowerAtlas(unit)
     local ok, kind = pcall(function()
         local _, token = UnitPowerType(unit)
+        if Secret(token) then return nil end
         return POWER[token]
     end)
     return POWER_FILL .. (ok and kind or "Mana")
@@ -260,6 +272,7 @@ local function QuestText(unit)
         local data = C_TooltipInfo.GetUnit(unit)
         local quests, current = {}, nil
         for _, line in ipairs(data and data.lines or {}) do
+            if Secret(line.type) or Secret(line.leftText) or Secret(line.completed) then return "" end
             if line.type == TITLE and line.leftText then
                 current = { "|cffffd100" .. line.leftText .. ":|r" }
                 quests[#quests + 1] = current
@@ -289,12 +302,8 @@ local function NameplateColor(unit)
     local player = Flag(UnitIsPlayer, unit)
     if Flag(UnitIsDead, unit) and not player then return 0.5, 0.5, 0.5 end
     if player then
-        local ok, c = pcall(function()
-            local _, class = UnitClass(unit)
-            local color = RAID_CLASS_COLORS[class]
-            return color and { color.r, color.g, color.b }
-        end)
-        if ok and c then return c[1], c[2], c[3] end
+        local c = ClassColorOf(unit)
+        if c then return c[1], c[2], c[3] end
     end
     if Flag(UnitIsTapDenied, unit) then return 0.9, 0.9, 0.9 end
     local friend = Flag(function(u) return UnitIsFriend("player", u) end, unit)
@@ -315,8 +324,9 @@ local CLASSIFICATION = {
 }
 
 local function Classification(unit)
-    local ok, c = pcall(function() return CLASSIFICATION[UnitClassification(unit)] end)
-    return ok and c or nil
+    local ok, kind = pcall(UnitClassification, unit)
+    if not ok or Secret(kind) or not kind then return nil end
+    return CLASSIFICATION[kind]
 end
 
 -- Its level, coloured by how hard it is for you; a skull when it's too
@@ -324,6 +334,7 @@ end
 local function Level(t, unit)
     local ok, level, r, g, b = pcall(function()
         local l = UnitLevel(unit)
+        if Secret(l) then error("secret") end
         if not l or l <= 0 then return nil end
         local color = (GetCreatureDifficultyColor or GetQuestDifficultyColor)(l)
         return l, color.r, color.g, color.b
@@ -517,12 +528,20 @@ local AVATAR_INSET, STRIP_H, ZOOM = 4, 3, 0.45
 local BRONZE = { 0.62, 0.5, 0.32 }     -- (the border's own, should the game's layout be missing)
 
 -- The game's tooltip layout (NineSliceUtil, applied to our frame), its
--- centre left out; without it, thin bronze edges of ours
+-- centre left out; without it, thin bronze edges of ours. Its pieces:
+-- frame.borderPieces (to tint)
+local PIECES = { "TopLeftCorner", "TopRightCorner", "BottomLeftCorner", "BottomRightCorner",
+    "TopEdge", "BottomEdge", "LeftEdge", "RightEdge" }
+
 local function Border(frame)
+    frame.borderPieces = {}
     local ok = NineSliceUtil and NineSliceUtil.ApplyLayoutByName
         and pcall(NineSliceUtil.ApplyLayoutByName, frame, "TooltipDefaultLayout")
     if ok and frame.TopEdge then
         if frame.Center then frame.Center:Hide() end
+        for _, key in ipairs(PIECES) do
+            if frame[key] then frame.borderPieces[#frame.borderPieces + 1] = frame[key] end
+        end
         return
     end
     for _, e in ipairs({ { "TOPLEFT", "TOPRIGHT", nil, 1 }, { "BOTTOMLEFT", "BOTTOMRIGHT", nil, 1 },
@@ -533,6 +552,7 @@ local function Border(frame)
         t:SetPoint(e[2])
         if e[3] then t:SetWidth(e[3]) end
         if e[4] then t:SetHeight(e[4]) end
+        frame.borderPieces[#frame.borderPieces + 1] = t
     end
 end
 
@@ -566,6 +586,7 @@ local function Avatar(parent, w, h)
     frame:SetFrameLevel(a.over:GetFrameLevel() + 6)
     Border(frame)
     local top = CreateFrame("Frame", nil, frame)
+    a.badge = top
     top:SetAllPoints()
     top:SetFrameLevel(frame:GetFrameLevel() + 2)
     a.gem = Atlas(top, "OVERLAY", "UI-HUD-UnitFrame-SmallCircle", 1)
@@ -598,6 +619,7 @@ local function AvatarLook(a, unit, color, grey)
     a.portrait:SetDesaturated(grey and true or false)
     local ok, level = pcall(function()
         local l = UnitLevel(unit)
+        if Secret(l) then return "" end
         return (l and l > 0) and tostring(l) or "??"
     end)
     a.level:SetText(ok and level or "")
@@ -605,12 +627,7 @@ end
 
 -- A unit's class colour, or nil
 local function ClassColor(unit)
-    local ok, c = pcall(function()
-        local _, class = UnitClass(unit)
-        local color = RAID_CLASS_COLORS[class]
-        return color and { color.r, color.g, color.b }
-    end)
-    return ok and c or nil
+    return ClassColorOf(unit)
 end
 
 -- The events that change a model
@@ -695,10 +712,10 @@ local function Join(a, b)
 end
 
 Listen(player, Join(UNIT, POWER_EVENTS), { "PLAYER_LEVEL_UP", "PLAYER_REGEN_DISABLED", "PLAYER_REGEN_ENABLED",
-    "PLAYER_ENTERING_WORLD", "CVAR_UPDATE" })
+    "PLAYER_ENTERING_WORLD" })
 Listen(target, { "UNIT_HEALTH", "UNIT_MAXHEALTH", "UNIT_NAME_UPDATE", "UNIT_FLAGS", "UNIT_FACTION", "UNIT_LEVEL",
     "UNIT_CLASSIFICATION_CHANGED", "UNIT_THREAT_LIST_UPDATE", "UNIT_THREAT_SITUATION_UPDATE" },
-    { "PLAYER_TARGET_CHANGED", "CVAR_UPDATE", "QUEST_LOG_UPDATE" })
+    { "PLAYER_TARGET_CHANGED", "QUEST_LOG_UPDATE" })
 
 ---------------------------------------------------------------------------
 -- The game's frames drawn at 0 while ours show, and the mouse they'd
@@ -750,10 +767,9 @@ UF.Try, UF.Flag, UF.Text, UF.Atlas, UF.Bar = Try, Flag, Text, Atlas, Bar
 UF.FillHealth, UF.FillPower, UF.UnitButton, UF.NameColor = FillHealth, FillPower, UnitButton, NameColor
 UF.Listen, UF.Join, UF.UNIT, UF.POWER_EVENTS = Listen, Join, UNIT, POWER_EVENTS
 UF.Avatar, UF.AvatarUnit, UF.AvatarLook, UF.ClassColor = Avatar, AvatarUnit, AvatarLook, ClassColor
+UF.Border = Border
 UF.MODEL_EVENTS, UF.GOLD, UF.GREY = MODEL_EVENTS, GOLD, GREY
 UF.player = player
--- (its top: the chat goes over it, ChatPosition.lua)
-UF.PLAYER_TOP = PLAYER_Y + AVATAR_H
 
 -- What the settings ask, now (Edit Mode: the game's shown to be moved,
 -- ours drawn at 0)

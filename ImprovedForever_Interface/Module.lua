@@ -4,9 +4,9 @@
 -- experience bar a line along the bottom edge (XPBar.lua), the gamepad
 -- bar as two diamonds bottom right (GamepadBar.lua), the chat as only its
 -- lines while not in use (ChatView.lua, ChatFade.lua), set up in its tab
--- (InterfaceEditor.lua); the chat over the player's frame, saved in the
--- Edit Mode layout for the game to apply at the next load
--- (ChatPosition.lua).
+-- (InterfaceEditor.lua). The chat isn't moved: its place is Edit Mode's,
+-- and Forever drops a layout saved from addon code (switching layouts
+-- from it taints); the player moves it there once.
 local IF = ImprovedForever
 
 IF.AddModule({ key = "interface", label = "Interface", icon = IF.TEX .. "ic_mod_interface", addon = ... })
@@ -20,9 +20,31 @@ IF.Interface = IN
 -- under it still clear of the experience line
 IN.BOTTOM = 30
 
+-- The game's colours of a monster's level against yours, its own when it
+-- has them: green, yellow, orange, red (a card's alert, a cooldown's time
+-- left: PartyCards.lua, GamepadBar.lua)
+local function Difficulty(key, r, g, b)
+    local c = QuestDifficultyColors and QuestDifficultyColors[key]
+    if type(c) == "table" and c.r then return { c.r, c.g, c.b } end
+    return { r, g, b }
+end
+IN.LEVEL_COLORS = {
+    Difficulty("standard", 0.25, 0.75, 0.25),
+    Difficulty("difficult", 1, 0.82, 0),
+    Difficulty("verydifficult", 1, 0.5, 0.25),
+    Difficulty("impossible", 1, 0.1, 0.1),
+}
+
+-- /if cards [tank | healer | dps | off]: every minion and party card shown,
+-- stand-ins in them, as that role sees them (PartyCards.lua)
+IF.AddCommand("cards", function(args) IN.PartyCards.TogglePreview(args[1]) end,
+    "[tank | healer | dps | off]: preview the minion and party cards (as that role sees them)")
+
 -- /if padprobe: what the game's gamepad bar holds (GamepadBar.lua)
 IF.AddCommand("padprobe", function() IN.GamepadBar.Probe() end, ": what the gamepad bar's buttons hold")
 
+-- /if l1probe: what L1 and the face buttons run (PartyPad.lua)
+IF.AddCommand("l1probe", function() IN.PartyPad.Probe() end, ": log what L1 and the face buttons run (party targeting test)")
 -- /if chatprobe: what keeps the game's chat shown (ChatFade.lua)
 IF.AddCommand("chatprobe", function() IN.ChatFade.Probe() end, ": what keeps the game's chat shown")
 
@@ -30,10 +52,11 @@ local DEFAULTS = {
     player = true,      -- the player frame bottom left (and the pet's beside it)
     target = true,      -- the target's health on top, its name over it
     cards = true,       -- your pet and party as cards on the experience line
+    cardFocus = "auto", -- the party cards as your role needs them: auto (your role), tank, healer, off
     chatDim = true,     -- the chat as only its lines while not in use
-    chatAbove = true,   -- the chat over the player's frame (saved in the Edit Mode layout)
     xp = true,          -- the experience as a line along the screen's bottom edge
     pad = true,         -- the gamepad bar as Hogwarts Legacy's spell diamonds, bottom right
+    partyPad = false,   -- tank / healer focus: L1 + the face buttons target party 1 to 4 (a test)
 }
 
 -- A watcher: fn() every `every` seconds. One that errors stops, said once
@@ -63,8 +86,8 @@ function IN.Settings()
     for key, value in pairs(DEFAULTS) do
         if settings[key] == nil then settings[key] = value end
     end
-    -- (an earlier one moved the chat right, another drew your auras: their
-    -- keys gone)
-    settings.chat, settings.auras = nil, nil
+    -- (earlier ones moved the chat (Forever drops an addon's Edit Mode
+    -- layout save) or drew your auras: their keys gone)
+    settings.chat, settings.auras, settings.chatAbove, settings.chatPlaced = nil, nil, nil, nil
     return settings
 end

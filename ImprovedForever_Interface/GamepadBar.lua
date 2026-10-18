@@ -117,8 +117,9 @@ local TURN = math.pi / 4
 -- (toggled on, a proc: the diamond lit, at these colours and strengths)
 local CHECKED_FILL, CHECKED_ALPHA = { 1, 0.75, 0.25 }, 0.35
 local PROC_FILL, PROC_ALPHA = { 1, 0.95, 0.6 }, 0.3
--- (a cooldown's beat, its end: the diamond flashing white, at most these)
-local FLASH_FILL, BEAT_FLASH, READY_FLASH = { 1, 1, 1 }, 0.22, 0.45
+-- (a cooldown's beat, its end: the diamond flashing in the cooldown's
+-- colour, at most these)
+local FLASH_FILL, BEAT_FLASH, READY_FLASH = { 1, 1, 1 }, 0.4, 0.45
 -- (a cooldown this short is the global one: not shown)
 local GCD_MAX = 1.6
 -- (the cast ring: on the border, RING_AT of the tile's half width out; its
@@ -413,7 +414,6 @@ end
 -- glows are). Times the game keeps
 -- secret: no ring (they can't be worked into a length).
 local CAST_COLOR = { 0.35, 0.75, 1 }
-local COOLDOWN_COLOR = { 0.9, 0.9, 0.9 }
 -- A cooldown's time left, short and rounded up: 2h, 2m, 45
 local function Short(left)
     if left >= 3600 then return math.ceil(left / 3600) .. "h" end
@@ -421,9 +421,21 @@ local function Short(left)
     return tostring(math.ceil(left))
 end
 
--- (a cooldown's beat: each whole second left, a flash fading over BEAT
--- seconds; its end, the whole ring flashing over READY seconds)
-local BEAT, READY = 0.35, 0.6
+-- (a cooldown's beat, as a party card's alert: each whole second left,
+-- the ring flashing (bright on the beat, down to BEAT_LOW half a second
+-- later) and the diamond pulsing (a flash fading over BEAT seconds); its
+-- end, the whole ring flashing out over READY seconds)
+local BEAT, BEAT_LOW, READY = 0.35, 0.35, 0.6
+-- (its colour by the share of it left, as a monster's level (Module.lua):
+-- red over 3/4, orange over 1/2, yellow over 1/4, green after; ready
+-- green)
+local function CooldownColor(f)
+    local level = IN.LEVEL_COLORS
+    if f > 0.75 then return level[4] end
+    if f > 0.5 then return level[3] end
+    if f > 0.25 then return level[2] end
+    return level[1]
+end
 
 local CHANNEL_COLOR = { 0.4, 1, 0.5 }
 -- (the corners, clockwise from the top: unit steps of the ring's radius)
@@ -475,6 +487,7 @@ local function SlotSpellName(native)
     if special and special:IsShown() then return nil end
     local ok, name = pcall(function()
         local kind, id = GetActionInfo(action)
+        if Secret(kind) or Secret(id) then return nil end
         if kind == "macro" then id = GetMacroSpell(id) elseif kind ~= "spell" then return nil end
         if not id then return nil end
         return C_Spell and C_Spell.GetSpellName and C_Spell.GetSpellName(id) or GetSpellInfo(id)
@@ -489,11 +502,11 @@ local function SlotCasting(native)
     if Casting(native) then return true end
     local slotName = SlotSpellName(native)
     if not slotName then return false end
-    local ok, same = pcall(function()
-        local name = UnitChannelInfo("player") or UnitCastingInfo("player")
-        return name ~= nil and name == slotName
-    end)
-    return ok and same or false
+    if Secret(slotName) then return false end
+    local ok, name = pcall(UnitChannelInfo, "player")
+    if ok and not Secret(name) and not name then ok, name = pcall(UnitCastingInfo, "player") end
+    if not ok or Secret(name) or not name then return false end
+    return name == slotName
 end
 
 local function CastFill(b, native)
@@ -547,14 +560,15 @@ local function ItemBuff(native)
     if not action or (special and special:IsShown()) then return nil end
     local ok, left, whole, drink = pcall(function()
         local kind, id = GetActionInfo(action)
-        if kind ~= "item" or not id then return nil end
+        if Secret(kind) or Secret(id) or kind ~= "item" or not id then return nil end
         local spell = ItemSpell(id)
         if not spell then return nil end
         local aura = spell.spellID and C_UnitAuras.GetPlayerAuraBySpellID(spell.spellID)
         if not aura and C_UnitAuras.GetAuraDataBySpellName then
             aura = C_UnitAuras.GetAuraDataBySpellName("player", spell.name, "HELPFUL")
         end
-        if not aura or not aura.duration or aura.duration <= 0 then return nil end
+        if not aura or Secret(aura.duration) or Secret(aura.expirationTime) then return nil end
+        if not aura.duration or aura.duration <= 0 then return nil end
         return aura.expirationTime - GetTime(), aura.duration, spell.name:find(DRINK_NAME) ~= nil
     end)
     if not ok or type(left) ~= "number" or left <= 0 then return nil end
@@ -626,10 +640,10 @@ local function Mirror(b, native)
     -- cooling down
     if icon then
         b.icon:SetVertexColor(icon:GetVertexColor())
-        b.icon:SetDesaturated(icon:IsDesaturated())
+        b.icon:SetDesaturated(b.disabled or icon:IsDesaturated())
     else
         b.icon:SetVertexColor(1, 1, 1)
-        b.icon:SetDesaturated(false)
+        b.icon:SetDesaturated(b.disabled and true or false)
     end
     Cooldown(b, native)
     local now = GetTime()
@@ -638,7 +652,7 @@ local function Mirror(b, native)
 
     -- The ring: a cast from the slot, else a buff from its item (food,
     -- drink: shrinking with its time left, its timer on it), else its
-    -- cooldown (white, unwinding: the share still to wait)
+    -- cooldown (coloured by its share left, unwinding: the share still to wait)
     CastFill(b, native)
     if b.casting then
         b.timer:Hide()
@@ -659,29 +673,37 @@ local function Mirror(b, native)
     if not (b.casting or b.buffing) then
         local done = type(b.cdDoneAt) == "number" and type(now) == "number" and now - b.cdDoneAt
         if cooling and type(b.cdDuration) == "number" and b.cdDuration > 0 then
-            -- (a beat on each whole second left)
+            -- (a beat on each whole second left: the ring's flash, the
+            -- diamond's pulse)
             local left = b.cdUntil - now
+            local share = left / b.cdDuration
+            local color = CooldownColor(share)
             local since = 1 - (left - math.floor(left))
             local beat = math.max(0, 1 - since / BEAT)
+            local wave = 0.5 + 0.5 * math.cos(2 * math.pi * since)
             b.timer:SetText(Short(left))
             b.timer:Show()
-            DrawRing(b.ring, left / b.cdDuration, COOLDOWN_COLOR, beat)
+            DrawRing(b.ring, share, color)
+            b.ring:SetAlpha(BEAT_LOW + (1 - BEAT_LOW) * wave)
             b.ring:Show()
+            b.flashFill:SetVertexColor(color[1], color[2], color[3], 1)
             b.flashFill:SetAlpha(BEAT_FLASH * beat)
         elseif done and done < READY then
             b.timer:Hide()
-            -- (ready: the whole ring and the tile flashing out)
+            -- (ready: the whole ring and the tile flashing out, green)
+            local color = CooldownColor(0)
             local fade = 1 - done / READY
-            DrawRing(b.ring, 1, COOLDOWN_COLOR, fade)
+            DrawRing(b.ring, 1, color, fade)
             b.ring:SetAlpha(fade)
             b.ring:Show()
+            b.flashFill:SetVertexColor(color[1], color[2], color[3], 1)
             b.flashFill:SetAlpha(READY_FLASH * fade)
         else
             if b.ring:IsShown() then b.ring:Hide() end
             b.flashFill:SetAlpha(0)
             b.timer:Hide()
         end
-        if not (done and done < READY) then b.ring:SetAlpha(1) end
+        if not (cooling or (done and done < READY)) then b.ring:SetAlpha(1) end
     end
 
     -- The diamond lit: casting or channelling from it, its item's buff on
@@ -771,6 +793,32 @@ end
 
 local shown
 
+---------------------------------------------------------------------------
+-- Picking a party member (PartyPad.lua: L1 held, party targeting on): the
+-- game's bar isn't what L1 runs then (the party slots' diamond is): dimmed
+-- and greyed, eased over SWAP_TIME.
+---------------------------------------------------------------------------
+local SWAP_TIME, PICK_DIM = 0.15, 0.45
+local swap = { now = 0, want = 0 }
+
+local function SetSwap(f)
+    local e = f * f * (3 - 2 * f)
+    holder:SetAlpha(1 - (1 - PICK_DIM) * e)
+end
+
+local swapper = CreateFrame("Frame", nil, holder)
+swapper:SetScript("OnUpdate", function(_, elapsed)
+    if swap.now == swap.want then return end
+    local step = elapsed / SWAP_TIME
+    swap.now = swap.want > swap.now and math.min(swap.want, swap.now + step) or math.max(swap.want, swap.now - step)
+    SetSwap(swap.now)
+end)
+
+local function Picking()
+    local PC = IN.PartyCards
+    return PC ~= nil and PC.Picking ~= nil and PC.Picking()
+end
+
 local function Watch()
     if not IF.db then return end
     local pu = PageUnit()
@@ -787,7 +835,10 @@ local function Watch()
     end
     if not on then return end
     local bar = pu.activeBar
+    local picking = Picking()
+    swap.want = picking and 1 or 0
     for i, b in ipairs(buttons) do
+        b.disabled = picking
         Mirror(b, Native(bar, i))
     end
     MirrorClass(classLeft, pu.LeftClassAction)
