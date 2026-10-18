@@ -58,16 +58,6 @@ local ITEMS = {
         end,
     }),
     Item({
-        key = "partyPad", group = "frames", label = "Party targeting (L1, test)",
-        tip = "A test. With the party cards' focus a tank's or a healer's, L1 is ours instead of the game's "
-            .. "friendly targeting. Held: the D-pad picks one of four party spells (kept until you pick "
-            .. "another), and Square, Circle, Triangle and X cast it on party members 1 to 4, your target left "
-            .. "as it is (the button shows on each card; a tank's press casts on the monster that member is "
-            .. "fighting, when there is one). The four spells are a diamond of their own after the party cards, the "
-            .. "picked one lit: drag a spell, item or macro onto a tile, off it to empty it. L1 is taken out "
-            .. "of combat only, while the game has the controller.",
-    }, Toggle("partyPad", "Party targeting (L1, test)", function() IN.PartyCards.Apply() end)),
-    Item({
         key = "xp", group = "frames", label = "Experience line",
         tip = "Your experience as a thin line along the screen's bottom edge, the rested part beyond it, in "
             .. "place of the game's experience bar (its reputation bar at the top level stays). The mouse over "
@@ -80,6 +70,18 @@ local ITEMS = {
             .. "swaps them to that set in place; the pips under them show which set is up. The game's bar "
             .. "still does every press: its slots are set as before (the Bindings tab, its own editor).",
     }, Toggle("pad", "Spell diamonds", function() IN.GamepadBar.Apply() end)),
+    Item({
+        key = "partyPad", group = "pad", label = "Party casting (L1, test)",
+        tip = "A test, for any role, in a party or raid: L1 is ours instead of the game's friendly targeting. "
+            .. "Held: the D-pad "
+            .. "picks one of four party spells (kept until you pick another), and Square, Circle, Triangle "
+            .. "and X cast it on party members 1 to 4, your target left as it is (the button shows on each "
+            .. "card). With the cards' focus a tank's, a press casts on the monster that member is "
+            .. "fighting, when there is one. The four spells are a diamond of their own after the party "
+            .. "cards, the picked one alone at rest (all four while L1 is held or the spell book is open): "
+            .. "drag a spell, item or macro onto a tile, off it to empty it. Off, or alone, L1 is the game's. L1 is "
+            .. "taken out of combat only, while the game has the controller.",
+    }, Toggle("partyPad", "Party casting (L1, test)", function() IN.PartyCards.Apply() end)),
     Item({
         key = "chatDim", group = "chat", label = "Immersive chat",
         tip = "While you aren't using the chat only its lines show, no box, tabs or edit box: each new line "

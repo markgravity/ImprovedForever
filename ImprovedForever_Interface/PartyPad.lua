@@ -1,6 +1,5 @@
--- Party targeting on the controller, while the party cards' focus is a
--- tank's or a healer's (PartyCards.lua, the setting on). A test of taking
--- L1 from the game:
+-- Party casting on the controller, for any role (the setting on). A test
+-- of taking L1 from the game:
 -- * L1 is the game's friendly targeting modifier (GAMEPADLEFTTARGETMODIFIER:
 --   held, its targeting bar overrides the top bar). Ours goes over it: an
 --   override binding (out of combat, while the game has the pad) to a
@@ -31,13 +30,14 @@ IN.PartyPad = PP
 local BUTTON = { 5, 7, 6, 8 }
 local DIRS = { { -1, 0 }, { 0, 1 }, { 1, 0 }, { 0, -1 } }
 
--- The focus it's on for ("tank" / "healer"), or nil (a preview's counts:
--- /if cards tank tries it solo)
+-- On (the setting, and you in a party or raid, or a preview up: /if
+-- cards tries it solo), and how: "tank" (the party cards' focus a tank's,
+-- a preview's counting: casts go on the monster a member is fighting) or
+-- "party" (on the member); nil off (L1 the game's)
 local function Mode()
-    local settings = IN.Settings()
-    if not (settings.partyPad and settings.cards) then return nil end
-    local focus = IN.PartyCards.Focus()
-    if focus == "tank" or focus == "healer" then return focus end
+    if not IN.Settings().partyPad then return nil end
+    if not ((IsInGroup and IsInGroup()) or IN.PartyCards.Previewing()) then return nil end
+    return IN.PartyCards.Focus() == "tank" and "tank" or "party"
 end
 
 ---------------------------------------------------------------------------
@@ -228,30 +228,23 @@ local function Pickup(action)
 end
 
 ---------------------------------------------------------------------------
--- The slots' diamond, after the party cards: the gamepad bar's tiles
--- (GamepadBar.lua), point to point as tall as a party card (CARD_H, its
--- glyphs past the points); grown while L1 is held
+-- The slots' diamond, after the party cards: the gamepad bar's tiles and
+-- their effects (GamepadBar.lua: cooldown, cast, food and drink rings),
+-- point to point as tall as a party card (CARD_H, its glyphs past the
+-- points); grown while L1 is held
 ---------------------------------------------------------------------------
 local ROOT2 = math.sqrt(2)
-local TURN = math.pi / 4
 local CARD_H, VISIBLE, TILE_GAP = 100, 1.2, 3
 -- (2 * (spread + width / 2) = CARD_H, the tiles' size from it)
 local SIZE = (CARD_H / 2 - TILE_GAP / ROOT2) / (VISIBLE / ROOT2 + VISIBLE / 2 * ROOT2)
 local GLYPH = 14
-local SIDE = SIZE * VISIBLE
-local WIDTH = SIDE * ROOT2
-local SPREAD = (SIDE + TILE_GAP) / ROOT2
+local GB = IN.GamepadBar
+local D = GB.Dims(SIZE, GLYPH)
+local WIDTH, SPREAD = D.width, D.spread
 -- (each tile's glyph hangs MARGIN past its point: counted in its width)
 local MARGIN = GLYPH * 0.7
 local EXTENT = SPREAD + WIDTH / 2 + MARGIN
-local ICON_FILL = 0.94
 local HELD_GROW, HELD_TIME = 1.2, 0.15
-local SLOT = {
-    bg = "gamepad-actionbar-squareslot-bg",
-    normal = "gamepad-actionbar-squareslot-border-normal",
-    selected = "gamepad-actionbar-squareslot-border-selected",
-    mask = "progress-bar-diamond-pip-mask",
-}
 
 local cluster = CreateFrame("Frame", "ImprovedForeverPartyCasts", UIParent)
 cluster:SetFrameStrata("LOW")
@@ -302,23 +295,67 @@ local function Name(action)
     end
 end
 
+-- (each slot's stand-in for the game's button, GB.StandIn: its icon, its
+-- spell (a macro's: the one it casts) or item; made again as they change)
+local standIns = {}
+
+local function StandIn(action)
+    local kind, value = (action or ""):match("^(%a+):(.+)$")
+    local spellID, itemID
+    if kind == "spell" then
+        spellID = tonumber(value)
+    elseif kind == "item" then
+        itemID = tonumber(value)
+    elseif kind == "macro" then
+        local index = GetMacroIndexByName(value)
+        spellID = index and index > 0 and GetMacroSpell and GetMacroSpell(index) or nil
+    end
+    local getName = C_Spell and C_Spell.GetSpellName or GetSpellInfo
+    return GB.StandIn(Icon(action), spellID, itemID, spellID and getName and getName(spellID) or nil)
+end
+
+-- (a spell's colour, as the game's buttons: grey when unusable, blue out
+-- of power; read whole or not at all (a secret: as usable))
+local function Usable(standIn)
+    local icon = standIn.icon
+    icon.r, icon.g, icon.b = 1, 1, 1
+    local id = standIn.spellID
+    if not id then return end
+    local get = C_Spell and C_Spell.IsSpellUsable or IsUsableSpell
+    local ok, usable, noPower = pcall(get, id)
+    if not ok or issecretvalue and (issecretvalue(usable) or issecretvalue(noPower)) then return end
+    if noPower then
+        icon.r, icon.g, icon.b = 0.5, 0.5, 1
+    elseif not usable then
+        icon.r, icon.g, icon.b = 0.4, 0.4, 0.4
+    end
+end
+
+-- Each tile as the gamepad bar's (GB.Mirror), then ours over it: the
+-- picked one's selected border and gold, the others' icons greyed
+local function Mirror()
+    local picked = Picked()
+    for i, b in ipairs(tiles) do
+        local standIn = standIns[i]
+        if standIn then Usable(standIn) end
+        GB.Mirror(b, standIn)
+        local on = i == picked
+        if on then GB.SetBorder(b, GB.SLOT.selected) end
+        b.lit:SetShown(on)
+        if not on then b.icon:SetDesaturated(true) end
+    end
+end
+
 local function Render()
     local picked = Picked()
     label:SetText(Name(Slots()[picked]) or "")
     for i, b in ipairs(tiles) do
-        local icon = Icon(Slots()[i])
-        b.icon:SetTexture(icon)
-        b.icon:SetShown(icon ~= nil)
-        local on = i == picked
-        b.border:SetAtlas(on and SLOT.selected or SLOT.normal)
-        b.border:SetRotation(TURN)
-        b.lit:SetShown(on)
-        b.icon:SetDesaturated(not on)
-        b.icon:SetVertexColor(on and 1 or 0.7, on and 1 or 0.7, on and 1 or 0.7)
+        standIns[i] = Slots()[i] and StandIn(Slots()[i]) or nil
         local key = SlotKey(i)
         local atlas = key and IF.GlyphAtlas(key)
         if atlas then b.key:SetAtlas(atlas) else b.key:SetTexture(nil) end
     end
+    Mirror()
 end
 
 local function Drop(i)
@@ -343,41 +380,17 @@ local function DragOff(i)
 end
 
 for i, dir in ipairs(DIRS) do
-    local b = CreateFrame("Frame", nil, center)
-    b:SetSize(SIZE, SIZE)
-    b:SetPoint("CENTER", center, "CENTER", dir[1] * SPREAD, dir[2] * SPREAD)
-    b:EnableMouse(true)
-    local bg = b:CreateTexture(nil, "BACKGROUND")
-    bg:SetAtlas(SLOT.bg)
-    bg:SetPoint("CENTER")
-    bg:SetSize(SIDE, SIDE)
-    bg:SetRotation(TURN)
-    b.icon = b:CreateTexture(nil, "ARTWORK")
-    b.icon:SetPoint("CENTER")
-    b.icon:SetSize(SIDE * ICON_FILL, SIDE * ICON_FILL)
-    b.icon:SetRotation(TURN)
-    local mask = b:CreateMaskTexture()
-    mask:SetAtlas(SLOT.mask)
-    mask:SetPoint("CENTER")
-    mask:SetSize(WIDTH * ICON_FILL, WIDTH * ICON_FILL)
-    b.icon:AddMaskTexture(mask)
-    -- (picked: the game's selected border, the diamond lit gold over the
-    -- icon, as the gamepad bar's toggled slot; the others' icons greyed)
-    b.lit = b:CreateTexture(nil, "ARTWORK", nil, 2)
+    local b = GB.Tile(center, center, D, dir)
+    -- (picked: the game's selected border (Mirror), the diamond lit gold
+    -- over the icon, as the gamepad bar's toggled slot; the others' icons
+    -- greyed)
+    b.lit = b:CreateTexture(nil, "ARTWORK", nil, 1)
     b.lit:SetPoint("CENTER")
-    b.lit:SetSize(WIDTH * ICON_FILL, WIDTH * ICON_FILL)
+    b.lit:SetSize(WIDTH * 0.94, WIDTH * 0.94)
     b.lit:SetColorTexture(1, 0.75, 0.25, 0.3)
     b.lit:SetBlendMode("ADD")
-    b.lit:AddMaskTexture(mask)
+    b.lit:AddMaskTexture(b.mask)
     b.lit:Hide()
-    b.border = b:CreateTexture(nil, "OVERLAY")
-    b.border:SetAtlas(SLOT.normal)
-    b.border:SetPoint("CENTER")
-    b.border:SetSize(SIZE * 64 / 46, SIZE * 64 / 46)
-    b.border:SetRotation(TURN)
-    b.key = b:CreateTexture(nil, "OVERLAY", nil, 2)
-    b.key:SetSize(GLYPH, GLYPH)
-    b.key:SetPoint("CENTER", b, "CENTER", dir[1] * (WIDTH / 2 + GLYPH * 0.2), dir[2] * (WIDTH / 2 + GLYPH * 0.2))
 
     b:SetScript("OnEnter", function(self)
         local kind, value = (Slots()[i] or ""):match("^(%a+):(.+)$")
@@ -427,8 +440,14 @@ local function Toward(now, want, step)
     return want > now and math.min(want, now + step) or math.max(want, now - step)
 end
 
-local grow, open, placed = 0, nil, nil
+local MIRROR_EVERY = 0.05      -- (as the gamepad bar's)
+local grow, open, placed, since = 0, nil, nil, 0
 cluster:SetScript("OnUpdate", function(_, elapsed)
+    since = since + elapsed
+    if since >= MIRROR_EVERY then
+        since = 0
+        Mirror()
+    end
     local step = elapsed / HELD_TIME
     local want = PP.Held() and 1 or 0
     if grow ~= want then

@@ -12,9 +12,9 @@
 Module.lua
 UnitFrames.lua
 PartyCards.lua
-PartyPad.lua
 XPBar.lua
 GamepadBar.lua
+PartyPad.lua
 ChatView.lua
 ChatFade.lua
 InterfaceEditor.lua

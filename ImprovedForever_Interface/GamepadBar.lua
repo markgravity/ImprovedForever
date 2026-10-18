@@ -162,8 +162,8 @@ local function DragOff(b)
     PickupAction(slot)
 end
 
-local function Button(center, d, dir, key)
-    local b = CreateFrame("Frame", nil, holder)
+local function Button(center, d, dir, key, parent)
+    local b = CreateFrame("Frame", nil, parent or holder)
     b:SetSize(d.size, d.size)
     b:SetPoint("CENTER", center, "CENTER", dir[1] * d.spread, dir[2] * d.spread)
     b:EnableMouse(true)
@@ -185,6 +185,7 @@ local function Button(center, d, dir, key)
     mask:SetPoint("CENTER")
     mask:SetSize(d.width * ICON_FILL, d.width * ICON_FILL)
     b.icon:AddMaskTexture(mask)
+    b.mask = mask
     -- (toggled on, a proc: the diamond lit over the icon, cut by the same
     -- mask; Mirror)
     local function Fill(color, sub)
@@ -363,6 +364,24 @@ end
 -- cooldown frame is hidden or reset while it plays its cast animation),
 -- else that frame's (the top bar's own face buttons)
 local function SlotCooldown(native)
+    -- (a stand-in's (GB.StandIn): its spell's or item's)
+    if native.spellID then
+        if C_Spell and C_Spell.GetSpellCooldown then
+            local ok, info = pcall(C_Spell.GetSpellCooldown, native.spellID)
+            if ok and type(info) == "table" then return info.startTime, info.duration end
+        elseif GetSpellCooldown then
+            local ok, start, duration = pcall(GetSpellCooldown, native.spellID)
+            if ok then return start, duration end
+        end
+        return nil
+    elseif native.itemID then
+        local get = (C_Item and C_Item.GetItemCooldown) or GetItemCooldown
+        if get then
+            local ok, start, duration = pcall(get, native.itemID)
+            if ok then return start, duration end
+        end
+        return nil
+    end
     local action = native.action
     local special = native.SpecialActionIcon
     if action and not (special and special:IsShown()) then
@@ -481,6 +500,7 @@ end
 
 -- The slot's spell (its action's, or its macro's) by name, or nil
 local function SlotSpellName(native)
+    if native and native.spellName then return native.spellName end
     local action = native and native.action
     if not action then return nil end
     local special = native.SpecialActionIcon
@@ -557,10 +577,14 @@ end
 local function ItemBuff(native)
     local action = native.action
     local special = native.SpecialActionIcon
-    if not action or (special and special:IsShown()) then return nil end
+    if not native.itemID and (not action or (special and special:IsShown())) then return nil end
     local ok, left, whole, drink = pcall(function()
-        local kind, id = GetActionInfo(action)
-        if Secret(kind) or Secret(id) or kind ~= "item" or not id then return nil end
+        local id = native.itemID
+        if not id then
+            local kind
+            kind, id = GetActionInfo(action)
+            if Secret(kind) or Secret(id) or kind ~= "item" or not id then return nil end
+        end
         local spell = ItemSpell(id)
         if not spell then return nil end
         local aura = spell.spellID and C_UnitAuras.GetPlayerAuraBySpellID(spell.spellID)
@@ -856,6 +880,42 @@ end
 glyphEvents:SetScript("OnEvent", function()
     if shown then UpdateGlyphs() end
 end)
+
+---------------------------------------------------------------------------
+-- For other diamonds of ours (the party spells', PartyPad.lua): a tile as
+-- these, and the same effects (cooldown ring and beat, cast and channel
+-- ring, food and drink, its end's flash) from a stand-in for the game's
+-- button: GB.StandIn
+---------------------------------------------------------------------------
+-- A tile's sizes from its size and its glyph's
+function GB.Dims(size, glyph)
+    local d = { size = size, glyph = glyph }
+    d.side = size * VISIBLE
+    d.width = d.side * ROOT2
+    d.spread = (d.side + TILE_GAP) / ROOT2
+    return d
+end
+
+-- A tile (parent: its frame; the mouse's scripts the caller's)
+function GB.Tile(parent, center, d, dir)
+    return Button(center, d, dir, nil, parent)
+end
+
+-- A stand-in for the game's button: a spell's (by ID, its name for the
+-- cast ring), an item's (its cooldown, its buff), its icon, its colour
+-- (r, g, b: unusable, out of power)
+function GB.StandIn(texture, spellID, itemID, spellName)
+    local icon = { texture = texture, r = 1, g = 1, b = 1 }
+    function icon.IsShown() return true end
+    function icon.GetTexture(self) return self.texture end
+    function icon.GetVertexColor(self) return self.r, self.g, self.b end
+    function icon.IsDesaturated() return false end
+    local standIn = { icon = icon, spellID = spellID, itemID = itemID, spellName = spellName }
+    function standIn.IsShown() return texture ~= nil end
+    return standIn
+end
+
+GB.Mirror, GB.SetBorder, GB.SLOT = Mirror, SetBorder, SLOT
 
 function GB.Apply()
     shown = nil

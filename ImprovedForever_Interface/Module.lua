@@ -56,7 +56,7 @@ local DEFAULTS = {
     chatDim = true,     -- the chat as only its lines while not in use
     xp = true,          -- the experience as a line along the screen's bottom edge
     pad = true,         -- the gamepad bar as Hogwarts Legacy's spell diamonds, bottom right
-    partyPad = false,   -- tank / healer focus: L1 + the face buttons target party 1 to 4 (a test)
+    partyPad = false,   -- L1 ours: + the D-pad picks a party spell, + a face button casts it on party 1 to 4 (a test)
 }
 
 -- A watcher: fn() every `every` seconds. One that errors stops, said once

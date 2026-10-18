@@ -363,7 +363,7 @@ local function Focus(b)
     end
 end
 
--- Party targeting's buttons shown: it's on (PartyPad.lua), or a tank's or
+-- Party casting's buttons shown: it's on (PartyPad.lua), or a tank's or
 -- healer's preview
 function PC.PadShown()
     local pp = IN.PartyPad
@@ -709,8 +709,8 @@ local function Layout()
         if previewing or (not inRaid and UnitExists(realUnit[b] or b.unit)) then members[#members + 1] = b end
     end
     local n = #mins + #members
-    -- (the party spells' diamond, PartyPad.lua, when shown: last in the
-    -- row, PAD_GAP after the cards, the row centred with it)
+    -- (the party spells' diamond, PartyPad.lua, when shown: PAD_GAP after
+    -- the last card, the cards centred without it)
     local pp = IN.PartyPad
     local pad = pp and pp.Shown() and pp.Width() or 0
     if n == 0 then
@@ -720,7 +720,6 @@ local function Layout()
     local width = (n - 1) * GAP + ((#mins > 0 and #members > 0) and (GROUP_GAP - GAP) or 0)
     for _, b in ipairs(mins) do width = width + b.cardW end
     for _, b in ipairs(members) do width = width + b.cardW end
-    if pad > 0 then width = width + PAD_GAP + pad end
     local x = -width / 2
     for i, b in ipairs(mins) do
         b:ClearAllPoints()
