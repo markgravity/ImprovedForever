@@ -5,8 +5,8 @@
 --   its casts under it;
 -- * the player's health and power bottom left, its avatar on their left
 --   (its model in the game's tooltip border, as the minion and party
---   cards), its level on it, a combat mark by its name (its pet: a card at
---   the bottom centre, PartyCards.lua).
+--   cards), its level on it, a combat mark by its name (its pet: a card
+--   beside it, PartyCards.lua).
 -- Ours are secure unit buttons (a click targets, a right click opens the
 -- unit's menu), shown by the game's unit watch, so they work in a fight.
 -- The game's are never hidden or changed (a property of the game's frames
