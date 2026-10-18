@@ -83,6 +83,13 @@ local ITEMS = {
             .. "taken out of combat only, while the game has the controller.",
     }, Toggle("partyPad", "Party casting (L1, test)", function() IN.PartyCards.Apply() end)),
     Item({
+        key = "chatAbove", group = "chat", label = "Chat over your frame (test)",
+        tip = "The chat moved over your player frame, written into your Edit Mode layout (a preset is copied "
+            .. "as \"Improved Forever\") and made the active layout again, so the game moves it now. Done once "
+            .. "per layout: moved again in Edit Mode, it stays where you put it. To undo it, pick your old "
+            .. "layout in Edit Mode.",
+    }, Toggle("chatAbove", "Chat over your frame (test)", function() IN.ChatPosition.Apply() end)),
+    Item({
         key = "chatDim", group = "chat", label = "Immersive chat",
         tip = "While you aren't using the chat only its lines show, no box, tabs or edit box: each new line "
             .. "bright for a few seconds, then barely there. Typing, the controller on it or the mouse over "

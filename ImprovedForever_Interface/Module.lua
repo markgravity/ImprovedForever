@@ -53,6 +53,7 @@ local DEFAULTS = {
     target = true,      -- the target's health on top, its name over it
     cards = true,       -- your pet and party as cards on the experience line
     cardFocus = "auto", -- the party cards as your role needs them: auto (your role), tank, healer, off
+    chatAbove = true,   -- the chat over the player's frame (in the Edit Mode layout; a test)
     chatDim = true,     -- the chat as only its lines while not in use
     xp = true,          -- the experience as a line along the screen's bottom edge
     pad = true,         -- the gamepad bar as Hogwarts Legacy's spell diamonds, bottom right
@@ -86,8 +87,8 @@ function IN.Settings()
     for key, value in pairs(DEFAULTS) do
         if settings[key] == nil then settings[key] = value end
     end
-    -- (earlier ones moved the chat (Forever drops an addon's Edit Mode
-    -- layout save) or drew your auras: their keys gone)
-    settings.chat, settings.auras, settings.chatAbove, settings.chatPlaced = nil, nil, nil, nil
+    -- (earlier ones moved the chat to the right or drew your auras: their
+    -- keys gone)
+    settings.chat, settings.auras = nil, nil
     return settings
 end

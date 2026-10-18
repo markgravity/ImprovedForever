@@ -778,6 +778,9 @@ UF.Listen, UF.Join, UF.UNIT, UF.POWER_EVENTS = Listen, Join, UNIT, POWER_EVENTS
 UF.Avatar, UF.AvatarUnit, UF.AvatarLook, UF.ClassColor = Avatar, AvatarUnit, AvatarLook, ClassColor
 UF.Border = Border
 UF.MODEL_EVENTS, UF.GOLD, UF.GREY = MODEL_EVENTS, GOLD, GREY
+-- (the player frame's top, from the screen's bottom: the chat over it,
+-- ChatPosition.lua)
+UF.PLAYER_TOP = PLAYER_Y + AVATAR_H
 UF.player = player
 
 -- What the settings ask, now (Edit Mode: the game's shown to be moved,
