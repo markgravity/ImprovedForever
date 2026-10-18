@@ -3,10 +3,10 @@
 -- and border round the unit frames' fills), the percent on them:
 -- * the target's health across the top centre, coloured by what it is,
 --   its casts under it;
--- * the player's health and power bottom left, its avatar on their left
---   (its model in the game's tooltip border, as the minion and party
---   cards), its level on it, a combat mark by its name (its pet: a card
---   beside it, PartyCards.lua).
+-- * the player bottom left, a card as the minion and party ones: its
+--   model in the game's tooltip border, its level on it, its name (a
+--   combat mark by it), health and power in a band along its foot (its
+--   pet: a card beside it, PartyCards.lua).
 -- Ours are secure unit buttons (a click targets, a right click opens the
 -- unit's menu), shown by the game's unit watch, so they work in a fight.
 -- The game's are never hidden or changed (a property of the game's frames
@@ -635,41 +635,50 @@ local MODEL_EVENTS = { UNIT_MODEL_CHANGED = true, UNIT_PORTRAIT_UPDATE = true, G
     UNIT_PET = true, PLAYER_ENTERING_WORLD = true }
 
 ---------------------------------------------------------------------------
--- The player's bottom left, as the target's: its avatar on the left (as
--- tall as the gamepad bar's big diamond), then along its foot its name (a
--- combat mark before it) over its health, its power under it (the same
--- width, two thirds the height)
+-- The player's bottom left, a card as the minion and party ones
+-- (PartyCards.lua), bigger: its avatar (as tall as the gamepad bar's big
+-- diamond), along its foot a dark band with its name (a combat mark before
+-- it) over its health, its power under it
 ---------------------------------------------------------------------------
-local POWER_H = 16
 -- (the avatar as tall as the gamepad bar's face buttons diamond,
 -- GamepadBar.lua: two spreads and a tile's width of a 44 tile, about 154;
--- the cards' proportions; the bars along its foot)
+-- the cards' proportions)
 local AVATAR_H = 154
 local AVATAR_W = math.floor(AVATAR_H * 0.78 + 0.5)
-local AVATAR_GAP = 6
+-- (the band's parts, a party card's (14, 11, 14, inset 4) a bit bigger)
+local CARD_HEALTH_H, CARD_POWER_H, CARD_NAME_H, CARD_INSET = 18, 14, 18, 4
 local PLAYER_X, PLAYER_Y = 20, IN.BOTTOM
 local GOLD = { 1, 0.82, 0 }
 local GREY = { 0.45, 0.45, 0.45 }
-local player = UnitButton("ImprovedForeverPlayerFrame", "player", AVATAR_W + AVATAR_GAP + BAR_W, AVATAR_H)
+local player = UnitButton("ImprovedForeverPlayerFrame", "player", AVATAR_W, AVATAR_H)
 player:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", PLAYER_X, PLAYER_Y)
 player:Hide()
 
 do
     local p = player
     p.avatar = Avatar(p, AVATAR_W, AVATAR_H)
-    p.avatar:SetPoint("LEFT")
-    local bars = CreateFrame("Frame", nil, p)
-    bars:SetSize(BAR_W, NAME_H + BAR_H + 2 + POWER_H)
-    bars:SetPoint("BOTTOMRIGHT")
-    p.combat = Atlas(bars, "OVERLAY", "UI-HUD-UnitFrame-Player-CombatIcon")
-    p.combat:SetPoint("TOPLEFT", 4, -3)
-    p.name = Text(bars, "GameFontNormalLarge", "LEFT")
-    p.name:SetHeight(NAME_H - 2)
-    p.health = Bar(bars, BAR_W, BAR_H, HEALTH_FILL)
-    p.health.box:SetPoint("TOP", 0, -NAME_H)
-    p.power = Bar(bars, BAR_W, POWER_H, POWER_FILL .. "Mana")
-    p.power.box:SetPoint("TOP", p.health.box, "BOTTOM", 0, -2)
-    p.power.text:SetFontObject(_G.TextStatusBarTextSmall or _G.SystemFont_Shadow_Small or "TextStatusBarText")
+    p.avatar:SetPoint("BOTTOM")
+    local over = p.avatar.over
+    local shade = over:CreateTexture(nil, "BACKGROUND")
+    shade:SetPoint("BOTTOMLEFT", CARD_INSET, CARD_INSET)
+    shade:SetPoint("BOTTOMRIGHT", -CARD_INSET, CARD_INSET)
+    shade:SetHeight(CARD_POWER_H + CARD_HEALTH_H + CARD_NAME_H + 4)
+    shade:SetColorTexture(0, 0, 0, 0.65)
+    local w = AVATAR_W - 2 * CARD_INSET + 2
+    p.power = Bar(over, w, CARD_POWER_H, POWER_FILL .. "Mana")
+    p.power.box:SetPoint("BOTTOM", 0, CARD_INSET - 1)
+    p.health = Bar(over, w, CARD_HEALTH_H, HEALTH_FILL)
+    p.health.box:SetPoint("BOTTOM", p.power.box, "TOP", 0, 0)
+    local small = _G.TextStatusBarTextSmall or _G.SystemFont_Shadow_Small
+    if small then
+        p.health.text:SetFontObject(small)
+        p.power.text:SetFontObject(small)
+    end
+    p.name = Text(over, "GameFontNormal")
+    p.name:SetHeight(CARD_NAME_H)
+    p.combat = Atlas(over, "OVERLAY", "UI-HUD-UnitFrame-Player-CombatIcon")
+    p.combat:SetSize(CARD_NAME_H, CARD_NAME_H)
+    p.combat:SetPoint("BOTTOMLEFT", p.health.box, "TOPLEFT", 2, 1)
 end
 
 function player:Refresh(event)
@@ -683,8 +692,8 @@ function player:Refresh(event)
     local fighting = Flag(UnitAffectingCombat, unit)
     self.combat:SetShown(fighting)
     self.name:ClearAllPoints()
-    self.name:SetPoint("TOPLEFT", fighting and 24 or 4, 0)
-    self.name:SetPoint("TOPRIGHT", -4, 0)
+    self.name:SetPoint("BOTTOMLEFT", self.health.box, "TOPLEFT", fighting and (CARD_NAME_H + 2) or 2, 1)
+    self.name:SetPoint("BOTTOMRIGHT", self.health.box, "TOPRIGHT", -2, 1)
     FillHealth(self)
     FillPower(self)
 end
