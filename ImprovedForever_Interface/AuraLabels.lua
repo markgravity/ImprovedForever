@@ -86,6 +86,8 @@ local function Effect(id, index, harmful)
     return text
 end
 
+AL.Effect = Effect
+
 ---------------------------------------------------------------------------
 -- The labels: one per game icon shown, over it by its rect
 ---------------------------------------------------------------------------
@@ -124,7 +126,9 @@ end
 
 local function Update()
     local n = 0
-    if IN.Settings().hudAuras and not IN.UnitFrames.EditMode() then
+    -- (the timeline on: the game's icons aren't shown, its own icons have
+    -- theirs, BuffTimeline.lua)
+    if IN.Settings().hudAuras and not IN.Settings().buffTimeline and not IN.UnitFrames.EditMode() then
         for _, frame in ipairs({ _G.BuffFrame, _G.DebuffFrame }) do
             local harmful = frame == _G.DebuffFrame
             for _, button in ipairs(frame and frame:IsVisible() and frame.auraFrames or {}) do

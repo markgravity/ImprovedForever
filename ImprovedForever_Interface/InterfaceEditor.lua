@@ -99,6 +99,26 @@ local ITEMS = {
             .. "them.",
     }, Toggle("hudAuras", "Buffs along the bottom (test)", function() IN.HudLayout.Apply() end)),
     Item({
+        key = "buffTimeline", group = "frames", label = "Buff timeline",
+        tip = "Your buffs and debuffs as a timeline along the bottom, between the minion card and the party "
+            .. "cards: each placed by the time it has left, sliding toward the middle as it runs out (those "
+            .. "with no end, or a long time left, at the far left), a thin line from it down to the "
+            .. "experience line, its effect in short over it. Icons never overlap: crowded ones go a row up. "
+            .. "The middle stays clear for the party cards. In place of the game's buffs (hidden while it's "
+            .. "on; Edit Mode shows them). In a fight the game hides your auras from addons: the buffs you "
+            .. "had keep their times, and those you cast on yourself are timed from your cast.",
+    }, Toggle("buffTimeline", "Buff timeline", function() IN.BuffTimeline.Apply() end)),
+    Item({
+        key = "cooldownTimeline", group = "pad", label = "Cooldown timeline",
+        tip = "The cooldowns of what's on your gamepad bar (every slot of its page shown) and your on-use "
+            .. "trinkets, as a timeline along the bottom between the party cards and the spell diamonds: "
+            .. "each shown while it cools, placed by the time it has left and sliding toward the middle, "
+            .. "coloured red to green as it runs down, flashing green as it comes ready, then gone. A thin "
+            .. "line from each down to the experience line. In place of the game's Cooldown Manager. In a "
+            .. "fight the game hides cooldown times: each is timed from your cast, by the length it had "
+            .. "out of one.",
+    }, Toggle("cooldownTimeline", "Cooldown timeline", function() IN.BuffTimeline.Apply() end)),
+    Item({
         key = "hudCooldowns", group = "pad", label = "Cooldowns beside the diamonds (test)",
         tip = "The game's Cooldown Manager (turn it on in the game's options) moved to the bottom, left of the "
             .. "spell diamonds: your main cooldowns on the bottom row, the utility ones over them, growing "

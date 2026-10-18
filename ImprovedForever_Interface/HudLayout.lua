@@ -128,6 +128,12 @@ local function IconSize(frame)
     end
 end
 
+-- The Cooldown Manager's essential icons' size on screen (UIParent's
+-- units), or nil (none shown)
+function HL.CooldownIconSize()
+    return IconSize(_G.EssentialCooldownViewer)
+end
+
 -- (the auras' icon size (a percent, by tens) as the Cooldown Manager's
 -- essential icons: measured on screen, else AURA_FALLBACK)
 local function AuraPercent()

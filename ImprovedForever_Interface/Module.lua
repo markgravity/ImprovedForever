@@ -46,6 +46,8 @@ IF.AddCommand("cards", function(args) IN.PartyCards.TogglePreview(args[1]) end,
 IF.AddCommand("padprobe", function() IN.GamepadBar.Probe() end, ": what the gamepad bar's buttons hold")
 
 -- /if l1probe: what L1 and the face buttons run (PartyPad.lua)
+-- /if tlprobe: what the game keeps secret for the timelines (BuffTimeline.lua)
+IF.AddCommand("tlprobe", function() IN.BuffTimeline.Probe() end, ": log what the buff and cooldown timelines can read in a fight")
 IF.AddCommand("l1probe", function() IN.PartyPad.Probe() end, ": log what L1 and the face buttons run (party targeting test)")
 -- /if chatprobe: what keeps the game's chat shown (ChatFade.lua)
 IF.AddCommand("chatprobe", function() IN.ChatFade.Probe() end, ": what keeps the game's chat shown")
@@ -57,6 +59,8 @@ local DEFAULTS = {
     cardFocus = "auto", -- the party cards as your role needs them: auto (your role), tank, healer, off
     chatAbove = true,   -- the chat over the player's frame (in the Edit Mode layout; a test)
     hudAuras = true,    -- your buffs and debuffs along the bottom (in the Edit Mode layout; a test)
+    buffTimeline = true, -- your buffs as a timeline along the bottom, sliding to the middle as they run out
+    cooldownTimeline = true, -- your gamepad bar's and trinkets' cooldowns as a timeline, right of the party
     hudCooldowns = true, -- the Cooldown Manager left of the spell diamonds (in the Edit Mode layout; a test)
     chatDim = true,     -- the chat as only its lines while not in use
     npcDialog = true,   -- talking to an NPC (quests, gossip) as subtitles low in the middle, Spoken's voice with it
@@ -92,12 +96,9 @@ function IN.Settings()
     for key, value in pairs(DEFAULTS) do
         if settings[key] == nil then settings[key] = value end
     end
-    -- (earlier ones moved the chat to the right, drew your auras, or the
-    -- buff and cooldown timelines (parked: docs/parked/timelines.md): their
-    -- keys and logs gone)
+    -- (earlier ones moved the chat to the right or drew your auras: their
+    -- keys gone; the timelines' bar test's log too)
     settings.chat, settings.auras = nil, nil
-    settings.buffTimeline, settings.cooldownTimeline = nil, nil
-    db.timelineProbe, db.timelineBar = nil, nil
-    if IF.charDB then IF.charDB.timelineLengths = nil end
+    db.timelineBar = nil
     return settings
 end

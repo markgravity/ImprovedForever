@@ -32,7 +32,7 @@ local function Secret(v)
     return type(issecretvalue) == "function" and issecretvalue(v)
 end
 
-local LINE_H = 4                -- (the experience line, XPBar.lua)
+local LINE_H = IN.XP_H          -- (the experience line, XPBar.lua)
 local START_GAP = 20            -- (after the minion card)
 local MINION_W = 61             -- (a minion's card, PartyCards.lua)
 local MIDDLE_GAP = 28           -- (kept clear by the party's row)
