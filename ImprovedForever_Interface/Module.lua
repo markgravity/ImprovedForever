@@ -19,7 +19,7 @@ IF.Interface = IN
 -- diamond (GamepadBar.lua: its bottom point), the set pips and glyphs
 -- under it still clear of the experience line
 IN.BOTTOM = 30
--- The experience line's height (XPBar.lua): the cards' dots sit on it
+-- The experience line's height (XPBar.lua)
 IN.XP_H = 8
 
 -- The game's colours of a monster's level against yours, its own when it
@@ -67,6 +67,7 @@ local DEFAULTS = {
     npcDialog = true,   -- talking to an NPC (quests, gossip) as subtitles low in the middle, Spoken's voice with it
     xp = true,          -- the experience as a line along the screen's bottom edge
     pad = true,         -- the gamepad bar as Hogwarts Legacy's spell diamonds, bottom right
+    padStyle = "square", -- its tiles: "diamond", "square" (rows and columns) or "circle" (GamepadBar.lua)
     partyPad = false,   -- L1 ours: + the D-pad picks a party spell, + a face button casts it on party 1 to 4 (a test)
 }
 

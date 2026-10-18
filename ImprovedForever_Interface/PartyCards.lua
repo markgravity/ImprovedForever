@@ -2,14 +2,13 @@
 -- screen's bottom edge (XPBar.lua): your pet beside the player frame,
 -- bottom left ("Minions"), your party's four centred ("Party"), each a card in
 -- the look of the rest of the bottom: the avatar the player's has too
--- (UnitFrames.lua: the unit's model in the game's tooltip border, a strip
+-- (UnitFrames.lua: the unit's model in the game's dialog border, a strip
 -- along its top in its class colour (a minion's gold, grey when dead or
 -- offline), its level at the top left); along its foot, on a dark band,
 -- its name over its health and power in our bars (the casting bar's
--- frame, as the player's).
--- Under each, its role as a flat dot on the experience line, its icon in
--- it (a minion's gold, its paw; a party member's tank blue / healer green
--- / damage red), a thin line up to it; a minion's card smaller. Faint when out of range.
+-- frame, as the player's). Its role's icon at its top right, as the game's
+-- party frames show it (a minion's paw); a minion's card smaller. Faint
+-- when out of range.
 -- /if cards previews every slot (Preview).
 -- Each card is a secure unit button (a click targets, a right click opens
 -- the unit's menu) in a place of its own, shown by the game's state
@@ -32,8 +31,7 @@ local MINION_GAP = 16            -- (the minions after the player frame, bottom 
 local PAD_GAP = 12               -- (the party spells' diamond after the last card, PartyPad.lua)
 local HEALTH_H, POWER_H, BAR_GAP, INSET = 14, 11, 0, 4
 local NAME_H = 14
--- (the cards' bottom: the HUD's shared bottom line, Module.lua; their role
--- dots under them, over the experience line)
+-- (the cards' bottom: the HUD's shared bottom line, Module.lua)
 local BOTTOM = IN.BOTTOM
 local PAD_GLYPH = 20             -- (a party card's face button, PartyPad.lua)
 -- (L1 held, picking: each party card grown by PICK_GROW, its face button
@@ -44,8 +42,7 @@ local PICK_GROW, PICK_GLYPH, PICK_TIME = 1.15, 44, 0.15
 -- and ALERT_OUT past each edge, so only its outer part shows; its burst
 -- as big to it as the game's to its alert (150 to a 45 button's 63))
 local ALERT_OUT, BURST_SIZE = 18, 150 / 63
-local DOT, DOT_ICON = 18, 12     -- (a flat dot as the gamepad bar's set pips, its role's icon in it)
-local DOT_MASK = "Interface\\CharacterFrame\\TempPortraitAlphaMask"
+local ROLE_SIZE = 14             -- (its role's icon, at its top right)
 local MINION_SCALE = 0.8         -- (a minion's card, a party member's times)
 -- (the alert's colours, as a monster's level against yours (Module.lua):
 -- green, yellow, orange steady, red flashing at its worst)
@@ -56,8 +53,6 @@ local FLASH, FLASH_LOW = 0.5, 0.25    -- (the alert's flash: seconds each way, i
 -- (its pulse, as a gamepad diamond's cooldown beat in the alert's colour:
 -- each second, a flash fading over PULSE seconds, at PULSE_PEAK)
 local PULSE, PULSE_PEAK = 0.35, 0.45
-local LINE_H = IN.XP_H  -- (the experience line's height, XPBar.lua: the dots sit on it)
-local STEM_W, STEM_ALPHA = 2, 0.55
 local HEALTH_FILL = "UI-HUD-UnitFrame-Target-PortraitOn-Bar-Health"
 local POWER_FILL = "UI-HUD-UnitFrame-Target-PortraitOn-Bar-"
 
@@ -113,7 +108,11 @@ local function Card(name, unit, scale)
         f:SetFrameLevel(level)
         f:SetAlpha(0)
         UF.Border(f)
-        for _, t in ipairs(f.borderPieces) do t:SetVertexColor(c[1], c[2], c[3], 1) end
+        -- (the metal greyed, then tinted: the colour as it is)
+        for _, t in ipairs(f.borderPieces) do
+            t:SetDesaturated(true)
+            t:SetVertexColor(c[1], c[2], c[3], 1)
+        end
         return f
     end
     b.bands = {}
@@ -149,21 +148,10 @@ local function Card(name, unit, scale)
     rise:SetEndDelay(2 * FLASH - PULSE)
     beat:Play()
 
-    -- (its role under it: a flat dot in the role's colour, as the gamepad
-    -- bar's set pips, on the experience line, a thin line of that colour up
-    -- to the card)
-    b.dot = b:CreateTexture(nil, "ARTWORK")
-    b.dot:SetTexture(DOT_MASK)
-    b.dot:SetSize(DOT, DOT)
-    b.dot:SetPoint("BOTTOM", b, "BOTTOM", 0, LINE_H - BOTTOM)
-    b.stem = b:CreateTexture(nil, "BACKGROUND")
-    b.stem:SetColorTexture(1, 1, 1, 1)
-    b.stem:SetWidth(STEM_W)
-    b.stem:SetPoint("TOP", b, "BOTTOM")
-    b.stem:SetPoint("BOTTOM", b.dot, "CENTER")
-    b.role = b:CreateTexture(nil, "OVERLAY")
-    b.role:SetSize(DOT_ICON, DOT_ICON)
-    b.role:SetPoint("CENTER", b.dot, "CENTER")
+    -- (its role's icon at its top right, over the border as its level)
+    b.role = b.avatar.badge:CreateTexture(nil, "OVERLAY", nil, 3)
+    b.role:SetSize(ROLE_SIZE, ROLE_SIZE)
+    b.role:SetPoint("CENTER", b.avatar, "TOPRIGHT", -7, -7)
     return b
 end
 
@@ -183,17 +171,8 @@ local function Near(unit)
     return not (checked == true and inRange == false)
 end
 
--- Its role's colour and icon: a minion's gold, its paw; a party member's
--- role (the game's: tank blue, healer green, damage red, the role's icon),
--- grey and none when it has none
-local ROLE_COLOR = {
-    MINION = { 1, 0.82, 0 },
-    TANK = { 0.3, 0.55, 1 },
-    HEALER = { 0.3, 0.9, 0.35 },
-    DAMAGER = { 0.95, 0.3, 0.25 },
-}
-local NO_ROLE = { 0.45, 0.45, 0.45 }
-
+-- Its role's icon (the game's): a minion's paw, a party member's role's;
+-- none when it has none
 local ROLE_ICON = {
     MINION = "paw-icon",
     TANK = "groupfinder-icon-role-micro-tank",
@@ -202,9 +181,6 @@ local ROLE_ICON = {
 }
 
 local function SetRole(b, role)
-    local c = role and ROLE_COLOR[role] or NO_ROLE
-    b.dot:SetVertexColor(c[1], c[2], c[3], 1)
-    b.stem:SetVertexColor(c[1], c[2], c[3], STEM_ALPHA)
     local atlas = role and ROLE_ICON[role]
     if atlas then
         b.role:SetAtlas(atlas)

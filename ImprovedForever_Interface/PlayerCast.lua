@@ -91,13 +91,18 @@ local function PlaceHalves()
 end
 PlaceHalves()
 
--- (its edges lit, from the top and bottom points to each side point: a
--- line and its wider, fainter glow, as the tiles' cast ring)
+-- (its edges lit, from the top and bottom to each side, along the tile's
+-- border (the spell diamonds' style, GamepadBar.lua): a diamond's from its
+-- top and bottom points straight to its side points; a square's from the
+-- middles of its top and bottom edges round its corners to the middles of
+-- its sides; a circle's round its rim. Each a line and its wider, fainter
+-- glow, as the tiles' cast ring)
 local arcs = CreateFrame("Frame", nil, line)
 arcs:SetSize(1, 1)
 arcs:SetPoint("CENTER", line, "CENTER")
 local arcLines, arcGlows = {}, {}
-for i = 1, 4 do
+local ARC_STEPS = 8             -- (a circle's quarter, in straight steps)
+for i = 1, 4 * ARC_STEPS do
     local glow = arcs:CreateLine(nil, "OVERLAY", nil, 1)
     glow:SetThickness(4)
     glow:SetTexture("Interface\\Buttons\\WHITE8x8")
@@ -109,32 +114,68 @@ for i = 1, 4 do
     arcLines[i], arcGlows[i] = edge, glow
 end
 
--- (amount: 0 to 1 of the way along the edges, from the top and bottom
--- points to the side ones)
-local EDGES = { { -1, 1 }, { 1, 1 }, { -1, -1 }, { 1, -1 } }    -- (side, top (1) or bottom (-1))
-local function Arcs(amount, color)
-    for i, e in ipairs(EDGES) do
-        local edge, glow = arcLines[i], arcGlows[i]
-        if amount <= 0 then
-            edge:Hide()
-            glow:Hide()
-        else
-            local x, y = e[1] * radius * amount, e[2] * radius * (1 - amount)
-            for _, l in ipairs({ edge, glow }) do
-                l:SetStartPoint("CENTER", arcs, 0, e[2] * radius)
-                l:SetEndPoint("CENTER", arcs, x, y)
-                l:Show()
-            end
-            edge:SetVertexColor(color[1], color[2], color[3], 1)
-            glow:SetVertexColor(color[1], color[2], color[3], 0.35)
+local function Style()
+    local GB = IN.GamepadBar
+    return GB and GB.Style and GB.Style() or "diamond"
+end
+
+-- (one quarter's path, from the top (or bottom) to a side, as points in
+-- units of radius: side -1 / 1, vertical 1 (top) / -1 (bottom))
+local function Path(side, vertical)
+    local style = Style()
+    if style == "square" then return { { 0, vertical }, { side, vertical }, { side, 0 } } end
+    if style == "circle" then
+        local path = {}
+        for k = 0, ARC_STEPS do
+            local a = k / ARC_STEPS * math.pi / 2
+            path[#path + 1] = { side * math.sin(a), vertical * math.cos(a) }
         end
+        return path
+    end
+    return { { 0, vertical }, { side, 0 } }
+end
+
+-- (amount: 0 to 1 of the way along the path, from the top and bottom to
+-- the sides)
+local QUARTERS = { { -1, 1 }, { 1, 1 }, { -1, -1 }, { 1, -1 } }
+local function Arcs(amount, color)
+    local n = 0
+    for _, q in ipairs(QUARTERS) do
+        local path = Path(q[1], q[2])
+        local segments = #path - 1
+        local along = amount * segments
+        for k = 1, segments do
+            n = n + 1
+            local edge, glow = arcLines[n], arcGlows[n]
+            local part = math.min(1, math.max(0, along - (k - 1)))
+            if part <= 0 then
+                edge:Hide()
+                glow:Hide()
+            else
+                local a, z = path[k], path[k + 1]
+                local x, y = a[1] + (z[1] - a[1]) * part, a[2] + (z[2] - a[2]) * part
+                for _, l in ipairs({ edge, glow }) do
+                    l:SetStartPoint("CENTER", arcs, a[1] * radius, a[2] * radius)
+                    l:SetEndPoint("CENTER", arcs, x * radius, y * radius)
+                    l:Show()
+                end
+                edge:SetVertexColor(color[1], color[2], color[3], 1)
+                glow:SetVertexColor(color[1], color[2], color[3], 0.35)
+            end
+        end
+    end
+    for i = n + 1, #arcLines do
+        arcLines[i]:Hide()
+        arcGlows[i]:Hide()
     end
 end
 
 -- (the edges' share of the run: their length against the line's half
--- out from the diamond)
+-- out from the tile)
 local function EdgeShare()
-    local edge = radius * math.sqrt(2)
+    local style = Style()
+    local edge = style == "square" and 2 * radius or style == "circle" and radius * math.pi / 2
+        or radius * math.sqrt(2)
     return edge / (edge + LINE_W / 2 - radius)
 end
 
@@ -258,7 +299,12 @@ local function Start(kind, text, startMs, endMs, notInterruptible, spell)
         left:SetReverseFill(true)
         right:SetReverseFill(false)
     end
-    Tile()
+    -- (the tile's border as its style has it now)
+    local t = Tile()
+    if t and type(t.ring) == "table" and type(t.ring.r) == "number" and t.ring.r ~= radius then
+        radius = t.ring.r
+        PlaceHalves()
+    end
     -- (plain times: the line's halves take their share of the run (a cast
     -- the part after the edges, a channel's time gone the part before
     -- them); secret ones: the whole cast, the edges lit throughout)

@@ -45,41 +45,80 @@ local DIRS = { { -1, 0 }, { 0, 1 }, { 1, 0 }, { 0, -1 } }
 local FACE_KEYS = { "PAD3", "PAD4", "PAD2", "PAD1" }
 local DPAD_KEYS = { "PADDLEFT", "PADDUP", "PADDRIGHT", "PADDDOWN" }
 
--- (diamond tiles, as Hogwarts Legacy's: the game's square slot turned a
--- quarter of a right angle. A tile's visible side: VISIBLE times its size
--- (the art's soft margin left out); its width point to point: that times
--- the root of 2. The four sit edge to edge, TILE_GAP apart, as one big
--- diamond: each tile's middle `spread` out from the group's.)
+-- The tiles' style (the setting padStyle, GB.SetStyle):
+-- * diamond, as Hogwarts Legacy's: the game's square slot turned a quarter
+--   of a right angle, cut by the game's diamond mask; the four edge to edge
+--   as one big diamond;
+-- * square: the game's square slot as it is (its own square mask), the
+--   four in two rows and two columns, each where the diamond's had it
+--   (turned an eighth back: left top left, up top right, right bottom
+--   right, down bottom left);
+-- * circle: the game's circle slot (its own circle mask), the four in a
+--   cross as the game's own bar has them.
+-- A tile's visible side: VISIBLE times its size (the art's soft margin
+-- left out); its width across (a diamond's point to point: that times the
+-- root of 2); TILE_GAP between two. `spread`: each tile's middle out from
+-- the group's (a grid's: on each axis).
 local ROOT2 = math.sqrt(2)
 local VISIBLE, TILE_GAP = 1.2, 3
-local FACE = { size = 44, glyph = 22 }
-local DPAD = { size = 36, glyph = 18 }
-local CLASS = { size = 36, glyph = 16 }
-for _, d in ipairs({ FACE, DPAD, CLASS }) do
+local CLASS_GAP = 10    -- (the class actions' tiles off their group's)
+local STYLES = {
+    diamond = { slot = "squareslot", mask = "progress-bar-diamond-pip-mask", turn = math.pi / 4, pointed = true,
+        upright = 0.5 },
+    square = { slot = "squareslot", mask = "SquareMask", turn = 0, grid = true, upright = 0.72 },
+    circle = { slot = "circleslot", mask = "CircleMask", turn = 0, round = true, upright = 0.7 },
+}
+GB.STYLE_ORDER = { "diamond", "square", "circle" }
+local style, styleName = STYLES.square, "square"
+
+-- (every size table made, so a new style reshapes them all)
+local dims = setmetatable({}, { __mode = "k" })
+local function Shape(d)
+    dims[d] = true
     d.side = d.size * VISIBLE
-    d.width = d.side * ROOT2
-    d.spread = (d.side + TILE_GAP) / ROOT2
+    d.width = style.pointed and d.side * ROOT2 or d.side
+    d.spread = style.grid and (d.side + TILE_GAP) / 2 or (d.side + TILE_GAP) / ROOT2
+    return d
+end
+local FACE = Shape({ size = 44, glyph = 22 })
+local DPAD = Shape({ size = 36, glyph = 18 })
+local CLASS = Shape({ size = 36, glyph = 18 })
+
+-- (a press's direction to its tile's place, times its spread: the
+-- cross's, or a grid's corner)
+local function Place(dir)
+    if style.grid then return dir[1] + dir[2], dir[2] - dir[1] end
+    return dir[1], dir[2]
 end
 
--- Where a class action's tile sits by a group: against the upper outer
--- edge of its top tile (in the tiles' own turned frame: one tile further
--- along), as (x, y) from the group's middle, x away from the screen's
--- middle line of the group
+-- (how far a tile's glyph reaches past its corner, and a little more: a
+-- grid's tiles' glyphs are at their outer corners, Button)
+local function GlyphOut(d)
+    return d.glyph * 0.7 + 3
+end
+
+-- Where a class action's tile sits by a group: CLASS_GAP off the upper
+-- outer edge of its top tile (in a diamond's turned frame: one tile further
+-- along; a grid's: beside its top row's outer tile), as (x, y) from the
+-- group's middle, x away from the screen's middle line of the group
 local function ClassSpot(d)
+    -- (a grid: a row of its own over the group, over its outer column,
+    -- clear of that column's corner glyph: GlyphOut)
+    if style.grid then return d.spread, d.spread + d.side / 2 + GlyphOut(d) + CLASS.side / 2 end
     local a = d.spread / ROOT2
-    local rx, ry = a + d.side / 2 + TILE_GAP + CLASS.side / 2, a
+    local rx, ry = a + d.side / 2 + CLASS_GAP + CLASS.side / 2, a
     return (rx - ry) / ROOT2, (rx + ry) / ROOT2
 end
--- (the face diamond's bottom point on the HUD's shared bottom, IN.BOTTOM:
--- the holder sits that point's glyph half lower, Extent)
-local MARGIN_X = 40
-local MARGIN_Y = IN.BOTTOM - FACE.glyph / 2
+-- (as far in from the screen's right edge as the player frame from its
+-- left (UnitFrames.lua), its tiles' bottom on the HUD's shared bottom,
+-- IN.BOTTOM: the holder's corner there, the outermost tile's edge on it)
+local MARGIN_X = 20
 local GAP = 34          -- (between the two groups)
 
 local holder = CreateFrame("Frame", "ImprovedForeverGamepadBar", UIParent)
 holder:SetFrameStrata("LOW")
 holder:SetSize(1, 1)
-holder:SetPoint("BOTTOMRIGHT", UIParent, "BOTTOMRIGHT", -MARGIN_X, MARGIN_Y)
+holder:SetPoint("BOTTOMRIGHT", UIParent, "BOTTOMRIGHT", -MARGIN_X, IN.BOTTOM)
 holder:Hide()
 
 local function Extent(d)
@@ -88,14 +127,26 @@ end
 
 local faceCenter = CreateFrame("Frame", nil, holder)
 faceCenter:SetSize(1, 1)
-faceCenter:SetPoint("CENTER", holder, "BOTTOMRIGHT", -Extent(FACE), Extent(FACE))
 local dpadCenter = CreateFrame("Frame", nil, holder)
 dpadCenter:SetSize(1, 1)
--- (the D-pad's raised so its class action sits on one row with the face
--- buttons')
-local _, FACE_CLASS_Y = ClassSpot(FACE)
-local _, DPAD_CLASS_Y = ClassSpot(DPAD)
-dpadCenter:SetPoint("CENTER", faceCenter, "CENTER", -(Extent(FACE) + GAP + Extent(DPAD)), FACE_CLASS_Y - DPAD_CLASS_Y)
+-- (the groups placed for the style: the D-pad's raised so its class
+-- action sits on one row with the face buttons')
+local function PlaceGroups()
+    -- (the face group's lowest and rightmost tile edges (its class
+    -- action's further right) on the holder's corner)
+    local edge = FACE.spread + FACE.width / 2
+    local classX = ClassSpot(FACE)
+    faceCenter:ClearAllPoints()
+    faceCenter:SetPoint("CENTER", holder, "BOTTOMRIGHT", -math.max(edge, classX + CLASS.width / 2), edge)
+    -- (a grid: both groups' bottoms on one line)
+    local _, faceClassY = ClassSpot(FACE)
+    local _, dpadClassY = ClassSpot(DPAD)
+    local dy = faceClassY - dpadClassY
+    if style.grid then dy = (DPAD.spread + DPAD.width / 2) - (FACE.spread + FACE.width / 2) end
+    dpadCenter:ClearAllPoints()
+    dpadCenter:SetPoint("CENTER", faceCenter, "CENTER", -(Extent(FACE) + GAP + Extent(DPAD)), dy)
+end
+PlaceGroups()
 
 ---------------------------------------------------------------------------
 -- A button of ours: the game's square slot (its background, the icon in
@@ -106,14 +157,19 @@ local CIRCLE = "Interface\\CharacterFrame\\TempPortraitAlphaMask"   -- (the set 
 -- The game's square slot (its D-pad buttons' look), turned into a
 -- diamond: background, border, pressed and selected borders; the icon
 -- upright, cut to a diamond (the game's diamond mask)
-local SLOT = {
-    bg = "gamepad-actionbar-squareslot-bg",
-    normal = "gamepad-actionbar-squareslot-border-normal",
-    pressed = "gamepad-actionbar-squareslot-border-pressed",
-    selected = "gamepad-actionbar-squareslot-border-selected",
-    mask = "progress-bar-diamond-pip-mask",
-}
-local TURN = math.pi / 4
+-- (the style's slot art, its mask; filled in place by SetSlot)
+local SLOT = {}
+local TURN
+local function SetSlot()
+    local slot = "gamepad-actionbar-" .. style.slot
+    SLOT.bg = slot .. "-bg"
+    SLOT.normal = slot .. "-border-normal"
+    SLOT.pressed = slot .. "-border-pressed"
+    SLOT.selected = slot .. "-border-selected"
+    SLOT.mask = style.mask
+    TURN = style.turn
+end
+SetSlot()
 -- (toggled on, a proc: the diamond lit, at these colours and strengths)
 local CHECKED_FILL, CHECKED_ALPHA = { 1, 0.75, 0.25 }, 0.35
 local PROC_FILL, PROC_ALPHA = { 1, 0.95, 0.6 }, 0.3
@@ -127,7 +183,8 @@ local GCD_MAX = 1.6
 local RING_AT, RING_LINE, RING_GLOW = 0.96, 2.5, 4
 -- (an icon's share of its tile: a turned one's side, the diamond mask's
 -- width; an upright one fits inside at half the diamond's width)
-local ICON_FILL, UPRIGHT_FILL = 0.94, 0.5
+local ICON_FILL = 0.94
+local function UprightFill() return style.upright end
 
 -- A turned texture's atlas changed, its turn kept (only when it changes)
 local function SetBorder(b, atlas)
@@ -162,10 +219,15 @@ local function DragOff(b)
     PickupAction(slot)
 end
 
+local tiles = setmetatable({}, { __mode = "k" })    -- (every tile made: reshaped with the style)
+
 local function Button(center, d, dir, key, parent)
     local b = CreateFrame("Frame", nil, parent or holder)
+    tiles[b] = true
+    b.center, b.dir = center, dir
     b:SetSize(d.size, d.size)
-    b:SetPoint("CENTER", center, "CENTER", dir[1] * d.spread, dir[2] * d.spread)
+    local px, py = Place(dir)
+    b:SetPoint("CENTER", center, "CENTER", px * d.spread, py * d.spread)
     b:EnableMouse(true)
 
     b.bg = b:CreateTexture(nil, "BACKGROUND")
@@ -201,6 +263,7 @@ local function Button(center, d, dir, key, parent)
     b.checkedFill = Fill(CHECKED_FILL, 2)
     b.procFill = Fill(PROC_FILL, 3)
     b.flashFill = Fill(FLASH_FILL, 4)
+    b.fills = { b.checkedFill, b.procFill, b.flashFill }
 
     -- (a square sweep would spill out of the diamond: the countdown only,
     -- the icon dimmed while it runs, Mirror)
@@ -225,6 +288,7 @@ local function Button(center, d, dir, key, parent)
         return t
     end
     b.border = Turned(SLOT.normal, 64 / 46, 0)
+    b.borderAtlas = SLOT.normal
     -- (a cast from this slot: a line running round the tile's border, its
     -- four edges clockwise from the top point, each with a wider, fainter
     -- one under it as its glow; CastFill)
@@ -233,17 +297,6 @@ local function Button(center, d, dir, key, parent)
     b.ring:SetFrameLevel(over:GetFrameLevel() + 1)
     b.ring.r = d.width / 2 * RING_AT
     b.ring.glows, b.ring.lines = {}, {}
-    for i = 1, 4 do
-        local glow = b.ring:CreateLine(nil, "OVERLAY", nil, 1)
-        glow:SetThickness(RING_GLOW)
-        glow:SetTexture("Interface\\Buttons\\WHITE8x8")
-        glow:SetBlendMode("ADD")
-        local line = b.ring:CreateLine(nil, "OVERLAY", nil, 2)
-        line:SetThickness(RING_LINE)
-        line:SetTexture("Interface\\Buttons\\WHITE8x8")
-        line:SetBlendMode("ADD")
-        b.ring.glows[i], b.ring.lines[i] = glow, line
-    end
     b.ring:Hide()
     b.timer = over:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
     b.timer:SetPoint("CENTER")
@@ -254,8 +307,10 @@ local function Button(center, d, dir, key, parent)
 
     b.key = over:CreateTexture(nil, "OVERLAY", nil, 2)
     b.key:SetSize(d.glyph, d.glyph)
-    b.key:SetPoint("CENTER", b, "CENTER", dir[1] * (d.width / 2 + d.glyph * 0.2),
-        dir[2] * (d.width / 2 + d.glyph * 0.2))
+    b.key.size = d.glyph
+    -- (outside it: past its point, or square, its outer corner)
+    b.key:SetPoint("CENTER", b, "CENTER", px * (d.width / 2 + d.glyph * 0.2),
+        py * (d.width / 2 + d.glyph * 0.2))
     b.keyName = key
 
     b:SetScript("OnEnter", function(self)
@@ -278,6 +333,35 @@ local function Button(center, d, dir, key, parent)
     return b
 end
 
+-- A tile reshaped for the style: its place (unless placed by its owner:
+-- b.placed), slot art, mask, fills, cooldown, border, ring, count, glyph
+local function Reshape(b)
+    local d = b.d
+    b:SetSize(d.size, d.size)
+    if not b.placed then
+        local px, py = Place(b.dir)
+        b:ClearAllPoints()
+        b:SetPoint("CENTER", b.center, "CENTER", px * d.spread, py * d.spread)
+    end
+    b.bg:SetAtlas(SLOT.bg)
+    b.bg:SetSize(d.side, d.side)
+    b.bg:SetRotation(TURN)
+    b.mask:SetAtlas(SLOT.mask)
+    b.mask:SetSize(d.width * ICON_FILL, d.width * ICON_FILL)
+    for _, t in ipairs(b.fills) do t:SetSize(d.width * ICON_FILL, d.width * ICON_FILL) end
+    b.cooldown:SetSize(d.side, d.side)
+    b.borderAtlas = nil
+    SetBorder(b, SLOT.normal)
+    b.ring.r = d.width / 2 * RING_AT
+    b.count:ClearAllPoints()
+    b.count:SetPoint("BOTTOM", b, "CENTER", 0, -d.width / 2 + 6)
+    if not b.placed then
+        local px, py = Place(b.dir)
+        b.key:ClearAllPoints()
+        b.key:SetPoint("CENTER", b, "CENTER", px * (d.width / 2 + d.glyph * 0.2), py * (d.width / 2 + d.glyph * 0.2))
+    end
+end
+
 local buttons = {}
 for i, dir in ipairs(DIRS) do
     buttons[i] = Button(dpadCenter, DPAD, dir, DPAD_KEYS[i])
@@ -288,25 +372,63 @@ end
 -- at the face buttons' upper right, L1 + L2 at the D-pad's upper left (the
 -- D-pad raised to put them on one row); their prompt (both glyphs) over
 -- them
-local function ClassButton(center, d, sign, keys)
-    local b = Button(center, CLASS, { sign, 1 }, nil)
-    local x, y = ClassSpot(d)
+local function PlaceClass(b)
+    local x, y = ClassSpot(b.group)
     b:ClearAllPoints()
-    b:SetPoint("CENTER", center, "CENTER", sign * x, y)
+    b:SetPoint("CENTER", b.center, "CENTER", b.sign * x, y)
     b.key:ClearAllPoints()
     b.key:SetPoint("BOTTOMRIGHT", b, "CENTER", -1, CLASS.width / 2 + 2)
+    b.key2:ClearAllPoints()
+    b.key2:SetPoint("BOTTOMLEFT", b, "CENTER", 1, CLASS.width / 2 + 2)
+end
+
+local function ClassButton(center, d, sign, keys)
+    local b = Button(center, CLASS, { sign, 1 }, nil)
+    b.placed, b.group, b.sign = true, d, sign
     b.key2 = b.key:GetParent():CreateTexture(nil, "OVERLAY", nil, 2)
     b.key2:SetSize(CLASS.glyph, CLASS.glyph)
-    b.key2:SetPoint("BOTTOMLEFT", b, "CENTER", 1, CLASS.width / 2 + 2)
+    b.key2.size = CLASS.glyph
     b.keyName, b.keyName2 = keys[1], keys[2]
+    PlaceClass(b)
     return b
 end
 local classLeft = ClassButton(dpadCenter, DPAD, -1, { "PADLSHOULDER", "PADLTRIGGER" })
 local classRight = ClassButton(faceCenter, FACE, 1, { "PADRSHOULDER", "PADRTRIGGER" })
 
-local function Glyph(tex, key)
-    local atlas = key and IF.GlyphAtlas(key)
-    if atlas then tex:SetAtlas(atlas) else tex:SetTexture(nil) end
+-- A press's glyph as the game's crossbar draws it (its
+-- InputIconTextureFrameTemplate's art: the game's prompt for the
+-- controller in use, read from its icon sets, its states Normal (1),
+-- Pressed (3) and Disabled (5)), else ours (IF.GlyphAtlas). The game's newer
+-- prompts (76 x 75) carry a shadow's padding: drawn bigger, their coords
+-- cut, as the game lays them out (InputIconTextureMixin:ApplyTextureLayout,
+-- for a 20 frame: 5 out at the top left, 4 and 3 at the bottom right).
+local LARGE_W, LARGE_H = 76, 75
+local function GameGlyphs(key)
+    local util = _G.InputIconTextureSetUtility
+    local ok, set = pcall(function() return util and util.GetActiveInputIconButtonTextures(key) end)
+    return ok and type(set) == "table" and set or nil
+end
+
+local function Glyph(tex, key, state)
+    local size = tex.size or tex:GetWidth()
+    local set = key and GameGlyphs(key)
+    local atlas = set and (set[state or 1] or set[1]) or nil
+    if not (atlas and IF.HasAtlas and IF.HasAtlas(atlas)) then atlas = key and IF.GlyphAtlas(key) end
+    tex.state = state or 1
+    if not atlas then
+        tex:SetTexture(nil)
+        return
+    end
+    tex:SetAtlas(atlas)
+    local info = C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(atlas)
+    if info and info.width == LARGE_W and info.height == LARGE_H then
+        local k = size / 20
+        tex:SetSize(size + 9 * k, size + 8 * k)
+        tex:SetTexCoord(0.015, 0.96, 0.015, 0.94)
+    else
+        tex:SetSize(size, size)
+        tex:SetTexCoord(0, 1, 0, 1)
+    end
 end
 
 local function UpdateGlyphs()
@@ -327,16 +449,22 @@ local PIP, PIP_GAP = 8, 6
 -- (centred on the whole: midway between the two diamonds' middles; just
 -- over the experience line (IN.XP_H), the lit one's bigger size clear of
 -- it. The face diamond's bottom point is on IN.BOTTOM)
-local PIPS_X = -(Extent(FACE) + GAP + Extent(DPAD)) / 2
 local PIPS_Y = IN.XP_H + 4 + (PIP + 3) / 2
 for i = 1, 4 do
     local p = holder:CreateTexture(nil, "ARTWORK")
     p:SetSize(PIP, PIP)
     p:SetTexture(CIRCLE)
-    p:SetPoint("CENTER", faceCenter, "CENTER", PIPS_X + (i - 2.5) * (PIP + PIP_GAP),
-        -(FACE.spread + FACE.width / 2) - (IN.BOTTOM - PIPS_Y))
     pips[i] = p
 end
+local function PlacePips()
+    local x = -(Extent(FACE) + GAP + Extent(DPAD)) / 2
+    for i, p in ipairs(pips) do
+        p:ClearAllPoints()
+        p:SetPoint("CENTER", faceCenter, "CENTER", x + (i - 2.5) * (PIP + PIP_GAP),
+            -(FACE.spread + FACE.width / 2) - (IN.BOTTOM - PIPS_Y))
+    end
+end
+PlacePips()
 local page = holder:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
 page:SetPoint("LEFT", pips[4], "RIGHT", 8, 0)
 
@@ -461,7 +589,39 @@ end
 
 local CHANNEL_COLOR = { 0.4, 1, 0.5 }
 -- (the corners, clockwise from the top: unit steps of the ring's radius)
-local CORNERS = { { 0, 1 }, { 1, 0 }, { 0, -1 }, { -1, 0 }, { 0, 1 } }
+-- (its path round the tile, clockwise, in units of its half width: a
+-- diamond's from its top point, a square's from its top left corner, a
+-- circle's from its top)
+local CIRCLE_STEPS = 32
+local function RingPath()
+    if style.grid then return { { -1, 1 }, { 1, 1 }, { 1, -1 }, { -1, -1 }, { -1, 1 } } end
+    if style.round then
+        local path = {}
+        for i = 0, CIRCLE_STEPS do
+            local a = i / CIRCLE_STEPS * 2 * math.pi
+            path[#path + 1] = { math.sin(a), math.cos(a) }
+        end
+        return path
+    end
+    return { { 0, 1 }, { 1, 0 }, { 0, -1 }, { -1, 0 }, { 0, 1 } }
+end
+GB.RingPath = RingPath
+
+-- (a ring's line and glow for one segment, made as needed)
+local function RingLines(ring, i)
+    if not ring.lines[i] then
+        local glow = ring:CreateLine(nil, "OVERLAY", nil, 1)
+        glow:SetThickness(RING_GLOW)
+        glow:SetTexture("Interface\\Buttons\\WHITE8x8")
+        glow:SetBlendMode("ADD")
+        local line = ring:CreateLine(nil, "OVERLAY", nil, 2)
+        line:SetThickness(RING_LINE)
+        line:SetTexture("Interface\\Buttons\\WHITE8x8")
+        line:SetBlendMode("ADD")
+        ring.glows[i], ring.lines[i] = glow, line
+    end
+    return ring.lines[i], ring.glows[i]
+end
 
 local function Casting(native)
     local anim = native and native.SpellCastAnimFrame
@@ -480,14 +640,20 @@ local function DrawRing(ring, f, color, pulse)
     local lr = color[1] + (1 - color[1]) * pulse
     local lg = color[2] + (1 - color[2]) * pulse
     local lb = color[3] + (1 - color[3]) * pulse
-    for i = 1, 4 do
-        local part = math.min(math.max(f * 4 - (i - 1), 0), 1)
-        local line, glow = ring.lines[i], ring.glows[i]
+    local path = RingPath()
+    local segments = #path - 1
+    for i = segments + 1, #ring.lines do
+        ring.lines[i]:Hide()
+        ring.glows[i]:Hide()
+    end
+    for i = 1, segments do
+        local part = math.min(math.max(f * segments - (i - 1), 0), 1)
+        local line, glow = RingLines(ring, i)
         if part <= 0 then
             line:Hide()
             glow:Hide()
         else
-            local a, z = CORNERS[i], CORNERS[i + 1]
+            local a, z = path[i], path[i + 1]
             local x1, y1 = a[1] * r, a[2] * r
             local x2, y2 = x1 + (z[1] - a[1]) * r * part, y1 + (z[2] - a[2]) * r * part
             for _, l in ipairs({ line, glow }) do
@@ -716,18 +882,18 @@ local function Mirror(b, native)
     local d = b.d
     if cursor then
         -- (the cursor drawn above, its own coords: upright)
-        b.icon:SetSize(d.width * UPRIGHT_FILL, d.width * UPRIGHT_FILL)
+        b.icon:SetSize(d.width * UprightFill(), d.width * UprightFill())
         b.icon:SetRotation(0)
     elseif Has(atlas) then
         b.icon:SetAtlas(atlas)
-        b.icon:SetSize(d.width * UPRIGHT_FILL, d.width * UPRIGHT_FILL)
+        b.icon:SetSize(d.width * UprightFill(), d.width * UprightFill())
         b.icon:SetRotation(0)
     else
         b.icon:SetTexture(texture)
         b.icon:SetTexCoord(unpack(coords or FULL))
         if coords then
             -- (the game's own picture, a cursor or a raid marker: upright)
-            b.icon:SetSize(d.width * UPRIGHT_FILL, d.width * UPRIGHT_FILL)
+            b.icon:SetSize(d.width * UprightFill(), d.width * UprightFill())
             b.icon:SetRotation(0)
         else
             b.icon:SetSize(d.side * ICON_FILL, d.side * ICON_FILL)
@@ -823,6 +989,11 @@ local function Mirror(b, native)
     pcall(b.count.SetText, b.count, count and count:IsShown() and count:GetText() or "")
     local ok, pressed = pcall(function() return native:GetButtonState() == "PUSHED" end)
     SetBorder(b, ok and pressed and SLOT.pressed or SLOT.normal)
+    -- (its glyph pressed with it, greyed while it's disabled, as the game's)
+    if b.keyName then
+        local state = b.disabled and 5 or (ok and pressed and 3) or 1
+        if b.key.state ~= state then Glyph(b.key, b.keyName, state) end
+    end
 end
 
 -- /if padprobe: what the game's active bar holds, logged in the saved
@@ -919,6 +1090,7 @@ end
 
 local function Watch()
     if not IF.db then return end
+    GB.SetStyle(IN.Settings().padStyle)
     local pu = PageUnit()
     local main = GamepadMainActionBarFrame
     local on = pu ~= nil and IN.Settings().pad and main:IsVisible() and not UF.EditMode()
@@ -963,12 +1135,11 @@ end)
 ---------------------------------------------------------------------------
 -- A tile's sizes from its size and its glyph's
 function GB.Dims(size, glyph)
-    local d = { size = size, glyph = glyph }
-    d.side = size * VISIBLE
-    d.width = d.side * ROOT2
-    d.spread = (d.side + TILE_GAP) / ROOT2
-    return d
+    return Shape({ size = size, glyph = glyph })
 end
+
+-- A press's direction to its tile's place (x, y, times a Dims' spread)
+GB.Place = Place
 
 -- A tile (parent: its frame; the mouse's scripts the caller's)
 function GB.Tile(parent, center, d, dir)
@@ -1020,15 +1191,45 @@ function GB.Rect()
 end
 
 -- Another addon's tile beside these (the Wheel module's recent slot,
--- ImprovedForever_Wheel/RecentSlot.lua): left of the D-pad's diamond,
--- level with its middle, the D-pad's tile size. While these show: the
+-- ImprovedForever_Wheel/RecentSlot.lua): left of the D-pad's group, the
+-- D-pad's tile size; level with its middle, or (a grid) beside its bottom
+-- row. While these show: the
 -- frame to anchor its middle to, x, y from it, the tile's sizes (GB.Dims);
 -- else nil.
 local SIDE_GAP = 14
 local sideDims = GB.Dims(DPAD.size, DPAD.glyph)
 function GB.SideSpot()
     if not holder:IsShown() then return nil end
+    -- (a grid: beside its bottom row, clear of that row's outer glyph)
+    if style.grid then
+        return dpadCenter, -(DPAD.spread + DPAD.side / 2 + GlyphOut(DPAD) + sideDims.width / 2), -DPAD.spread, sideDims
+    end
     return dpadCenter, -(Extent(DPAD) + SIDE_GAP + sideDims.width / 2), 0, sideDims
+end
+
+---------------------------------------------------------------------------
+-- The style: every size, tile and place again; others told (GB.OnStyle)
+---------------------------------------------------------------------------
+local styleListeners = {}
+function GB.OnStyle(fn)
+    styleListeners[#styleListeners + 1] = fn
+end
+
+function GB.Style()
+    return styleName
+end
+
+function GB.SetStyle(name)
+    if not STYLES[name] or name == styleName then return end
+    style, styleName = STYLES[name], name
+    SetSlot()
+    for d in pairs(dims) do Shape(d) end
+    PlaceGroups()
+    for b in pairs(tiles) do Reshape(b) end
+    PlaceClass(classLeft)
+    PlaceClass(classRight)
+    PlacePips()
+    for _, fn in ipairs(styleListeners) do pcall(fn, name) end
 end
 
 function GB.Apply()

@@ -1,7 +1,7 @@
--- Two rows along the bottom, either side of the party cards, each icon
--- round (in the game's gamepad circle slot), a line from it down to the
--- experience line in the ring's metal (tinted as the ring: a debuff's by
--- its kind):
+-- Two rows along the bottom, either side of the party cards, each icon as
+-- the game's buff frame draws them (square, a debuff in its kind's border,
+-- its time over it in the game's yellow), a thin line from it down to the
+-- experience line (a debuff's in its kind's colour):
 -- * left: your buffs and debuffs, from after the minion card toward the
 --   party's row: the game's aura container (Blizzard_AuraContainer's
 --   CustomAuraContainerTemplate), filled by the game itself, in a fight
@@ -39,43 +39,28 @@ local MINION_W = 61             -- (a minion's card, PartyCards.lua)
 local MIDDLE_GAP = 28           -- (kept clear by the party's row)
 local PAD_GAP = 12              -- (the party spells' diamond after the cards, PartyCards.lua)
 local DIAMOND_GAP = 40          -- (before the spell diamonds)
-local SPACING = 14              -- (between two icons: their rings, a fifth wider, clear by ~8)
+local SPACING = 10              -- (between two icons; a debuff's border a sixth out each side)
 local ROW_GAP = 18              -- (between rows: the effect over each)
 local SIZE_FALLBACK = 40        -- (the Cooldown Manager's icons can't be measured)
 local SLIDE = 6                 -- (how fast an icon slides to its place)
 local GCD_MAX = 1.6             -- (a cooldown this short is the global one)
 local READY_FLASH = 1           -- (a cooldown come ready: shown this long, flashing)
--- (the line down to the experience line, as the cards' role dots' lines,
--- PartyCards.lua)
+-- (the line down to the experience line: thin, in the cards' bronze
+-- (the game's dialog border, UnitFrames.lua); a debuff's in its kind's
+-- colour)
 local STEM_W = 2
-local DOT_MASK = "Interface\\CharacterFrame\\TempPortraitAlphaMask"
+local STEM_COLOR = { 0.62, 0.5, 0.32, 0.8 }
 local DEBUFF_COLOR = { 0.9, 0.15, 0.15 }
--- (the round slot, as the Wheel's recent slot: the game's gamepad circle
--- slot round the icon; its parts' sizes of the icon's slot)
-local RING_BG, RING_ICON, RING_FRAME = 1.13, 0.83, 1.22
--- (the line down: the ring's metal band cut across (its left side, halfway
--- down, BAND of its width) and stretched, as wide as the band is drawn)
-local RING_ATLAS, BAND = "gamepad-actionbar-circleslot-frame", 6 / 46
-local band
-local function Band(tex, size)
-    if band == nil then
-        band = false
-        local get = C_Texture and C_Texture.GetAtlasInfo
-        local ok, info = pcall(function() return get and get(RING_ATLAS) end)
-        local file = ok and type(info) == "table" and (info.file or info.filename)
-        if file then
-            local l, r, t, b = info.leftTexCoord, info.rightTexCoord, info.topTexCoord, info.bottomTexCoord
-            band = { file, l, l + (r - l) * BAND, t + (b - t) * 0.49, t + (b - t) * 0.51 }
-        end
-    end
-    if band then
-        tex:SetTexture(band[1])
-        tex:SetTexCoord(band[2], band[3], band[4], band[5])
-        tex:SetWidth(math.max(STEM_W, size * RING_FRAME * BAND))
-    else
-        tex:SetColorTexture(1, 1, 1, 1)
-        tex:SetWidth(STEM_W)
-    end
+-- (the icons as the game's buff frame's (BuffFrameTemplates.xml): square,
+-- no frame, a debuff's border the game's (its kind's) BORDER_OUT of the
+-- icon's size; the time in GameFontNormalSmall, the stacks in
+-- NumberFontNormal at the bottom right)
+local BORDER_OUT = 40 / 30
+
+local function Line(tex)
+    tex:SetColorTexture(1, 1, 1, 1)
+    tex:SetWidth(STEM_W)
+    tex:SetVertexColor(STEM_COLOR[1], STEM_COLOR[2], STEM_COLOR[3], STEM_COLOR[4])
 end
 -- (each lane's end, by the middle, where its icons run out: a short black
 -- line cut into the experience line)
@@ -99,11 +84,6 @@ local function Short(left)
     if left >= 3600 then return math.ceil(left / 3600) .. "h" end
     if left >= 60 then return math.ceil(left / 60) .. "m" end
     return tostring(math.ceil(left))
-end
-
-local function Outline(fs)
-    local font, size = fs:GetFont()
-    if font then fs:SetFont(font, size, "OUTLINE") end
 end
 
 ---------------------------------------------------------------------------
@@ -189,47 +169,25 @@ local function Timeline(name, source)
     local function NewIcon()
         local b = CreateFrame("Frame", nil, holder)
         b:EnableMouse(true)
-        -- (round: the circle slot's background, the icon cut round, the
-        -- slot's ring over it)
-        b.bg = b:CreateTexture(nil, "BACKGROUND")
-        b.bg:SetPoint("CENTER")
-        if Atlas({ "gamepad-actionbar-circleslot-bg" }) then
-            b.bg:SetAtlas("gamepad-actionbar-circleslot-bg")
-        else
-            b.bg:SetTexture(DOT_MASK)
-            b.bg:SetVertexColor(0, 0, 0, 0.6)
-        end
-        local mask = b:CreateMaskTexture()
-        mask:SetTexture(DOT_MASK, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
-        mask:SetPoint("CENTER")
-        b.mask = mask
+        -- (as the game's buff frame's: the icon square, a flash over it)
         b.icon = b:CreateTexture(nil, "ARTWORK")
-        b.icon:SetPoint("CENTER")
-        b.icon:AddMaskTexture(mask)
+        b.icon:SetAllPoints()
         b.flash = b:CreateTexture(nil, "ARTWORK", nil, 2)
-        b.flash:SetPoint("CENTER")
+        b.flash:SetAllPoints()
         b.flash:SetColorTexture(1, 1, 1, 1)
         b.flash:SetBlendMode("ADD")
-        b.flash:AddMaskTexture(mask)
         b.flash:SetAlpha(0)
-        b.ring = b:CreateTexture(nil, "OVERLAY")
-        b.ring:SetPoint("CENTER")
-        if Atlas({ "gamepad-actionbar-circleslot-frame" }) then
-            b.ring:SetAtlas("gamepad-actionbar-circleslot-frame")
-        end
-        b.time = b:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmall")
-        b.time:SetPoint("TOP", b, "BOTTOM", 0, -1)
-        Outline(b.time)
-        b.count = b:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmall")
-        b.count:SetPoint("TOPRIGHT", -1, -1)
-        Outline(b.count)
+        b.time = b:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        b.time:SetPoint("TOP", b, "BOTTOM")
+        b.count = b:CreateFontString(nil, "OVERLAY", "NumberFontNormal")
+        b.count:SetPoint("BOTTOMRIGHT", -2, 2)
         b.effect = b:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         b.effect:SetPoint("BOTTOM", b, "TOP", 0, 2)
         b.effect:SetWordWrap(false)
-        Outline(b.effect)
         -- (down to the experience line: a thin line, its foot kept on the
         -- line's top by an unseen point under the icon)
         b.stem = holder:CreateTexture(nil, "BACKGROUND")
+        Line(b.stem)
         b.stem:SetPoint("TOP", b, "BOTTOM")
         b.foot = holder:CreateTexture(nil, "BACKGROUND")
         b.foot:SetSize(1, 1)
@@ -294,19 +252,8 @@ local function Timeline(name, source)
                 Parts(b, true)
             end
             b:SetSize(size, size)
-            b.bg:SetSize(size * RING_BG, size * RING_BG)
-            b.mask:SetSize(size * RING_ICON, size * RING_ICON)
-            b.icon:SetSize(size * RING_ICON, size * RING_ICON)
-            b.flash:SetSize(size * RING_ICON, size * RING_ICON)
-            b.ring:SetSize(size * RING_FRAME, size * RING_FRAME)
             pcall(b.icon.SetTexture, b.icon, entry.texture)
             local c = entry.color
-            -- (the ring tinted when the entry says; the line the ring's
-            -- metal, tinted as it)
-            local r = entry.ring or { 1, 1, 1 }
-            b.ring:SetVertexColor(r[1], r[2], r[3], 1)
-            Band(b.stem, size)
-            b.stem:SetVertexColor(r[1], r[2], r[3], 1)
             b.flash:SetVertexColor(c[1], c[2], c[3], 1)
             b.flash:SetAlpha(entry.flash or 0)
             b.time:SetText(entry.left and entry.left > 0 and Short(entry.left) or "")
@@ -408,36 +355,15 @@ end
 
 local function StyleButton(b, harmful, size)
     b:SetSize(size, size)
-    local bg = b:CreateTexture(nil, "BACKGROUND")
-    bg:SetPoint("CENTER")
-    bg:SetSize(size * RING_BG, size * RING_BG)
-    if Atlas({ "gamepad-actionbar-circleslot-bg" }) then
-        bg:SetAtlas("gamepad-actionbar-circleslot-bg")
-    else
-        bg:SetTexture(DOT_MASK)
-        bg:SetVertexColor(0, 0, 0, 0.6)
-    end
-    local mask = b:CreateMaskTexture()
-    mask:SetTexture(DOT_MASK, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
-    mask:SetPoint("CENTER")
-    mask:SetSize(size * RING_ICON, size * RING_ICON)
     local icon = b:CreateTexture(nil, "ARTWORK")
-    icon:SetPoint("CENTER")
-    icon:SetSize(size * RING_ICON, size * RING_ICON)
-    icon:AddMaskTexture(mask)
-    local ring = b:CreateTexture(nil, "OVERLAY")
-    ring:SetPoint("CENTER")
-    ring:SetSize(size * RING_FRAME, size * RING_FRAME)
-    if Atlas({ "gamepad-actionbar-circleslot-frame" }) then ring:SetAtlas("gamepad-actionbar-circleslot-frame") end
-    local time = b:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmall")
+    icon:SetAllPoints()
+    local time = b:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     time:SetPoint("BOTTOM", b, "TOP", 0, 1)
-    Outline(time)
-    local count = b:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmall")
-    count:SetPoint("TOPRIGHT", 1, 1)
-    Outline(count)
+    local count = b:CreateFontString(nil, "OVERLAY", "NumberFontNormal")
+    count:SetPoint("BOTTOMRIGHT", -2, 2)
     -- (down to the experience line's top: the row's foot is on IN.BOTTOM)
     local stem = b:CreateTexture(nil, "BACKGROUND")
-    Band(stem, size)
+    Line(stem)
     stem:SetPoint("TOP", b, "BOTTOM")
     stem:SetPoint("BOTTOM", b, "BOTTOM", 0, LINE_H - IN.BOTTOM)
 
@@ -445,13 +371,20 @@ local function StyleButton(b, harmful, size)
     pcall(b.SetDurationText, b, time)
     pcall(b.SetApplicationCount, b, count)
     if harmful then
+        -- (the game's debuff border, its kind's; the line tinted as it)
         local styles = Enum.CustomAuraButtonDispelTypeTextureStyle
-        local tint = {
+        local border = b:CreateTexture(nil, "OVERLAY")
+        border:SetPoint("CENTER")
+        border:SetSize(size * BORDER_OUT, size * BORDER_OUT)
+        pcall(b.AddDispelTypeTexture, b, border, {
+            style = styles and styles.Border or 0,
+            showWhenHarmful = true, showWithoutDispelType = true,
+        })
+        pcall(b.AddDispelTypeTexture, b, stem, {
             style = styles and styles.PreserveAsset or 3,
             showWhenHarmful = true, showWithoutDispelType = true,
             customDispelColorMap = DEBUFF_TINTS,
-        }
-        for _, region in ipairs({ ring, stem }) do pcall(b.AddDispelTypeTexture, b, region, tint) end
+        })
     end
 end
 

@@ -240,15 +240,16 @@ local SIZE = (CARD_H / 2 - TILE_GAP / ROOT2) / (VISIBLE / ROOT2 + VISIBLE / 2 * 
 local GLYPH = 14
 local GB = IN.GamepadBar
 local D = GB.Dims(SIZE, GLYPH)
-local WIDTH, SPREAD = D.width, D.spread
+-- (its sizes the spell diamonds' style's: read as they are, GB.OnStyle)
+local function Width() return D.width end
+local function Spread() return D.spread end
 -- (each tile's glyph hangs MARGIN past its point: counted in its width)
 local MARGIN = GLYPH * 0.7
-local EXTENT = SPREAD + WIDTH / 2 + MARGIN
+local function Extent() return D.spread + D.width / 2 + MARGIN end
 local HELD_GROW, HELD_TIME = 1.2, 0.15
 
 local cluster = CreateFrame("Frame", "ImprovedForeverPartyCasts", UIParent)
 cluster:SetFrameStrata("LOW")
-cluster:SetSize(2 * EXTENT, 2 * EXTENT)
 cluster:SetPoint("CENTER", UIParent, "BOTTOM", 0, CARD_H / 2 + IN.BOTTOM)
 cluster:Hide()
 
@@ -259,25 +260,23 @@ function PP.Shown()
 end
 
 function PP.Width()
-    return 2 * EXTENT
+    return 2 * Extent()
 end
 
 function PP.Place(x, y)
     cluster:ClearAllPoints()
     cluster:SetPoint("LEFT", UIParent, "BOTTOM", x, y)
 end
--- (its middle EXTENT in from its left edge, in its own scale: grown, it
+-- (its middle Extent() in from its left edge, in its own scale: grown, it
 -- grows away from the cards, its left edge kept)
 local center = CreateFrame("Frame", nil, cluster)
 center:SetSize(1, 1)
-center:SetPoint("CENTER", cluster, "LEFT", EXTENT, 0)
 
 local tiles = {}
 
 -- (the picked slot's name under its tile at rest: faded out as the
 -- diamond opens)
 local label = cluster:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-label:SetWidth(2 * EXTENT)
 label:SetWordWrap(false)
 label:SetShadowOffset(1, -1)
 
@@ -386,7 +385,7 @@ for i, dir in ipairs(DIRS) do
     -- greyed)
     b.lit = b:CreateTexture(nil, "ARTWORK", nil, 1)
     b.lit:SetPoint("CENTER")
-    b.lit:SetSize(WIDTH * 0.94, WIDTH * 0.94)
+    b.lit:SetSize(Width() * 0.94, Width() * 0.94)
     b.lit:SetColorTexture(1, 0.75, 0.25, 0.3)
     b.lit:SetBlendMode("ADD")
     b.lit:AddMaskTexture(b.mask)
@@ -442,6 +441,20 @@ end
 
 local MIRROR_EVERY = 0.05      -- (as the gamepad bar's)
 local grow, open, placed, since = 0, nil, nil, 0
+
+-- (sized for the style, now and as it changes: the cluster, its middle,
+-- the label, the picked tile's light; its tiles placed again)
+local function Resize()
+    local extent = Extent()
+    cluster:SetSize(2 * extent, 2 * extent)
+    center:ClearAllPoints()
+    center:SetPoint("CENTER", cluster, "LEFT", extent, 0)
+    label:SetWidth(2 * extent)
+    for _, b in ipairs(tiles) do b.lit:SetSize(Width() * 0.94, Width() * 0.94) end
+    placed = nil
+end
+Resize()
+if GB.OnStyle then GB.OnStyle(Resize) end
 cluster:SetScript("OnUpdate", function(_, elapsed)
     since = since + elapsed
     if since >= MIRROR_EVERY then
@@ -459,19 +472,21 @@ cluster:SetScript("OnUpdate", function(_, elapsed)
     if open == want and placed == picked then return end
     open, placed = Toward(open or want, want, step), picked
     local e = Ease(open)
-    local rest = DIRS[1]
+    -- (each direction's place: the spell diamonds', GamepadBar.lua: a cross
+    -- of diamonds, or a grid of squares)
+    local Place = GB.Place or function(dir) return dir[1], dir[2] end
+    local rx, ry = Place(DIRS[1])
     label:SetAlpha(1 - e)
     for i, b in ipairs(tiles) do
-        local dir = DIRS[i]
+        local dx, dy = Place(DIRS[i])
         local mine = i == picked
         local f = mine and e or 1
         b:ClearAllPoints()
-        b:SetPoint("CENTER", center, "CENTER", (rest[1] + (dir[1] - rest[1]) * f) * SPREAD,
-            (rest[2] + (dir[2] - rest[2]) * f) * SPREAD)
+        b:SetPoint("CENTER", center, "CENTER", (rx + (dx - rx) * f) * Spread(), (ry + (dy - ry) * f) * Spread())
         b:SetAlpha(mine and 1 or e)
         if mine then
             label:ClearAllPoints()
-            label:SetPoint("TOP", b, "CENTER", 0, -WIDTH / 2 - 2)
+            label:SetPoint("TOP", b, "CENTER", 0, -Width() / 2 - 2)
         end
         local on = mine or open == 1
         if b:IsMouseEnabled() ~= on then b:EnableMouse(on) end

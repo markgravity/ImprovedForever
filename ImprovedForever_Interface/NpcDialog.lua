@@ -41,7 +41,7 @@ local ITEM = 32                 -- (a reward's icon)
 local GAP = 8
 
 ---------------------------------------------------------------------------
--- The panel: dark, in the game's tooltip border (as our cards)
+-- The panel: dark, in the game's dialog border (as our cards)
 ---------------------------------------------------------------------------
 local panel = CreateFrame("Frame", "ImprovedForeverNpcDialog", UIParent)
 panel:SetSize(WIDTH, 200)

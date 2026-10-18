@@ -14,6 +14,8 @@ local function Toggle(key, label, after)
     end, label)
 end
 
+local STYLE_NAMES = { diamond = "Diamonds", square = "Squares", circle = "Circles" }
+
 local FOCUS_ORDER = { "auto", "tank", "healer", "off" }
 local FOCUS_NAMES = { auto = "Automatic", tank = "Tank", healer = "Healer", off = "Off" }
 
@@ -78,6 +80,23 @@ local ITEMS = {
             .. "swaps them to that set in place; the pips under them show which set is up. The game's bar "
             .. "still does every press: its slots are set as before (the Bindings tab, its own editor).",
     }, Toggle("pad", "Spell diamonds", function() IN.GamepadBar.Apply() end)),
+    Item({
+        key = "padStyle", group = "pad", label = "Tile style",
+        tip = "The shape of the gamepad bar's tiles (and of the party spells' and the cast line's): Diamonds, "
+            .. "four to a group as one big diamond; Squares, the game's square slots in two rows and two "
+            .. "columns; Circles, the game's round slots in a cross, as its own bar.",
+        value = function() return IN.Settings().padStyle end,
+        text = function() return STYLE_NAMES[IN.Settings().padStyle] or "" end,
+        options = function()
+            local list = {}
+            for _, key in ipairs(IN.GamepadBar.STYLE_ORDER) do list[#list + 1] = { action = key, name = STYLE_NAMES[key] } end
+            return list
+        end,
+        choose = function(action)
+            IN.Settings().padStyle = action
+            IN.GamepadBar.Apply()
+        end,
+    }),
     Item({
         key = "partyPad", group = "pad", label = "Party casting (L1, test)",
         tip = "A test, for any role, in a party or raid: L1 is ours instead of the game's friendly targeting. "

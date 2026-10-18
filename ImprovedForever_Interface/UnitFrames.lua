@@ -4,7 +4,7 @@
 -- * the target's health across the top centre, coloured by what it is,
 --   its casts under it;
 -- * the player bottom left, a card as the minion and party ones: its
---   model in the game's tooltip border, its level on it, its name (a
+--   model in the game's dialog border, its level and class on it, its name (a
 --   combat mark by it), health and power in a band along its foot (its
 --   pet: a card beside it, PartyCards.lua).
 -- Ours are secure unit buttons (a click targets, a right click opens the
@@ -518,8 +518,8 @@ end)
 
 ---------------------------------------------------------------------------
 -- An avatar (the player's, a minion's or a party member's card,
--- PartyCards.lua): the unit's model in the game's tooltip border (its
--- bronze frame, its centre left out), its round portrait when it's too far
+-- PartyCards.lua): the unit's model in the game's dialog border (its
+-- diamond-metal frame, scaled down, its centre left out), its round portrait when it's too far
 -- to be drawn, a strip along its top in its colour, its level in the
 -- game's small circle at the top left. a.over: a frame over the model,
 -- under the border (a card's band and bars go on it).
@@ -527,23 +527,29 @@ end)
 local AVATAR_INSET, STRIP_H, ZOOM = 4, 3, 0.45
 local BRONZE = { 0.62, 0.5, 0.32 }     -- (the border's own, should the game's layout be missing)
 
--- The game's tooltip layout (NineSliceUtil, applied to our frame), its
--- centre left out; without it, thin bronze edges of ours. Its pieces:
--- frame.borderPieces (to tint)
+-- The game's dialog border (its diamond-metal frame: NineSliceUtil's
+-- "Dialog" layout, as its popups), on a frame of its own over ours scaled
+-- down to a card (BORDER_SCALE), its centre left out; without it, thin
+-- bronze edges of ours. Its pieces: frame.borderPieces (to tint)
 local PIECES = { "TopLeftCorner", "TopRightCorner", "BottomLeftCorner", "BottomRightCorner",
     "TopEdge", "BottomEdge", "LeftEdge", "RightEdge" }
+local BORDER_LAYOUT, BORDER_SCALE = "Dialog", 0.35
 
 local function Border(frame)
     frame.borderPieces = {}
+    local edge = CreateFrame("Frame", nil, frame)
+    edge:SetScale(BORDER_SCALE)
+    edge:SetAllPoints()
     local ok = NineSliceUtil and NineSliceUtil.ApplyLayoutByName
-        and pcall(NineSliceUtil.ApplyLayoutByName, frame, "TooltipDefaultLayout")
-    if ok and frame.TopEdge then
-        if frame.Center then frame.Center:Hide() end
+        and pcall(NineSliceUtil.ApplyLayoutByName, edge, BORDER_LAYOUT)
+    if ok and edge.TopEdge then
+        if edge.Center then edge.Center:Hide() end
         for _, key in ipairs(PIECES) do
-            if frame[key] then frame.borderPieces[#frame.borderPieces + 1] = frame[key] end
+            if edge[key] then frame.borderPieces[#frame.borderPieces + 1] = edge[key] end
         end
         return
     end
+    edge:Hide()
     for _, e in ipairs({ { "TOPLEFT", "TOPRIGHT", nil, 1 }, { "BOTTOMLEFT", "BOTTOMRIGHT", nil, 1 },
         { "TOPLEFT", "BOTTOMLEFT", 1, nil }, { "TOPRIGHT", "BOTTOMRIGHT", 1, nil } }) do
         local t = frame:CreateTexture(nil, "BORDER")
@@ -648,9 +654,8 @@ local AVATAR_W = math.floor(AVATAR_H * 0.78 + 0.5)
 -- (the band's parts, a party card's (14, 11, 14, inset 4) a bit bigger)
 local CARD_HEALTH_H, CARD_POWER_H, CARD_NAME_H, CARD_INSET = 18, 14, 18, 4
 local PLAYER_X, PLAYER_Y = 20, IN.BOTTOM
--- (its class dot: the cards' role dots' sizes, PartyCards.lua)
-local DOT, DOT_ICON, LINE_H, STEM_W, STEM_ALPHA = 18, 12, IN.XP_H, 2, 0.55
-local DOT_MASK = "Interface\\CharacterFrame\\TempPortraitAlphaMask"
+-- (its class's icon at its top right, as the party cards' role icons)
+local CLASS_ICON = 16
 local GOLD = { 1, 0.82, 0 }
 local GREY = { 0.45, 0.45, 0.45 }
 local player = UnitButton("ImprovedForeverPlayerFrame", "player", AVATAR_W, AVATAR_H)
@@ -682,21 +687,11 @@ do
     p.combat = Atlas(over, "OVERLAY", "UI-HUD-UnitFrame-Player-CombatIcon")
     p.combat:SetSize(CARD_NAME_H, CARD_NAME_H)
     p.combat:SetPoint("BOTTOMLEFT", p.health.box, "TOPLEFT", 2, 1)
-    -- (under it, as the cards' role dots (PartyCards.lua): a flat dot in
-    -- its class colour on the experience line, its class's icon in it, a
-    -- thin line of that colour up to the card)
-    p.dot = p:CreateTexture(nil, "ARTWORK")
-    p.dot:SetTexture(DOT_MASK)
-    p.dot:SetSize(DOT, DOT)
-    p.dot:SetPoint("BOTTOM", p, "BOTTOM", 0, LINE_H - PLAYER_Y)
-    p.stem = p:CreateTexture(nil, "BACKGROUND")
-    p.stem:SetColorTexture(1, 1, 1, 1)
-    p.stem:SetWidth(STEM_W)
-    p.stem:SetPoint("TOP", p, "BOTTOM")
-    p.stem:SetPoint("BOTTOM", p.dot, "CENTER")
-    p.class = p:CreateTexture(nil, "OVERLAY")
-    p.class:SetSize(DOT_ICON, DOT_ICON)
-    p.class:SetPoint("CENTER", p.dot, "CENTER")
+    -- (its class's icon at its top right, over the border as its level,
+    -- as the party cards' role icons (PartyCards.lua))
+    p.class = p.avatar.badge:CreateTexture(nil, "OVERLAY", nil, 3)
+    p.class:SetSize(CLASS_ICON, CLASS_ICON)
+    p.class:SetPoint("CENTER", p.avatar, "TOPRIGHT", -7, -7)
 end
 
 function player:Refresh(event)
@@ -707,9 +702,7 @@ function player:Refresh(event)
     AvatarLook(self.avatar, unit, dead and GREY or color, dead)
     Try(self.name.SetText, self.name, UnitName(unit))
     NameColor(self)
-    -- (its class dot)
-    self.dot:SetVertexColor(color[1], color[2], color[3], 1)
-    self.stem:SetVertexColor(color[1], color[2], color[3], STEM_ALPHA)
+    -- (its class's icon)
     local _, class = UnitClass(unit)
     if type(class) == "string" and IF.HasAtlas and IF.HasAtlas("groupfinder-icon-class-" .. class:lower()) then
         self.class:SetAtlas("groupfinder-icon-class-" .. class:lower())
