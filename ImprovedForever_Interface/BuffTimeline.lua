@@ -1,7 +1,6 @@
 -- Two rows along the bottom, either side of the party cards, each icon as
 -- the game's buff frame draws them (square, a debuff in its kind's border,
--- its time over it in the game's yellow), a thin line from it down to the
--- experience line (a debuff's in its kind's colour):
+-- its time over it in the game's yellow):
 -- * left: your buffs and debuffs, from after the minion card toward the
 --   party's row: the game's aura container (Blizzard_AuraContainer's
 --   CustomAuraContainerTemplate), filled by the game itself, in a fight
@@ -45,39 +44,14 @@ local SIZE_FALLBACK = 40        -- (the Cooldown Manager's icons can't be measur
 local SLIDE = 6                 -- (how fast an icon slides to its place)
 local GCD_MAX = 1.6             -- (a cooldown this short is the global one)
 local READY_FLASH = 1           -- (a cooldown come ready: shown this long, flashing)
--- (the line down to the experience line: thin, in the cards' bronze
--- (the game's dialog border, UnitFrames.lua); a debuff's in its kind's
--- colour)
-local STEM_W = 2
-local STEM_COLOR = { 0.62, 0.5, 0.32, 0.8 }
-local DEBUFF_COLOR = { 0.9, 0.15, 0.15 }
 -- (the icons as the game's buff frame's (BuffFrameTemplates.xml): square,
 -- no frame, a debuff's border the game's (its kind's) BORDER_OUT of the
 -- icon's size; the time in GameFontNormalSmall, the stacks in
 -- NumberFontNormal at the bottom right)
 local BORDER_OUT = 40 / 30
-
-local function Line(tex)
-    tex:SetColorTexture(1, 1, 1, 1)
-    tex:SetWidth(STEM_W)
-    tex:SetVertexColor(STEM_COLOR[1], STEM_COLOR[2], STEM_COLOR[3], STEM_COLOR[4])
-end
 -- (each lane's end, by the middle, where its icons run out: a short black
 -- line cut into the experience line)
 local END_W = 2
-
-local function Atlas(list)
-    for _, name in ipairs(list or {}) do
-        if IF.HasAtlas and IF.HasAtlas(name) then return name end
-    end
-end
-
--- A debuff's kind's colour (the game's), else DEBUFF_COLOR
-local function DispelColor(kind)
-    local c = type(kind) == "string" and DebuffTypeColor and DebuffTypeColor[kind]
-    if c and c.r then return { c.r, c.g, c.b } end
-    return DEBUFF_COLOR
-end
 
 -- A time left, short: 2h, 5m, 45
 local function Short(left)
@@ -184,14 +158,6 @@ local function Timeline(name, source)
         b.effect = b:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         b.effect:SetPoint("BOTTOM", b, "TOP", 0, 2)
         b.effect:SetWordWrap(false)
-        -- (down to the experience line: a thin line, its foot kept on the
-        -- line's top by an unseen point under the icon)
-        b.stem = holder:CreateTexture(nil, "BACKGROUND")
-        Line(b.stem)
-        b.stem:SetPoint("TOP", b, "BOTTOM")
-        b.foot = holder:CreateTexture(nil, "BACKGROUND")
-        b.foot:SetSize(1, 1)
-        b.stem:SetPoint("BOTTOM", b.foot, "BOTTOM")
         b:SetScript("OnEnter", function(self)
             if not self.Tooltip then return end
             GameTooltip:SetOwner(self, "ANCHOR_TOP")
@@ -203,13 +169,9 @@ local function Timeline(name, source)
         return b
     end
 
-    -- (an icon's parts shown, or hidden, together; their fade)
-    local function Parts(b, on)
-        for _, part in ipairs({ b, b.stem }) do part:SetShown(on) end
-    end
-    local function Fade(b, alpha)
-        for _, part in ipairs({ b, b.stem }) do part:SetAlpha(alpha) end
-    end
+    -- (an icon shown or hidden; its fade)
+    local function Parts(b, on) b:SetShown(on) end
+    local function Fade(b, alpha) b:SetAlpha(alpha) end
 
     -- (the entries in a row from the near end, the soonest first, a row
     -- up past the far end)
@@ -300,8 +262,6 @@ local function Timeline(name, source)
                 Fade(b, b.alpha)
                 b:ClearAllPoints()
                 b:SetPoint("BOTTOM", UIParent, "BOTTOMLEFT", b.x, b.y)
-                b.foot:ClearAllPoints()
-                b.foot:SetPoint("BOTTOM", UIParent, "BOTTOMLEFT", b.x, LINE_H)
             end
         end
     end)
@@ -347,12 +307,6 @@ end
 local GROUP_GAP = 12            -- (between the buffs and the debuffs)
 local DEBUFF_MAX = 8
 
-local DEBUFF_TINTS = { None = { r = DEBUFF_COLOR[1], g = DEBUFF_COLOR[2], b = DEBUFF_COLOR[3] } }
-for _, kind in ipairs({ "Magic", "Curse", "Disease", "Poison", "Bleed" }) do
-    local c = DispelColor(kind)
-    DEBUFF_TINTS[kind] = { r = c[1], g = c[2], b = c[3] }
-end
-
 local function StyleButton(b, harmful, size)
     b:SetSize(size, size)
     local icon = b:CreateTexture(nil, "ARTWORK")
@@ -361,17 +315,12 @@ local function StyleButton(b, harmful, size)
     time:SetPoint("BOTTOM", b, "TOP", 0, 1)
     local count = b:CreateFontString(nil, "OVERLAY", "NumberFontNormal")
     count:SetPoint("BOTTOMRIGHT", -2, 2)
-    -- (down to the experience line's top: the row's foot is on IN.BOTTOM)
-    local stem = b:CreateTexture(nil, "BACKGROUND")
-    Line(stem)
-    stem:SetPoint("TOP", b, "BOTTOM")
-    stem:SetPoint("BOTTOM", b, "BOTTOM", 0, LINE_H - IN.BOTTOM)
 
     pcall(b.SetIcon, b, icon)
     pcall(b.SetDurationText, b, time)
     pcall(b.SetApplicationCount, b, count)
     if harmful then
-        -- (the game's debuff border, its kind's; the line tinted as it)
+        -- (the game's debuff border, its kind's)
         local styles = Enum.CustomAuraButtonDispelTypeTextureStyle
         local border = b:CreateTexture(nil, "OVERLAY")
         border:SetPoint("CENTER")
@@ -379,11 +328,6 @@ local function StyleButton(b, harmful, size)
         pcall(b.AddDispelTypeTexture, b, border, {
             style = styles and styles.Border or 0,
             showWhenHarmful = true, showWithoutDispelType = true,
-        })
-        pcall(b.AddDispelTypeTexture, b, stem, {
-            style = styles and styles.PreserveAsset or 3,
-            showWhenHarmful = true, showWithoutDispelType = true,
-            customDispelColorMap = DEBUFF_TINTS,
         })
     end
 end
