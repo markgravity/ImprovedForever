@@ -1,6 +1,6 @@
 -- Minions and party as cards standing on the experience line along the
--- screen's bottom edge (XPBar.lua): your pet on the left of the middle
--- ("Minions"), your party's four on the right ("Party"), each a card in
+-- screen's bottom edge (XPBar.lua): your pet beside the player frame,
+-- bottom left ("Minions"), your party's four centred ("Party"), each a card in
 -- the look of the rest of the bottom: the avatar the player's has too
 -- (UnitFrames.lua: the unit's model in the game's tooltip border, a strip
 -- along its top in its class colour (a minion's gold, grey when dead or
@@ -24,7 +24,8 @@ local UF = IN.UnitFrames
 local PC = {}
 IN.PartyCards = PC
 
-local CARD_W, CARD_H, GAP, GROUP_GAP = 76, 100, 8, 40
+local CARD_W, CARD_H, GAP = 76, 100, 8
+local MINION_GAP = 16            -- (the minions after the player frame, bottom left)
 local PAD_GAP = 12               -- (the party spells' diamond after the last card, PartyPad.lua)
 local HEALTH_H, POWER_H, BAR_GAP, INSET = 14, 11, 0, 4
 local NAME_H = 14
@@ -445,7 +446,7 @@ end
 -- The two groups in one row, a label over each (Layout centres the row)
 ---------------------------------------------------------------------------
 local minions = { Card("ImprovedForeverMinionCard1", "pet", MINION_SCALE) }
-minions[1]:SetPoint("BOTTOMRIGHT", UIParent, "BOTTOM", -GROUP_GAP / 2, BOTTOM)   -- (Layout centres them)
+minions[1]:SetPoint("BOTTOMLEFT", UF.player, "BOTTOMRIGHT", MINION_GAP, 0)   -- (Layout places them)
 
 local party = {}
 for i = 1, 4 do
@@ -483,7 +484,7 @@ for i = 1, 4 do
         end
         b.alertGlow = alert
     end
-    b:SetPoint("BOTTOMLEFT", UIParent, "BOTTOM", GROUP_GAP / 2 + (i - 1) * (CARD_W + GAP), BOTTOM)
+    b:SetPoint("BOTTOMLEFT", UIParent, "BOTTOM", (i - 1) * (CARD_W + GAP), BOTTOM)
     party[i] = b
 end
 
@@ -689,9 +690,9 @@ local function Preview(on)
     end
 end
 
--- The row centred on the screen: the cards there (your minion, then your
--- party; all of them previewing), GAP apart, GROUP_GAP between
--- the groups. Secure frames: placed out of combat only, else after it.
+-- The cards placed (those there; all of them previewing): your minions
+-- beside the player frame, your party centred, GAP apart. Secure frames:
+-- placed out of combat only, else after it.
 local layoutPending
 
 local function Layout()
@@ -708,24 +709,26 @@ local function Layout()
     for _, b in ipairs(party) do
         if previewing or (not inRaid and UnitExists(realUnit[b] or b.unit)) then members[#members + 1] = b end
     end
-    local n = #mins + #members
-    -- (the party spells' diamond, PartyPad.lua, when shown: PAD_GAP after
-    -- the last card, the cards centred without it)
+    -- (the minions beside the player frame, bottom left, their bottoms
+    -- level, MINION_GAP after it, GAP apart)
+    local anchor, gap = UF.player, MINION_GAP
+    for _, b in ipairs(mins) do
+        b:ClearAllPoints()
+        b:SetPoint("BOTTOMLEFT", anchor, "BOTTOMRIGHT", gap, 0)
+        anchor, gap = b, GAP
+    end
+    -- (the party centred at the bottom; the party spells' diamond,
+    -- PartyPad.lua, when shown: PAD_GAP after the last card, the cards
+    -- centred without it)
     local pp = IN.PartyPad
     local pad = pp and pp.Shown() and pp.Width() or 0
-    if n == 0 then
+    if #members == 0 then
         if pad > 0 then pp.Place(-pad / 2, BOTTOM + CARD_H / 2) end
         return
     end
-    local width = (n - 1) * GAP + ((#mins > 0 and #members > 0) and (GROUP_GAP - GAP) or 0)
-    for _, b in ipairs(mins) do width = width + b.cardW end
+    local width = (#members - 1) * GAP
     for _, b in ipairs(members) do width = width + b.cardW end
     local x = -width / 2
-    for i, b in ipairs(mins) do
-        b:ClearAllPoints()
-        b:SetPoint("BOTTOMLEFT", UIParent, "BOTTOM", x, BOTTOM)
-        x = x + b.cardW + (i < #mins and GAP or GROUP_GAP)
-    end
     for _, b in ipairs(members) do
         b:ClearAllPoints()
         b:SetPoint("BOTTOMLEFT", UIParent, "BOTTOM", x, BOTTOM)
