@@ -27,6 +27,7 @@ IN.PartyCards = PC
 local CARD_W, CARD_H, GAP = 76, 100, 8
 -- (a full party's row, half its width: the middle kept for it, BuffTimeline.lua)
 PC.ROW_HALF = (4 * CARD_W + 3 * GAP) / 2
+PC.CARD_H = CARD_H
 local MINION_GAP = 16            -- (the minions after the player frame, bottom left)
 local PAD_GAP = 12               -- (the party spells' diamond after the last card, PartyPad.lua)
 local HEALTH_H, POWER_H, BAR_GAP, INSET = 14, 11, 0, 4

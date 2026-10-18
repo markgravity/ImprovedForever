@@ -63,6 +63,7 @@ local DEFAULTS = {
     cooldownTimeline = true, -- your gamepad bar's and trinkets' cooldowns in a row along the bottom, right of the party
     hudCooldowns = true, -- the Cooldown Manager left of the spell diamonds (in the Edit Mode layout; a test)
     chatDim = true,     -- the chat as only its lines while not in use
+    castBar = true,     -- your casts as a long line over the party cards, filling out from the middle
     npcDialog = true,   -- talking to an NPC (quests, gossip) as subtitles low in the middle, Spoken's voice with it
     xp = true,          -- the experience as a line along the screen's bottom edge
     pad = true,         -- the gamepad bar as Hogwarts Legacy's spell diamonds, bottom right

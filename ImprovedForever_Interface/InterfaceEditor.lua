@@ -59,6 +59,13 @@ local ITEMS = {
         end,
     }),
     Item({
+        key = "castBar", group = "frames", label = "Cast line",
+        tip = "Your casts as a long thin line over the party cards, in place of the game's casting bar: a "
+            .. "cast fills it from the middle out to both ends, a channel drains from both ends in to the "
+            .. "middle, the spell's name over it. Yellow for a cast, green for a channel, grey while it can't "
+            .. "be interrupted, red when it's cut. Edit Mode shows the game's bar.",
+    }, Toggle("castBar", "Cast line", function() IN.PlayerCast.Apply() end)),
+    Item({
         key = "xp", group = "frames", label = "Experience line",
         tip = "Your experience as a thin line along the screen's bottom edge, the rested part beyond it, in "
             .. "place of the game's experience bar (its reputation bar at the top level stays). The mouse over "
