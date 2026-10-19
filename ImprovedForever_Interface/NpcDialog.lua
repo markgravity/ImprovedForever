@@ -267,7 +267,7 @@ end
 local itemLabel = Shadowed(panel:CreateFontString(nil, "OVERLAY", "GameFontNormal"), GOLD)
 local items = CreateFrame("Frame", nil, panel)
 items:SetSize(WIDTH, ITEM)
-local extra = Shadowed(items:CreateFontString(nil, "OVERLAY", "GameFontHighlight"))
+local extra = Shadowed(panel:CreateFontString(nil, "OVERLAY", "GameFontHighlight"))
 local rows = CreateFrame("Frame", nil, panel)
 rows:SetWidth(WIDTH)
 local answers = CreateFrame("Frame", nil, panel)
@@ -347,13 +347,17 @@ local function Row(i)
     return r
 end
 
--- (a reward's tooltip beside the panel (its right, past the band), clear
+-- (a reward's tooltip beside the panel (just past its right edge, its top
+-- level with the face's), clear
 -- of the words, the equipped one compared beside it, as the game's reward
--- buttons show it (QuestInfo.lua))
+-- buttons show it (QuestInfo.lua). Owned by a point there, ANCHOR_BOTTOMRIGHT:
+-- the game's comparison then opens on the right too, away from the panel)
+local tipAnchor = CreateFrame("Frame", nil, panel)
+tipAnchor:SetSize(1, 1)
+tipAnchor:SetPoint("TOPLEFT", panel, "TOPRIGHT", 4, 1 - PAD)
+
 local function ItemTip(b)
-    GameTooltip:SetOwner(b, "ANCHOR_NONE")
-    GameTooltip:ClearAllPoints()
-    GameTooltip:SetPoint("BOTTOMLEFT", panel, "BOTTOMRIGHT", BAND_REACH + 8, 0)
+    GameTooltip:SetOwner(tipAnchor, "ANCHOR_BOTTOMRIGHT")
     pcall(GameTooltip.SetQuestItem, GameTooltip, b.kind, b.index)
     GameTooltip:Show()
     if GameTooltip_ShowCompareItem then pcall(GameTooltip_ShowCompareItem, GameTooltip) end
@@ -529,7 +533,7 @@ local function Reward()
     Rewards(d)
     local choices = GetNumQuestChoices() or 0
     d.answers = {
-        { key = "PAD1", text = COMPLETE_QUEST or "Complete Quest", needsChoice = choices > 1, Run = function()
+        { key = "PAD1", text = FRAME_ACTION_COMPLETE or "Complete", needsChoice = choices > 1, Run = function()
             local picked = choices == 1 and 1 or Chosen()
             if choices > 1 and picked <= 0 then
                 UIErrorsFrame:AddMessage(ERR_QUEST_MUST_CHOOSE or "You must choose a reward.", 1, 0.1, 0.1)
@@ -1324,8 +1328,8 @@ local function Build(d)
     end
     if speaking and questPage then Place(track, PROGRESS_H, 12) end
 
-    -- (the rewards or the items needed: their heading, then round icons,
-    -- money and experience beside them)
+    -- (the rewards or the items needed: their heading, round icons, then
+    -- money and experience on a row of their own)
     local list = d.items or {}
     local extras = {}
     if d.money then extras[#extras + 1] = IF.ItemValue.Money(d.money) end
@@ -1335,8 +1339,7 @@ local function Build(d)
     itemLabel:SetShown(hasItems and d.itemLabel ~= nil)
     if itemLabel:IsShown() then Place(itemLabel, itemLabel:GetStringHeight(), 6) end
     extra:SetText(table.concat(extras, "    "))
-    local extraW = #extras > 0 and (extra:GetStringWidth() + (#list > 0 and 14 or 0)) or 0
-    local wide = #list * ITEM + math.max(0, #list - 1) * GAP + extraW
+    local wide = #list * ITEM + math.max(0, #list - 1) * GAP
     for i, it in ipairs(list) do
         local b = ItemButton(i)
         b.kind, b.index, b.choice = it.kind, it.index, it.choice
@@ -1352,10 +1355,10 @@ local function Build(d)
         byKey[it.kind .. ":" .. it.index] = b
     end
     for i = #list + 1, #itemPool do itemPool[i]:Hide() end
-    extra:ClearAllPoints()
-    extra:SetPoint("RIGHT", items, "CENTER", wide / 2, 0)
-    items:SetShown(hasItems)
-    if hasItems then Place(items, ITEM, 12) end
+    items:SetShown(#list > 0)
+    if #list > 0 then Place(items, ITEM, #extras > 0 and 8 or 12) end
+    extra:SetShown(#extras > 0)
+    if #extras > 0 then Place(extra, extra:GetStringHeight(), 12) end
 
     -- (the quests and options: a round icon and the words, centred, one a
     -- line)
@@ -1472,6 +1475,43 @@ local function KeyOf(button)
     if (button.type == "choice" or button.type == "reward") and button.GetID then
         return button.type .. ":" .. button:GetID()
     end
+end
+
+-- (the cursor's spot when the game's is on none of ours: the first row, or
+-- the answer A gives; on a reward page whose Complete waits for a pick, the
+-- first reward to pick instead)
+local function Fallback()
+    if not (primary and primary.blocked) then return primary end
+    for _, b in ipairs(itemPool) do
+        if b:IsShown() and b.choice then return b end
+    end
+    return primary
+end
+
+-- (probe: where the game's cursor goes on a quest page, a line each time
+-- it moves, in IF.db.ndLog)
+local probed
+local function ProbeNav(button)
+    if button == probed then return end
+    probed = button
+    local function Get(fn)
+        local ok, v = pcall(fn)
+        return ok and tostring(v) or "?"
+    end
+    local dirs = {}
+    for _, k in ipairs({ "PADDUP", "PADDDOWN", "PADDLEFT", "PADDRIGHT" }) do
+        if IsKeyDown(k) then dirs[#dirs + 1] = k end
+    end
+    LogLine(table.concat({ "nav",
+        Get(function() return button and button:GetName() end),
+        "type=" .. Get(function() return button and button.type end),
+        "id=" .. Get(function() return button and button.GetID and button:GetID() end),
+        "ctx=" .. Get(function() return button and button.buttonContext end),
+        "parent=" .. Get(function() return button and button:GetParent() and button:GetParent():GetName() end),
+        "key=" .. Get(function() return KeyOf(button) end),
+        "choice=" .. Get(function() return QuestInfoFrame and QuestInfoFrame.itemChoice end),
+        "kind=" .. Get(function() return current and current.kind end),
+        "dpad=" .. table.concat(dirs, "+") }, " "))
 end
 
 local pointed
@@ -1704,8 +1744,9 @@ local function Tick()
     if NativeFocused() and IF.Input.Pad() then
         local nav = _G.SmartNavigation
         local ok, button = pcall(function() return nav and nav:GetCurrentButton() end)
+        ProbeNav(ok and button or nil)
         local target = byKey[KeyOf(ok and button or nil) or ""]
-        Point((target and target:IsShown() and target) or primary)
+        Point((target and target:IsShown() and target) or Fallback())
         FollowTip(ok and button or nil, target and target:IsShown() and target or nil)
         HidePointer(true)
     else
