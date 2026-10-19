@@ -48,6 +48,13 @@ local ITEM = 30                         -- (a reward, round)
 local GAP = 8
 local GREY = { 0.62, 0.62, 0.62 }
 local GOLD = { 1, 0.82, 0 }
+-- (the one the cursor or the mouse is on: light blue on a soft light bar,
+-- apart from the answers' gold)
+local LIT = { 0.55, 0.82, 1 }
+-- (the answer that leaves: Goodbye, Cancel, Decline (B): soft white, apart
+-- from the gold of the one that goes on; greyed: darker)
+local BACK = { 0.88, 0.88, 0.88 }
+local BLOCKED = { 0.45, 0.45, 0.45 }
 local CIRCLE_MASK = "Interface\\CharacterFrame\\TempPortraitAlphaMask"
 local RING = "gamepad-actionbar-circleslot-frame"
 -- (Spoken's own band, when it's installed: its subtitle's shade)
@@ -274,10 +281,35 @@ answers:SetSize(WIDTH, ROW_H)
 local function Lit(button)
     local on = button.lit or button.pointed or false
     if button.text then
-        local c = on and (button.litColor or GOLD) or (button.color or { 1, 1, 1 })
+        local c = on and LIT or (button.color or { 1, 1, 1 })
         button.text:SetTextColor(c[1], c[2], c[3])
     end
     if button.hl then button.hl:SetShown(on) end
+    if button.bar then
+        for _, t in ipairs(button.bar) do t:SetShown(on) end
+    end
+end
+
+-- (the lit one's bar: light, fading out to both ends, a little past its
+-- words)
+local BAR_ALPHA, BAR_REACH = 0.16, 24
+local function Bar(button)
+    local function Half(point, relative, from, to)
+        local t = button:CreateTexture(nil, "BACKGROUND")
+        t:SetColorTexture(1, 1, 1, 1)
+        t:SetPoint("TOP", button, "TOP", 0, 1)
+        t:SetPoint("BOTTOM", button, "BOTTOM", 0, -1)
+        t:SetPoint(point, button, relative, point == "LEFT" and -BAR_REACH or BAR_REACH, 0)
+        t:SetPoint(point == "LEFT" and "RIGHT" or "LEFT", button, "CENTER")
+        if t.SetGradient and CreateColor then
+            t:SetGradient("HORIZONTAL", CreateColor(LIT[1], LIT[2], LIT[3], from), CreateColor(LIT[1], LIT[2], LIT[3], to))
+        else
+            t:SetVertexColor(LIT[1], LIT[2], LIT[3], BAR_ALPHA / 2)
+        end
+        t:Hide()
+        return t
+    end
+    button.bar = { Half("LEFT", "LEFT", 0, BAR_ALPHA), Half("RIGHT", "RIGHT", BAR_ALPHA, 0) }
 end
 
 local rowPool, itemPool, answerPool = {}, {}, {}
@@ -307,6 +339,7 @@ local function Row(i)
     r.icon:SetSize(16, 16)
     r.text = Shadowed(r:CreateFontString(nil, "OVERLAY", "QuestFont"), { 1, 1, 1 })
     r.text:SetWordWrap(false)
+    Bar(r)
     r:SetScript("OnEnter", function(self) self.lit = true Lit(self) end)
     r:SetScript("OnLeave", function(self) self.lit = nil Lit(self) end)
     r:SetScript("OnClick", function(self) if self.Run then self.Run() end end)
@@ -362,12 +395,23 @@ local function AnswerButton(i)
     b.glyph:SetSize(20, 20)
     b.glyph:SetPoint("LEFT")
     b.text = Shadowed(b:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge"), GOLD)
-    -- (gold, white when lit: the mouse on it or the cursor)
-    b.color, b.litColor = GOLD, { 1, 1, 1 }
+    -- (gold; lit as the rows are)
+    b.color = GOLD
+    Bar(b)
     b:SetScript("OnEnter", function(self) self.lit = true Lit(self) end)
     b:SetScript("OnLeave", function(self) self.lit = nil Lit(self) end)
     -- (an answer leaves the page: Spoken's line for it stopped first)
+    -- (another answer in it: gold, not greyed)
+    function b:Reset(a)
+        self.Run, self.needsChoice, self.blocked = a.Run, a.needsChoice, nil
+        self.color = a.key == "PAD2" and BACK or GOLD
+        self.normal = self.color
+        self.glyph:SetDesaturated(false)
+        self.glyph:SetAlpha(1)
+        Lit(self)
+    end
     b:SetScript("OnClick", function(self)
+        if self.blocked then return end
         ND.StopLine()
         if self.Run then self.Run() end
     end)
@@ -466,7 +510,7 @@ local function Reward()
     Rewards(d)
     local choices = GetNumQuestChoices() or 0
     d.answers = {
-        { key = "PAD1", text = COMPLETE_QUEST or "Complete Quest", Run = function()
+        { key = "PAD1", text = COMPLETE_QUEST or "Complete Quest", needsChoice = choices > 1, Run = function()
             local picked = choices == 1 and 1 or Chosen()
             if choices > 1 and picked <= 0 then
                 UIErrorsFrame:AddMessage(ERR_QUEST_MUST_CHOOSE or "You must choose a reward.", 1, 0.1, 0.1)
@@ -1348,7 +1392,7 @@ local function Build(d)
             b.text:SetPoint("LEFT")
         end
         b:SetWidth((b.glyph:IsShown() and 24 or 0) + b.text:GetStringWidth())
-        b.Run = a.Run
+        b:Reset(a)
         -- (the cursor's spot on a page with nothing to pick: the answer A
         -- gives (Accept, Continue...), as the game's window would)
         if a.key == "PAD1" and not primary then primary = b end
@@ -1434,6 +1478,18 @@ function ND.Refresh()
     local chosen = Chosen()
     for _, b in ipairs(itemPool) do
         b.chosen:SetShown(b:IsShown() and b.choice and b.index == chosen or false)
+    end
+    -- (Complete Quest, where there's a reward to pick: greyed, doing
+    -- nothing, until one is picked)
+    for _, b in ipairs(answerPool) do
+        local blocked = b:IsShown() and b.needsChoice and chosen <= 0 or false
+        if blocked ~= (b.blocked or false) then
+            b.blocked = blocked or nil
+            b.color = blocked and BLOCKED or b.normal or GOLD
+            b.glyph:SetDesaturated(blocked)
+            b.glyph:SetAlpha(blocked and 0.5 or 1)
+            Lit(b)
+        end
     end
     -- (Spoken)
     -- (Spoken: "(Stopped)" after the title while its line for this NPC
