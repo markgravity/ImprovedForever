@@ -447,9 +447,10 @@ end
 local pips = {}
 local PIP, PIP_GAP = 8, 6
 -- (centred on the whole: midway between the two diamonds' middles; just
--- over the experience line (IN.XP_H), the lit one's bigger size clear of
--- it. The face diamond's bottom point is on IN.BOTTOM)
-local PIPS_Y = IN.XP_H + 4 + (PIP + 3) / 2
+-- over the experience line (IN.XP_H) and the health bar (IN.HP_H), the lit
+-- one's bigger size clear of them. The face diamond's bottom point is on
+-- IN.BOTTOM)
+local PIPS_Y = IN.XP_H + IN.HP_H + 4 + (PIP + 3) / 2
 for i = 1, 4 do
     local p = holder:CreateTexture(nil, "ARTWORK")
     p:SetSize(PIP, PIP)

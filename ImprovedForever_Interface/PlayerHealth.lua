@@ -19,7 +19,7 @@ local UF = IN.UnitFrames
 local PlayerHealth = {}
 IN.PlayerHealth = PlayerHealth
 
-local LINE_H = 5
+local LINE_H = IN.HP_H or 5
 local COMPARTMENTS = 10
 local FRAME = { 0.25, 0.25, 0.25 }      -- (its frame's and notches' grey, the experience line's)
 local FADE = 0.3

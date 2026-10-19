@@ -347,6 +347,27 @@ local function Row(i)
     return r
 end
 
+-- (a reward's tooltip beside the panel (its right, past the band), clear
+-- of the words, the equipped one compared beside it, as the game's reward
+-- buttons show it (QuestInfo.lua))
+local function ItemTip(b)
+    GameTooltip:SetOwner(b, "ANCHOR_NONE")
+    GameTooltip:ClearAllPoints()
+    GameTooltip:SetPoint("BOTTOMLEFT", panel, "BOTTOMRIGHT", BAND_REACH + 8, 0)
+    pcall(GameTooltip.SetQuestItem, GameTooltip, b.kind, b.index)
+    GameTooltip:Show()
+    if GameTooltip_ShowCompareItem then pcall(GameTooltip_ShowCompareItem, GameTooltip) end
+end
+
+-- (the game's cursor on a reward: the game shows its tooltip at its own
+-- window's button (faded, elsewhere); shown over ours instead, once each
+-- time the game shows it)
+local function FollowTip(button, target)
+    if not (button and target and target.kind and target.index and GameTooltip:IsShown()) then return end
+    local ok, owner = pcall(GameTooltip.GetOwner, GameTooltip)
+    if ok and owner == button then ItemTip(target) end
+end
+
 local function ItemButton(i)
     local b = itemPool[i]
     if b then return b end
@@ -371,9 +392,7 @@ local function ItemButton(i)
     b:SetScript("OnEnter", function(self)
         self.lit = true
         Lit(self)
-        GameTooltip:SetOwner(self, "ANCHOR_TOP")
-        pcall(GameTooltip.SetQuestItem, GameTooltip, self.kind, self.index)
-        GameTooltip:Show()
+        ItemTip(self)
     end)
     b:SetScript("OnLeave", function(self)
         self.lit = nil
@@ -1687,6 +1706,7 @@ local function Tick()
         local ok, button = pcall(function() return nav and nav:GetCurrentButton() end)
         local target = byKey[KeyOf(ok and button or nil) or ""]
         Point((target and target:IsShown() and target) or primary)
+        FollowTip(ok and button or nil, target and target:IsShown() and target or nil)
         HidePointer(true)
     else
         Point(nil)

@@ -17,10 +17,12 @@ IF.Interface = IN
 -- The bottom padding the HUD's groups share, so their feet line up: the
 -- player's avatar (UnitFrames.lua) and the gamepad bar's face buttons
 -- diamond (GamepadBar.lua: its bottom point), the set pips and glyphs
--- under it still clear of the experience line
-IN.BOTTOM = 30
+-- under it still clear of the experience line and the health bar over it
+IN.BOTTOM = 38
 -- The experience line's height (XPBar.lua)
 IN.XP_H = 8
+-- The health bar's, over it (PlayerHealth.lua)
+IN.HP_H = 5
 
 -- The game's colours of a monster's level against yours, its own when it
 -- has them: green, yellow, orange, red (a card's alert, a cooldown's time
