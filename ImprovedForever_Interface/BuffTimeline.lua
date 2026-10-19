@@ -480,6 +480,9 @@ local function SpellOf(storage)
     return not Secret(id) and type(id) == "number" and id or nil
 end
 
+-- (for the cast line's range diamond, PlayerCast.lua)
+BT.PadSlots, BT.SpellOf = PadSlots, SpellOf
+
 -- A slot's length from its tooltip ("8 sec cooldown", an item's "(2 Min
 -- Cooldown)"), read once out of a fight
 local RECASTS = {
@@ -527,11 +530,26 @@ local function BaseLength(storage)
     return ms / 1000
 end
 
+-- (a lockout no longer than this (the wand's or a ranged weapon's swing,
+-- which the game reports on every spell, not as the global cooldown) is
+-- shown only on a slot whose spell has a cooldown of its own)
+local LOCKOUT_MAX = 3
+
+-- A slot's own cooldown length, known: learnt, from its tooltip, or its
+-- spell's base one; nil for a spell with none
+local function RealLength(key, storage)
+    return cdLengths[key] or BaseLength(storage)
+end
+
 -- A slot's cooldown now: start, duration (duration nil: running,
 -- untimed), or nil (not cooling)
 local function SlotCooldown(key, storage, now)
     local start, duration, active, onGCD = ActionCooldown(storage)
     local whole = Timed(start, duration)
+    if whole and duration <= LOCKOUT_MAX and not RealLength(key, storage) then
+        known[key], activeSince[key] = nil, nil
+        return nil
+    end
     if whole then
         known[key], cdLengths[key], activeSince[key] = { start, duration }, duration, nil
         return start, duration
@@ -547,7 +565,8 @@ local function SlotCooldown(key, storage, now)
         local ok, object = pcall(C_ActionBar.GetActionCooldownDuration, storage, true)
         local left, total = DurationTimes(ok and object or nil)
         if left then
-            if left <= 0 or (total and total <= GCD_MAX) then
+            if left <= 0 or (total and total <= GCD_MAX)
+                or (total and total <= LOCKOUT_MAX and not RealLength(key, storage)) then
                 known[key], activeSince[key] = nil, nil
                 return nil
             end
@@ -568,9 +587,15 @@ local function SlotCooldown(key, storage, now)
         known[key], activeSince[key] = nil, nil
         return nil
     end
+    -- (running, its times secret, not seen cast: only a spell with a
+    -- cooldown of its own; any other is the swing lockout)
+    local length = RealLength(key, storage)
+    if not length then
+        activeSince[key] = nil
+        return nil
+    end
     activeSince[key] = activeSince[key] or now
     if now - activeSince[key] < GCD_MAX then return nil end
-    local length = cdLengths[key] or BaseLength(storage)
     known[key] = { activeSince[key], length }
     return activeSince[key], length
 end

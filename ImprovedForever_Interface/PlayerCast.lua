@@ -29,8 +29,9 @@ IN.PlayerCast = PlayerCast
 
 local LINE_W = 460
 local LINE_H = 3
--- (over the party cards, clear of a card grown while picking, PartyCards.lua)
-local LINE_Y = IN.BOTTOM + (IN.PartyCards.CARD_H or 100) * 1.15 + 10
+-- (over the party cards, its diamond clear of a card grown while picking,
+-- PartyCards.lua)
+local LINE_Y = IN.BOTTOM + (IN.PartyCards.CARD_H or 100) * 1.15 + 32
 local TILE = 30                 -- (the diamond's tile: a size as the spell diamonds')
 local INTERRUPTED_HOLD = 0.6
 local FADE = 0.3                -- (a cast done: the line fading out)
@@ -55,11 +56,22 @@ local function IconColor(texture)
     return { math.floor(c / 65536) / 255, math.floor(c / 256) % 256 / 255, c % 256 / 255 }
 end
 
+PlayerCast.IconColor = IconColor
+
 local line = CreateFrame("Frame", "ImprovedForeverPlayerCast", UIParent)
 line:SetSize(LINE_W, LINE_H)
 line:SetPoint("BOTTOM", UIParent, "BOTTOM", 0, LINE_Y)
 line:SetFrameStrata("LOW")
 line:Hide()
+
+-- (the diamond's own frame: shown with the line, and alone while nothing is
+-- cast: the range diamond, below)
+local hub = CreateFrame("Frame", nil, UIParent)
+hub:SetSize(TILE, TILE)
+hub:SetPoint("CENTER", line, "CENTER")
+hub:SetFrameStrata("LOW")
+hub:SetFrameLevel(line:GetFrameLevel() + 4)
+hub:Hide()
 
 -- (the track: dark, a channel's colour under its halves)
 local track = line:CreateTexture(nil, "BACKGROUND")
@@ -186,7 +198,7 @@ local function Tile()
     if tile ~= nil then return tile or nil end
     local GB = IN.GamepadBar
     if not (GB and GB.Tile and GB.Dims and GB.Mirror and GB.StandIn) then return nil end
-    local ok, t = pcall(GB.Tile, line, line, GB.Dims(TILE, 14), { 0, 0 })
+    local ok, t = pcall(GB.Tile, hub, line, GB.Dims(TILE, 14), { 0, 0 })
     tile = ok and t or false
     if tile then
         tile:EnableMouse(false)
@@ -377,9 +389,129 @@ local function Check()
     end
 end
 
+---------------------------------------------------------------------------
+-- The range diamond: while nothing is cast and you have an enemy targeted,
+-- the diamond alone, an aim (the game's crosshair cursor) for your
+-- longest-reaching harmful spell on the gamepad bar (a wand's Shoot, a
+-- bow's Auto Shot, a Frostbolt...), grey while the target is out of its
+-- range (the range check's answer as it is: secret in a fight, the icon's
+-- colour set from it). A cast begun turns it into the cast's diamond; once
+-- the cast is done it comes back.
+---------------------------------------------------------------------------
+local RANGE_CHECK, RANGE_FADE = 0.1, 0.2
+local OUT_COLOR = { 0.4, 0.4, 0.4 }
+local AIM = "crosshair_crosshairs_64"
+local range = { alpha = 0 }
+
+-- (a spell's reach and icon, read whole, or nil)
+local function Reach(id)
+    if not (C_Spell and C_Spell.GetSpellInfo) then return nil end
+    local ok, info = pcall(C_Spell.GetSpellInfo, id)
+    if not ok or type(info) ~= "table" or Secret(info.maxRange) or type(info.maxRange) ~= "number" then return nil end
+    return info.maxRange, info.iconID
+end
+
+-- (the diamond's stand-in: the aim, upright, as the game's special icons
+-- (GamepadBar.lua's Picture); the spell's own icon without the atlas)
+local function AimStandIn(spell)
+    local s = IN.GamepadBar.StandIn(spell.icon or 136243)
+    if C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(AIM) then
+        s.SpecialActionIcon = {
+            IsShown = function() return true end,
+            GetAtlas = function() return AIM end,
+        }
+    end
+    return s
+end
+
+-- (your longest-reaching harmful spell on the gamepad bar: its ID, reach,
+-- icon; read out of a fight, kept through it)
+local function PickSpell()
+    local BT = IN.BuffTimeline
+    if not (BT and BT.PadSlots and BT.SpellOf) or IF.InCombat() then return end
+    local best
+    for _, slot in ipairs(BT.PadSlots()) do
+        local id = BT.SpellOf(slot.storage)
+        local ok, harmful = pcall(C_Spell.IsSpellHarmful, id or 0)
+        if id and ok and harmful == true then
+            local reach, icon = Reach(id)
+            if reach and (not best or reach > best.reach) then best = { id = id, reach = reach, icon = icon } end
+        end
+    end
+    if (best and best.id) ~= (range.spell and range.spell.id)
+        or (best and best.reach) ~= (range.spell and range.spell.reach) then
+        range.spell = best
+        range.standIn = best and AimStandIn(best) or nil
+    end
+end
+
+-- (an enemy targeted, alive)
+local function Enemy()
+    local ok, yes = pcall(function()
+        if not UnitExists("target") then return false end
+        local attack, dead = UnitCanAttack("player", "target"), UnitIsDeadOrGhost("target")
+        if Secret(attack) or Secret(dead) then return true end
+        return attack and not dead
+    end)
+    return ok and yes or false
+end
+
+local WHITE_C, OUT_C
+local function ShowRange(t, inRange)
+    if Secret(inRange) then
+        WHITE_C = WHITE_C or CreateColor(1, 1, 1, 1)
+        OUT_C = OUT_C or CreateColor(OUT_COLOR[1], OUT_COLOR[2], OUT_COLOR[3], 1)
+        t.icon:SetDesaturated(false)
+        if not pcall(t.icon.SetVertexColorFromBoolean, t.icon, inRange, WHITE_C, OUT_C) then
+            t.icon:SetVertexColor(1, 1, 1)
+        end
+        return
+    end
+    local out = inRange == false
+    local c = out and OUT_COLOR or { 1, 1, 1 }
+    t.icon:SetVertexColor(c[1], c[2], c[3])
+    t.icon:SetDesaturated(out)
+end
+
+local driver = CreateFrame("Frame")
+local since, pickSince = RANGE_CHECK, 1
+driver:SetScript("OnUpdate", function(_, elapsed)
+    if not PlayerCast.on then return end
+    pickSince = pickSince + elapsed
+    if pickSince >= 1 then
+        pickSince = 0
+        PickSpell()
+    end
+    local casting = line.kind ~= nil or line.holdUntil ~= nil
+    local want = IN.Settings().castRange ~= false and range.spell ~= nil and Enemy()
+    -- (eased in and out: the diamond and its reach)
+    local goal = want and 1 or 0
+    if range.alpha ~= goal then
+        local step = elapsed / RANGE_FADE
+        range.alpha = goal > range.alpha and math.min(goal, range.alpha + step) or math.max(goal, range.alpha - step)
+    end
+    local lineAlpha = line:IsShown() and line:GetAlpha() or 0
+    hub:SetAlpha(math.max(range.alpha, lineAlpha))
+    hub:SetShown(range.alpha > 0 or line:IsShown())
+    if casting or range.alpha <= 0 then return end
+    since = since + elapsed
+    if since < RANGE_CHECK then return end
+    since = 0
+    local t = Tile()
+    if not (t and range.standIn) then return end
+    standIn = range.standIn
+    pcall(IN.GamepadBar.Mirror, t, standIn)
+    if t.flashFill then t.flashFill:SetAlpha(0) end
+    local ok, inRange = pcall(C_Spell.IsSpellInRange, range.spell.id, "target")
+    if not ok then inRange = nil end
+    ShowRange(t, inRange)
+end)
+
 line:SetScript("OnUpdate", function(self)
     local now = GetTime()
-    Mirror()
+    -- (the cast's diamond while it's cast; done, the range diamond's driver
+    -- draws it)
+    if self.kind or self.holdUntil then Mirror() end
     if self.kind then
         left:SetValue(now * 1000)
         right:SetValue(now * 1000)
@@ -440,6 +572,8 @@ local function Watch()
         else
             line.kind, line.holdUntil, line.fadeFrom = nil, nil, nil
             line:Hide()
+            hub:Hide()
+            range.alpha = 0
         end
     end
 end

@@ -14,6 +14,7 @@ UnitFrames.lua
 PartyCards.lua
 IconColors.lua
 PlayerCast.lua
+PlayerHealth.lua
 XPBar.lua
 GamepadBar.lua
 HudLayout.lua

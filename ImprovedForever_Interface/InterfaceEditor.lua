@@ -68,6 +68,18 @@ local ITEMS = {
             .. "be interrupted, red when it's cut. Edit Mode shows the game's bar.",
     }, Toggle("castBar", "Cast line", function() IN.PlayerCast.Apply() end)),
     Item({
+        key = "castRange", group = "frames", label = "Range diamond",
+        tip = "With the cast line, while you aren't casting and have an enemy targeted: its diamond alone, "
+            .. "with the icon and reach of the longest-reaching harmful spell on your gamepad bar (a wand's "
+            .. "Shoot, a bow's Auto Shot, a Frostbolt...), grey while the target is out of its range. A "
+            .. "cast turns it into the cast's diamond.",
+    }, Toggle("castRange", "Range diamond", function() IN.PlayerCast.Apply() end)),
+    Item({
+        key = "hpLine", group = "frames", label = "Health line",
+        tip = "Your health as a bar over the experience line, drawn as it is: green, amber past half, red "
+            .. "when low, the health just lost trailing. Shown in a fight and while you're hurt.",
+    }, Toggle("hpLine", "Health line", function() IN.PlayerHealth.Apply() end)),
+    Item({
         key = "xp", group = "frames", label = "Experience line",
         tip = "Your experience as a thin line along the screen's bottom edge, the rested part beyond it, in "
             .. "place of the game's experience bar (its reputation bar at the top level stays). The mouse over "

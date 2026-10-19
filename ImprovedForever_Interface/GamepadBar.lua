@@ -712,9 +712,9 @@ local function CastFill(b, native, interact)
         return
     end
     local channel = false
-    local _, _, _, startMs, endMs = UnitCastingInfo("player")
+    local _, _, texture, startMs, endMs = UnitCastingInfo("player")
     if not (Secret(startMs) or startMs) then
-        _, _, _, startMs, endMs = UnitChannelInfo("player")
+        _, _, texture, startMs, endMs = UnitChannelInfo("player")
         channel = true
     end
     if Secret(startMs) or Secret(endMs) or type(startMs) ~= "number" or type(endMs) ~= "number"
@@ -724,7 +724,11 @@ local function CastFill(b, native, interact)
     end
     local f = (GetTime() * 1000 - startMs) / (endMs - startMs)
     f = math.min(math.max(f, 0), 1)
-    DrawRing(b.ring, channel and (1 - f) or f, channel and CHANNEL_COLOR or CAST_COLOR)
+    -- (in the cast's icon's colour, as the cast line (PlayerCast.lua), else
+    -- the casting bar's)
+    local PC = IN.PlayerCast
+    local color = PC and PC.IconColor and PC.IconColor(texture)
+    DrawRing(b.ring, channel and (1 - f) or f, color or (channel and CHANNEL_COLOR or CAST_COLOR))
     b.ring:SetAlpha(1)
     b.ring:Show()
     b.flashFill:SetAlpha(0)
