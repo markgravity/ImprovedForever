@@ -1133,6 +1133,169 @@ glyphEvents:SetScript("OnEvent", function()
 end)
 
 ---------------------------------------------------------------------------
+-- Supplies: small tiles (0.7 of a D-pad tile) in a row under the R3 slot
+-- (the Wheel module's recent slot, ImprovedForever_Wheel/RecentSlot.lua;
+-- its spot, GB.SideSpot, without it): your bags' free slots, and a
+-- hunter's ammo, a warlock's soul shards. The count on each (red at none,
+-- the icon too, the tile pulsing red as a cooldown beats; orange when low); its numbers
+-- in a tooltip.
+---------------------------------------------------------------------------
+local SUPPLY = Shape({ size = DPAD.size * 0.7, glyph = 0 })
+local SUPPLY_GAP, SUPPLY_LOW = 4, 3
+local SUPPLY_UNDER = 20         -- (under the R3 slot, clear of its glyphs)
+local SOUL_SHARD = 6265
+local supplies = {}
+
+local function Count(fn, ...)
+    local ok, n = pcall(fn, ...)
+    if not ok or Secret(n) or type(n) ~= "number" then return nil end
+    return n
+end
+
+-- (free slots in the bags that take anything (no quivers, soul bags...))
+local function BagSpace()
+    local C = C_Container
+    if not (C and C.GetContainerNumFreeSlots) then return nil end
+    local free, total = 0, 0
+    for bag = 0, NUM_BAG_SLOTS or 4 do
+        local ok, n, kind = pcall(C.GetContainerNumFreeSlots, bag)
+        if ok and type(n) == "number" and (kind == 0 or kind == nil) then
+            free = free + n
+            total = total + (Count(C.GetContainerNumSlots, bag) or 0)
+        end
+    end
+    return free, total
+end
+
+local function Supply(read, tip)
+    local center = CreateFrame("Frame", nil, holder)
+    center:SetSize(1, 1)
+    local b = Button(center, SUPPLY, { 0, 0 }, nil, holder)
+    b.count:SetFontObject(NumberFontNormal)
+    b.read, b.tip = read, tip
+    b:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_TOP")
+        self.tip()
+        GameTooltip:Show()
+    end)
+    b:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    -- (none left: the tile pulsing red, as a cooldown's beat: a flash on
+    -- each whole second, fading over BEAT)
+    local alarm = CreateFrame("Frame", nil, b)
+    alarm:SetScript("OnUpdate", function()
+        local since = GetTime() % 1
+        b.flashFill:SetVertexColor(1, 0.15, 0.1, 1)
+        b.flashFill:SetAlpha(BEAT_FLASH * math.max(0, 1 - since / BEAT))
+    end)
+    alarm:Hide()
+    b.alarm = alarm
+    b:Hide()
+    supplies[#supplies + 1] = { tile = b, center = center }
+    return b
+end
+
+Supply(function()
+    local free = BagSpace()
+    return free and "Interface\\Icons\\INV_Misc_Bag_08", free
+end, function()
+    local free, total = BagSpace()
+    GameTooltip:SetText(BAGSLOTTEXT or "Bags")
+    GameTooltip:AddLine(("%d / %d free"):format(free or 0, total or 0), 1, 1, 1)
+end)
+
+local _, playerClass = UnitClass("player")
+if playerClass == "HUNTER" then
+    local AMMO = INVSLOT_AMMO or 0
+    Supply(function()
+        local texture = GetInventoryItemTexture("player", AMMO)
+        return texture or "Interface\\Icons\\INV_Ammo_Arrow_02", texture and Count(GetInventoryItemCount, "player", AMMO) or 0
+    end, function()
+        if not pcall(GameTooltip.SetInventoryItem, GameTooltip, "player", AMMO) or not GameTooltip:NumLines()
+            or GameTooltip:NumLines() == 0 then
+            GameTooltip:SetText(AMMOSLOT or "Ammo")
+            GameTooltip:AddLine("None equipped", 1, 0.3, 0.3)
+        end
+    end)
+elseif playerClass == "WARLOCK" then
+    local GetCount = C_Item and C_Item.GetItemCount or GetItemCount
+    local GetIcon = C_Item and C_Item.GetItemIconByID or GetItemIcon
+    Supply(function()
+        local ok, icon = pcall(GetIcon, SOUL_SHARD)
+        return ok and icon or "Interface\\Icons\\INV_Misc_Gem_Amethyst_02", Count(GetCount, SOUL_SHARD) or 0
+    end, function()
+        pcall(GameTooltip.SetItemByID, GameTooltip, SOUL_SHARD)
+    end)
+end
+
+-- (centred under the R3 slot, or its spot while it isn't shown)
+local supplyRow = CreateFrame("Frame", nil, holder)
+supplyRow:SetSize(1, 1)
+local function PlaceSupplies()
+    supplyRow:ClearAllPoints()
+    local slot = rawget(_G, "ImprovedForeverRecentSlot")
+    if type(slot) == "table" and slot.IsShown and slot:IsShown() then
+        supplyRow:SetPoint("TOP", slot, "BOTTOM", 0, -SUPPLY_UNDER)
+    else
+        local anchor, x, y, d = GB.SideSpot()
+        if not anchor then return end
+        supplyRow:SetPoint("TOP", anchor, "CENTER", x, y - d.width / 2 - SUPPLY_UNDER)
+    end
+    local shown = {}
+    for _, sp in ipairs(supplies) do
+        if sp.tile:IsShown() then shown[#shown + 1] = sp end
+    end
+    for k, sp in ipairs(shown) do
+        sp.center:ClearAllPoints()
+        sp.center:SetPoint("CENTER", supplyRow, "TOP", (k - (#shown + 1) / 2) * (SUPPLY.width + SUPPLY_GAP),
+            -SUPPLY.width / 2)
+    end
+end
+
+local function UpdateSupplies()
+    for _, sp in ipairs(supplies) do
+        local b = sp.tile
+        local texture, n = b.read()
+        local on = texture ~= nil
+        b:SetShown(on)
+        if on then
+            local text = tostring(n or 0)
+            local stand = GB.StandIn(texture)
+            stand.Count = { IsShown = function() return true end, GetText = function() return text end }
+            -- (none left: the icon red)
+            if (n or 0) <= 0 then
+                stand.icon.r, stand.icon.g, stand.icon.b = 1, 0.2, 0.2
+                function stand.icon.IsDesaturated() return true end
+            end
+            pcall(Mirror, b, stand)
+            local alarm, empty = b.alarm, (n or 0) <= 0
+            alarm:SetShown(empty)
+            if not empty then b.flashFill:SetAlpha(0) end
+            local c = (n or 0) <= 0 and { 1, 0.25, 0.25 } or (n or 0) <= SUPPLY_LOW and { 1, 0.6, 0.15 } or { 1, 1, 1 }
+            b.count:SetTextColor(c[1], c[2], c[3])
+        end
+    end
+    PlaceSupplies()
+end
+GB.UpdateSupplies, GB.PlaceSupplies = UpdateSupplies, PlaceSupplies
+
+local supplyEvents = CreateFrame("Frame")
+for _, e in ipairs({ "BAG_UPDATE_DELAYED", "PLAYER_ENTERING_WORLD", "UNIT_INVENTORY_CHANGED" }) do
+    supplyEvents:RegisterEvent(e)
+end
+supplyEvents:SetScript("OnEvent", function(_, event, unit)
+    if event == "UNIT_INVENTORY_CHANGED" and unit ~= "player" then return end
+    UpdateSupplies()
+end)
+-- (placed again now and then: the R3 slot comes, goes and moves (Edit Mode))
+local sincePlaced = 0
+supplyRow:SetScript("OnUpdate", function(_, elapsed)
+    sincePlaced = sincePlaced + elapsed
+    if sincePlaced < 0.5 then return end
+    sincePlaced = 0
+    PlaceSupplies()
+end)
+
+---------------------------------------------------------------------------
 -- For other diamonds of ours (the party spells', PartyPad.lua): a tile as
 -- these, and the same effects (cooldown ring and beat, cast and channel
 -- ring, food and drink, its end's flash) from a stand-in for the game's
@@ -1234,6 +1397,7 @@ function GB.SetStyle(name)
     PlaceClass(classLeft)
     PlaceClass(classRight)
     PlacePips()
+    PlaceSupplies()
     for _, fn in ipairs(styleListeners) do pcall(fn, name) end
 end
 
