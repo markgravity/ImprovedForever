@@ -532,7 +532,8 @@ end
 
 -- (a lockout no longer than this (the wand's or a ranged weapon's swing,
 -- which the game reports on every spell, not as the global cooldown) is
--- shown only on a slot whose spell has a cooldown of its own)
+-- shown only on a slot whose spell has a cooldown of its own, and not
+-- while shooting: Shooting)
 local LOCKOUT_MAX = 3
 
 -- A slot's own cooldown length, known: learnt, from its tooltip, or its
@@ -541,12 +542,28 @@ local function RealLength(key, storage)
     return cdLengths[key] or BaseLength(storage)
 end
 
+-- (an auto-repeat shot (a wand's Shoot, Auto Shot) running, or stopped
+-- under LOCKOUT_MAX ago: its lockout, between shots, shows on every slot
+-- as running, a potion's and Cannibalize's too; none of them then counts
+-- as a cooldown not seen cast)
+local repeating, repeatEnded = false, nil
+local repeats = CreateFrame("Frame")
+repeats:RegisterEvent("START_AUTOREPEAT_SPELL")
+repeats:RegisterEvent("STOP_AUTOREPEAT_SPELL")
+repeats:SetScript("OnEvent", function(_, event)
+    repeating = event == "START_AUTOREPEAT_SPELL"
+    if not repeating then repeatEnded = GetTime() end
+end)
+local function Shooting(now)
+    return repeating or (repeatEnded ~= nil and now - repeatEnded < LOCKOUT_MAX)
+end
+
 -- A slot's cooldown now: start, duration (duration nil: running,
 -- untimed), or nil (not cooling)
 local function SlotCooldown(key, storage, now)
     local start, duration, active, onGCD = ActionCooldown(storage)
     local whole = Timed(start, duration)
-    if whole and duration <= LOCKOUT_MAX and not RealLength(key, storage) then
+    if whole and duration <= LOCKOUT_MAX and (Shooting(now) or not RealLength(key, storage)) then
         known[key], activeSince[key] = nil, nil
         return nil
     end
@@ -566,7 +583,7 @@ local function SlotCooldown(key, storage, now)
         local left, total = DurationTimes(ok and object or nil)
         if left then
             if left <= 0 or (total and total <= GCD_MAX)
-                or (total and total <= LOCKOUT_MAX and not RealLength(key, storage)) then
+                or (total and total <= LOCKOUT_MAX and (Shooting(now) or not RealLength(key, storage))) then
                 known[key], activeSince[key] = nil, nil
                 return nil
             end
@@ -588,9 +605,10 @@ local function SlotCooldown(key, storage, now)
         return nil
     end
     -- (running, its times secret, not seen cast: only a spell with a
-    -- cooldown of its own; any other is the swing lockout)
+    -- cooldown of its own, and not while shooting; any other is the swing
+    -- lockout)
     local length = RealLength(key, storage)
-    if not length then
+    if not length or Shooting(now) then
         activeSince[key] = nil
         return nil
     end
