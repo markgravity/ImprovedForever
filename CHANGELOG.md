@@ -1,5 +1,9 @@
 # Changelog
 
+## Core 0.10.1
+
+- New icon for the Immersion module (formerly Interface) in the AddOns list and the settings.
+
 ## Immersion 0.1.0
 
 - New module (formerly Interface): **the HUD made for the controller and the scene**. Needs *Spoken*.
