@@ -115,6 +115,8 @@ local function Loot()
         Changed()
         for _, fn in ipairs(catchers) do pcall(fn, catch) end
     end
+    -- (read: now taken, in fishing mode, AutoLoot.lua)
+    if F.TakeLoot then F.TakeLoot() end
 end
 
 -- (the game's error line: the fish got away, or nothing hooked yet; read

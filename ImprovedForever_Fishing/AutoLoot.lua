@@ -39,9 +39,37 @@ local function Apply()
 end
 F.ApplyAutoLoot = Apply
 
+-- The catch taken by us too: Forever's gamepad loot window opens even with
+-- the game's auto loot on. In fishing mode each slot looted (LootSlot) as
+-- soon as Session.lua has read them, the window drawn at 0 (IF.Focus.Fade:
+-- its own alpha untouched) till it closes; still open a moment on (the
+-- bags full, a confirmation), it's shown again
+local WAIT = 1
+local lootFaded = false
+local function ShowLoot()
+    if lootFaded then
+        lootFaded = false
+        IF.Focus.Fade(_G.LootFrame, false)
+    end
+end
+
+function F.TakeLoot()
+    if not (F.Settings().autoLoot and F.InMode()) then return end
+    if _G.LootFrame then
+        lootFaded = true
+        IF.Focus.Fade(LootFrame, true)
+    end
+    for slot = (GetNumLootItems() or 0), 1, -1 do pcall(LootSlot, slot) end
+    if C_Timer then C_Timer.After(WAIT, ShowLoot) end
+end
+
 local events = CreateFrame("Frame")
 events:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
-events:SetScript("OnEvent", Apply)
+events:RegisterEvent("LOOT_CLOSED")
+events:SetScript("OnEvent", function(_, event)
+    if event == "LOOT_CLOSED" then return ShowLoot() end
+    Apply()
+end)
 IF.OnLogin(Apply)
 F.OnMode(Apply)
 

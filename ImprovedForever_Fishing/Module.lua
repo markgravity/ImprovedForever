@@ -22,6 +22,7 @@ local DEFAULTS = {
     firstCatch = true,  -- something caught for the first time ever: a moment of its own (FirstCatch.lua)
     chat = true,        -- with the fishing view, the chat by the stringer, faint (Chat.lua)
     guide = true,       -- the line on the screen: how to start fishing, how to stop (Mode.lua)
+    skillLine = true,   -- with the fishing view, the fishing skill along the bottom edge (SkillLine.lua)
 }
 -- (these were the Interface module's once: moved over, then gone from it)
 local MOVED = { fishLoot = "panel", fishCatch = "bar", fishMode = "view", fishCamera = "camera", fishCam = "cam" }

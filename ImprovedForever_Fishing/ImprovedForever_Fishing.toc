@@ -19,6 +19,7 @@ AutoLoot.lua
 View.lua
 Panel.lua
 Chat.lua
+SkillLine.lua
 CastBar.lua
 FirstCatch.lua
 Book.lua

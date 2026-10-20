@@ -84,6 +84,12 @@ local ITEMS = {
         tip = "With the fishing view: the chat by the session panel, bottom right, every line faint and a "
             .. "new one bright for a while. Typing in the chat, or the mouse on it, brings the game's back.",
     }, Toggle("chat", "Fishing chat", function() F.ApplyChat() end)),
+    Item({
+        key = "skillLine", group = "view", label = "Skill line",
+        tip = "With the fishing view: your fishing skill as a line along the screen's bottom edge, as the "
+            .. "experience line, in the water's blue (a lure's bonus beyond it in sea green), its numbers "
+            .. "over its left end; it flares as the skill goes up.",
+    }, Toggle("skillLine", "Skill line", function() F.ApplySkillLine() end)),
     {
         key = "zoom", group = "view", section = "Camera framing", label = "Distance",
         tip = "How far the camera sits from you while fishing. In fishing mode you see it change as you "
