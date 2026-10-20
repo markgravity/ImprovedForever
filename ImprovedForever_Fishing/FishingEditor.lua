@@ -14,18 +14,6 @@ local function Toggle(key, label, after)
     end, label)
 end
 
--- (a framing slider: its limits, the view's, seen at once while fishing.
--- The page's sliders step in whole numbers: this one's in units of `unit`)
-local function CameraSlider(key, unit, format)
-    local limit = F.CAMERA_LIMITS and F.CAMERA_LIMITS[key] or { 0, 1 }
-    return {
-        min = math.floor(limit[1] / unit + 0.5), max = math.floor(limit[2] / unit + 0.5), step = 1,
-        get = function() return math.floor((F.CameraGet and F.CameraGet(key) or limit[1]) / unit + 0.5) end,
-        set = function(n) if F.CameraSet then F.CameraSet(key, n * unit) end end,
-        format = function(n) return format(n * unit) end,
-    }
-end
-
 local ITEMS = {
     Item({
         key = "guide", group = "fishing", label = "Start / stop guide",
@@ -76,8 +64,8 @@ local ITEMS = {
         key = "camera", group = "view", label = "Fishing camera",
         tip = "With the fishing view: the camera at your fishing distance, over your shoulder and pitched "
             .. "down, so you stand low on the left (the game's ActionCam settings: the game asks once to "
-            .. "allow them, Accept). Your camera comes back when you stop fishing. /if fishcam keeps the "
-            .. "distance you're at; /if fishcam shoulder 0.8, /if fishcam pitch 0.3 frame you.",
+            .. "allow them, Accept). Your camera comes back when you stop fishing. To frame it: in fishing "
+            .. "mode, Triangle (or Alt + F; the Bindings tab, Misc) and move it as the line top left says.",
     }, Toggle("camera", "Fishing camera", function() F.ApplyView() end)),
     Item({
         key = "chat", group = "view", label = "Fishing chat",
@@ -90,28 +78,6 @@ local ITEMS = {
             .. "experience line, in the water's blue (a lure's bonus beyond it in sea green), its numbers "
             .. "over its left end; it flares as the skill goes up.",
     }, Toggle("skillLine", "Skill line", function() F.ApplySkillLine() end)),
-    {
-        key = "zoom", group = "view", section = "Camera framing", label = "Distance",
-        tip = "How far the camera sits from you while fishing. In fishing mode you see it change as you "
-            .. "slide. /if fishcam keeps the distance you're at.",
-        slider = CameraSlider("zoom", 0.5, function(v) return ("%.1f yd"):format(v) end),
-    },
-    {
-        key = "shoulder", group = "view", section = "Camera framing", label = "Character left / right",
-        tip = "How far the camera moves over your shoulder: higher puts you further left on the screen, "
-            .. "lower further right (below 0: the other shoulder).",
-        slider = CameraSlider("shoulder", 0.1, function(v)
-            if math.abs(v) < 0.05 then return "Middle" end
-            return ("%.1f %s"):format(math.abs(v), v > 0 and "left" or "right")
-        end),
-    },
-    {
-        key = "pitch", group = "view", section = "Camera framing", label = "Character low / high",
-        tip = "How much of the screen is kept under your feet: lower puts you lower on the screen, the water "
-            .. "and the sky more in view.",
-        -- (its whole range, 0 to 0.4, shown as 0 to 100%)
-        slider = CameraSlider("pitch", 0.004, function(v) return ("%d%%"):format(math.floor(v / 0.4 * 100 + 0.5)) end),
-    },
 }
 
 local GROUPS = {

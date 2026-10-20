@@ -1,8 +1,10 @@
 -- The chat while fishing: the game's lines by the stringer (Panel.lua),
 -- bottom right over its tally, set right: every line barely there, a new
 -- one bright for a while, fading back (as the Interface module's chat).
--- Shown with the fishing view (View.lua); the game's whole (typing in it,
--- the pad on it, the mouse on it, Edit Mode): ours hidden.
+-- Shown with the fishing view (View.lua). Typing: the game's chat in its
+-- own place, ours hidden; the typing done, ours back at once. The game's
+-- whole too with the pad on its window, the mouse on it, Edit Mode (ours
+-- back HOLD seconds after).
 -- Two message frames of ours, one over the other, fed the same lines: the
 -- back one at DIM, never fading; the front one at full, its lines fading
 -- after BRIGHT seconds. The lines come from the game's chat frames as
@@ -122,6 +124,8 @@ local BORDER = { "Background", "TopLeftTexture", "BottomLeftTexture", "TopRightT
     "LeftTexture", "RightTexture", "BottomTexture", "TopTexture" }
 
 local chats = {}
+local boxHooked = {}
+local Watch
 local function Parts()
     local list = {}
     local function Part(f)
@@ -136,6 +140,12 @@ local function Parts()
         local box = _G[name .. "EditBox"]
         if box and box.GetRegions then
             for _, region in ipairs({ box:GetRegions() }) do Part(region) end
+        end
+        -- (typing begun or ended: the chat moved at once, not a moment on)
+        if box and box.HookScript and not boxHooked[box] then
+            boxHooked[box] = true
+            box:HookScript("OnEditFocusGained", function() if Watch then Watch() end end)
+            box:HookScript("OnEditFocusLost", function() if Watch then Watch() end end)
         end
         Part(_G[name .. "Tab"])
         Part(_G[name .. "ButtonFrame"])
@@ -202,11 +212,16 @@ local function MouseOn(now)
     return false
 end
 
-local function GameChatInUse(now)
+-- (the chat's edit box typed in, or nil)
+local function Typing()
+    local box = GetCurrentKeyBoardFocus and GetCurrentKeyBoardFocus()
+    return box and box.chatFrame and box or nil
+end
+
+local function GameChatInUse(now, typing)
     if EditModeManagerFrame and EditModeManagerFrame:IsEditModeActive() then return true end
     if IF.ChatLines and IF.ChatLines.IsOpen and IF.ChatLines.IsOpen() then return true end
-    local box = GetCurrentKeyBoardFocus and GetCurrentKeyBoardFocus()
-    if box and box.chatFrame then return true end
+    if typing then return false end
     local m = IF.Focus.Manager()
     if m and m.isUIFocused and IsChat(m.focusedFrame) then return true end
     return MouseOn(now)
@@ -217,14 +232,15 @@ end
 ---------------------------------------------------------------------------
 local usedAt = -math.huge
 
-local function Watch()
+Watch = function()
     if not IF.db then return end
     local now = GetTime()
     -- (read again now and then: a whisper tab is a window opened later)
     if not parts or now - partsAt > 2 then parts, partsAt = Parts(), now end
     local fishing = F.Settings().chat and F.ViewActive and F.ViewActive() or false
-    if fishing and GameChatInUse(now) then usedAt = now end
-    local on = fishing and now - usedAt > HOLD
+    local typing = fishing and Typing() ~= nil
+    if fishing and GameChatInUse(now, typing) then usedAt = now end
+    local on = fishing and not typing and now - usedAt > HOLD
     local frame = Selected()
     if on and frame ~= current then Rebuild(frame) end
     if on then Place() end

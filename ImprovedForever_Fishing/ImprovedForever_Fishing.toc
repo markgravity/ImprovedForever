@@ -17,6 +17,7 @@ Session.lua
 Collection.lua
 AutoLoot.lua
 View.lua
+CameraEdit.lua
 Panel.lua
 Chat.lua
 SkillLine.lua

@@ -100,7 +100,8 @@ end
 local bound = false
 local function Bind()
     if InCombatLockdown() or not IF.db then return end
-    local want = F.InMode and F.InMode() and IF.Binds.InGame() or false
+    local want = F.InMode and F.InMode() and IF.Binds.InGame()
+        and not (F.CameraEditing and F.CameraEditing()) or false
     if want == bound then return end
     bound = want
     ClearOverrideBindings(owner)

@@ -35,12 +35,17 @@ local CAMERA_DEFAULTS = { zoom = 3.5, shoulder = 2, pitch = 0.12 }
 -- (each kept within what still frames you)
 -- (pitch: the game's share of the screen kept under your feet; past about
 -- 0.4 it changes nothing)
-local CAMERA_LIMITS = { zoom = { 1, 15 }, shoulder = { -3, 3 }, pitch = { 0, 0.4 } }
+local CAMERA_LIMITS = { zoom = { 1, 15 }, shoulder = { -8, 8 }, pitch = { 0, 0.4 } }
 local CVARS = { "test_cameraOverShoulder", "test_cameraDynamicPitch", "test_cameraDynamicPitchBaseFovPad" }
 -- (the game's gamepad mode keeps the character centred with a temporary
 -- value of its own (Blizzard_Gamepad/Core.lua: SetupTempCVar), over the
 -- saved one: ours a temporary one too, the gamepad's put back after)
 local CENTERED = "CameraKeepCharacterCentered"
+-- (the framing is the camera's settings and its distance alone, as
+-- DialogueUI frames its scenes: no saved view (setting one breaks the
+-- camera's follow style) and no FlipCameraYaw (an offset of its own, kept
+-- till a /reload). A saved view of ours from before (VIEW) reset once.)
+local VIEW = 5
 
 local function Camera()
     local s = F.Settings()
@@ -120,7 +125,9 @@ local function Fade(on)
 end
 
 -- (the camera: your settings kept, the fishing ones set)
-local function CameraIn()
+-- (settingsOnly: the framing's settings alone, the distance left as it is
+-- (a slider moved))
+local function CameraIn(settingsOnly)
     if not F.Settings().camera or not IF.charDB then return end
     local cam = Camera()
     if not IF.charDB.fishCamSaved then
@@ -135,7 +142,7 @@ local function CameraIn()
     SetCVarSafe("test_cameraOverShoulder", cam.shoulder)
     SetCVarSafe("test_cameraDynamicPitch", 1)
     SetCVarSafe("test_cameraDynamicPitchBaseFovPad", cam.pitch)
-    ZoomTo(cam.zoom)
+    if not settingsOnly then ZoomTo(cam.zoom) end
 end
 
 -- The fishing camera's framing (FishingEditor.lua's sliders): zoom,
@@ -149,8 +156,19 @@ function F.CameraSet(key, value)
     local limit = CAMERA_LIMITS[key]
     if not (limit and tonumber(value)) then return end
     Camera()[key] = math.max(limit[1], math.min(limit[2], tonumber(value)))
-    if F.ViewActive() then CameraIn() end
+    if F.ViewActive() then CameraIn(true) end
 end
+
+-- A framing tried (the camera edit, CameraEdit.lua): set, not kept; nil:
+-- the kept one back. F.CameraZoom(): the distance now
+function F.CameraPreview(cam)
+    if not (active and F.Settings().camera) then return end
+    if not cam then return CameraIn() end
+    if cam.shoulder then SetCVarSafe("test_cameraOverShoulder", cam.shoulder) end
+    if cam.pitch then SetCVarSafe("test_cameraDynamicPitchBaseFovPad", cam.pitch) end
+    if cam.zoom then ZoomTo(cam.zoom) end
+end
+F.CameraZoom = Zoom
 
 -- (yours back; the distance only when it's back from fishing)
 local function CameraOut(zoomBack)
@@ -224,6 +242,12 @@ end)
 -- (left in the fishing camera by a /reload or a logout: yours back)
 IF.OnLogin(function()
     if IF.charDB and IF.charDB.fishCamSaved and not Wanted() then CameraOut(false) end
+    -- (a saved view and turn of ours from before: the view reset, forgotten)
+    if IF.db then
+        local cam = Camera()
+        if cam.view then pcall(ResetView, VIEW) end
+        cam.view, cam.yaw = nil, nil
+    end
 end)
 
 -- /if fishcam [shoulder <n> | pitch <n> | zoom <n>]: alone, the distance
@@ -231,7 +255,9 @@ end)
 IF.AddCommand("fishcam", function(args)
     local cam = Camera()
     local key, value = args[1], tonumber(args[2])
-    if key and CAMERA_DEFAULTS[key] and value then
+    if key == "reset" then
+        for k, v in pairs(CAMERA_DEFAULTS) do cam[k] = v end
+    elseif key and CAMERA_DEFAULTS[key] and value then
         cam[key] = value
     else
         cam.zoom = Zoom() or cam.zoom
@@ -243,6 +269,6 @@ IF.AddCommand("fishcam", function(args)
     local now = {}
     for _, name in ipairs({ CENTERED, unpack(CVARS) }) do now[#now + 1] = name .. "=" .. tostring(GetCVarSafe(name)) end
     IF.Print("Now: " .. table.concat(now, ", ") .. (active and " (fishing view on)" or " (fishing view off)"))
-end, "[shoulder <n> | pitch <n> | zoom <n>]: the fishing camera (alone: keep the distance you're at)")
+end, "[shoulder <n> | pitch <n> | zoom <n> | reset]: the fishing camera (alone: keep the distance you're at)")
 
 F.ApplyView = Watch

@@ -125,6 +125,12 @@ local function Tap(t, down, now, ok, x, y)
 end
 
 local r2, right = Tapper(), Tapper()
+local lastFree = false
+
+-- Nothing else open (the last look): a press of the world's
+function F.NothingOpen()
+    return lastFree
+end
 local circle = { down = false }
 local openAt = -math.huge
 
@@ -150,13 +156,16 @@ watch:SetScript("OnUpdate", function()
     local other = OtherOpen()
     if other then openAt = now end
     local free = not other and now - openAt > QUIET
-    BindEscape(on and free)
+    lastFree = free
+    -- (the camera edit has its own Esc and Circle, CameraEdit.lua)
+    local editing = F.CameraEditing and F.CameraEditing()
+    BindEscape(on and free and not editing)
     if not IsKeyDown then return end
     if on then
         -- (Circle alone, begun with nothing open: on its release)
         local down = IsKeyDown(EXIT_KEY)
         if down and not circle.down then
-            circle.ours = free and not ComboHeld()
+            circle.ours = free and not ComboHeld() and not editing
         elseif not down and circle.down and circle.ours and free then
             Set(false)
         end
@@ -230,17 +239,40 @@ local function MouseRight()
     return has and ("|A:" .. atlas .. ":34:28|a ") or ""
 end
 
+-- (a key on the keyboard, as the line shows it)
+local function Key(text)
+    return "|cffffffff" .. text .. "|r"
+end
+
 local function Line(fishing)
     local pad = IF.Input.Pad()
+    -- (the camera edit, CameraEdit.lua: its presses)
+    if F.CameraEditing and F.CameraEditing() then
+        if pad then
+            return Glyph("PADLTRIGGER") .. Glyph("PADRTRIGGER") .. " Closer / further     "
+                .. Glyph("PADLSHOULDER") .. Glyph("PADRSHOULDER") .. " Left / right     "
+                .. Glyph("PADDUP") .. Glyph("PADDDOWN") .. " Lower / higher     "
+                .. Glyph("PAD1") .. " " .. GOLD .. "Keep|r     " .. Glyph("PAD2") .. " Leave"
+        end
+        return Key("Mouse wheel") .. "  Closer / further     " .. Key("A / D") .. "  Left / right     "
+            .. Key("W / S") .. "  Lower / higher     " .. Key("Enter") .. "  " .. GOLD .. "Keep|r     "
+            .. Key("Esc") .. "  Leave"
+    end
+    local camera = F.Settings().camera and F.Settings().view
     if not fishing then
         if pad then return Glyph(ENTER_KEY) .. Glyph(ENTER_KEY) .. "  " .. GOLD .. "Start fishing|r" end
         return MouseRight() .. "Double right-click  " .. GOLD .. "Start fishing|r"
     end
     if pad then
+        local key = camera and F.CameraKey and F.CameraKey()
+        local held, pressed = key and key:match("^(.-)%+(.+)$")
+        local glyphs = key and (held and (Glyph(held) .. Glyph(pressed)) or Glyph(key))
         return Glyph(ENTER_KEY) .. " Cast     " .. Glyph(ENTER_KEY) .. Glyph(ENTER_KEY) .. " Lure     "
+            .. (glyphs and (glyphs .. " Camera     ") or "")
             .. Glyph(EXIT_KEY) .. " " .. GOLD .. "Stop fishing|r"
     end
-    return "Esc  " .. GOLD .. "Stop fishing|r"
+    local key = camera and F.CameraKeyText and F.CameraKeyText()
+    return (key and (Key(key) .. "  Camera     ") or "") .. Key("Esc") .. "  " .. GOLD .. "Stop fishing|r"
 end
 
 -- (start: bright a while, then quieter; in it: quiet)
@@ -256,7 +288,8 @@ end)
 
 F.Watcher("fishing guide", 0.1, function()
     local fishing = on
-    local want = F.Settings().guide and (fishing or CanFish()) and not OtherOpen()
+    local editing = F.CameraEditing and F.CameraEditing()
+    local want = (editing or F.Settings().guide and (fishing or CanFish()) and not OtherOpen())
         and not (F.BarBusy and F.BarBusy() and not fishing) or false
     if not want then
         guide.goal = 0
@@ -270,6 +303,7 @@ F.Watcher("fishing guide", 0.1, function()
         guide:SetWidth(18 + 40 + 10 + text:GetStringWidth() + 70)
         since = GetTime()
     end
-    guide.goal = (not fishing and GetTime() - since < BRIGHT) and 1 or QUIET_ALPHA
+    -- (the camera edit's at full: what it does is all there is to read)
+    guide.goal = (editing or not fishing and GetTime() - since < BRIGHT) and 1 or QUIET_ALPHA
     guide:Show()
 end)
