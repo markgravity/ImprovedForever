@@ -21,6 +21,7 @@ ICONS = {
     "Icon Auction": ("ic_mod_auction", "Auction"),
     "Icon Chat": ("ic_mod_chat", "Chat"),
     "Icon Controller": ("ic_mod_controller", "Controller"),
+    "Icon Fishing": ("ic_mod_fishing", "Fishing"),
     "Icon Gather": ("ic_mod_gather", "Gather"),
     "Icon Interface": ("ic_mod_interface", "Interface"),
     "Icon Journal": ("ic_mod_journal", "Journal"),

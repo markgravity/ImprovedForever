@@ -135,39 +135,14 @@ local function Escape(message)
     for _, fn in ipairs(escapers) do pcall(fn, kind) end
 end
 
--- Probe: the events around a cast, a catch and a miss, in IF.db.fishingLog
--- (a fresh log each session, written on /reload)
-local logStarted
-local function Log(text)
-    if not IF.db then return end
-    if not logStarted then
-        logStarted = true
-        IF.db.fishingLog = { date("%H:%M:%S") }
-    end
-    local log = IF.db.fishingLog
-    if #log < 300 then log[#log + 1] = ("%.2f %s"):format(GetTime() % 1000, text) end
-end
-local function Shown(v)
-    if issecretvalue and issecretvalue(v) then return "<hidden>" end
-    return tostring(v)
-end
-
 local events = CreateFrame("Frame")
 events:RegisterEvent("LOOT_OPENED")
 events:RegisterEvent("LOOT_READY")
 events:RegisterEvent("LOOT_CLOSED")
 events:RegisterUnitEvent("UNIT_SPELLCAST_CHANNEL_START", "player")
-events:RegisterUnitEvent("UNIT_SPELLCAST_CHANNEL_STOP", "player")
-events:RegisterUnitEvent("UNIT_SPELLCAST_INTERRUPTED", "player")
 events:RegisterEvent("UI_ERROR_MESSAGE")
 events:RegisterEvent("UI_INFO_MESSAGE")
-events:RegisterUnitEvent("UNIT_SPELLCAST_FAILED", "player")
-events:RegisterUnitEvent("UNIT_SPELLCAST_FAILED_QUIET", "player")
 events:SetScript("OnEvent", function(_, event, a1, a2, spellID)
-    if session and session.active then
-        local fishing = IsFishingLoot and IsFishingLoot()
-        Log(table.concat({ event, Shown(a1), Shown(a2), Shown(spellID), "fishingLoot=" .. tostring(fishing) }, " "))
-    end
     if event == "UI_ERROR_MESSAGE" or event == "UI_INFO_MESSAGE" then
         Escape(a2)
         Escape(a1)
@@ -189,12 +164,13 @@ end)
 -- (the error line's own lines: whatever event brings them)
 if UIErrorsFrame and hooksecurefunc then
     hooksecurefunc(UIErrorsFrame, "AddMessage", function(_, message)
-        if session and session.active then Log("UIErrorsFrame " .. Shown(message)) end
         Escape(message)
     end)
 end
 
 IF.OnLogin(function()
+    -- (the event probe's log, gone with it)
+    if IF.db then IF.db.fishingLog = nil end
     session = IF.charDB and IF.charDB.fishingSession or nil
     if session then session.active = false end
     loaded = true

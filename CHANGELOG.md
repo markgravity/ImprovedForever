@@ -1,5 +1,59 @@
 # Changelog
 
+## Fishing 0.1.0
+
+- New module: **fishing from the controller**. With a pole in hand, tap R2 twice (or double right-click)
+  to start fishing; R2 casts, R2 twice puts your best lure on; Circle or Esc stops. A guide line top left
+  shows the buttons.
+- Each cast is a scene of its own: the HUD steps back, the camera comes in over your shoulder, the bobber
+  flies out on its line, the fish of that water swim round it, and a catch or a miss plays out on the bar.
+- The session's catches hang on a rope stringer under the minimap; the chat sits beside it, faint until
+  something new is said; your fishing skill runs along the bottom edge.
+- **Fish Collection** (D-pad up, a key, or the Improved Forever wheel): every fish and item you've caught,
+  when and where first, sorted by zone level, with a filter; Cross opens its Wiki page. A cinematic
+  greets each fish caught for the first time.
+- Triangle (or Alt + F) frames the fishing camera: distance, left / right and height.
+- Catches are looted at once in fishing mode; the Wiki shows where each fish can be fished.
+
+## Core 0.10.0
+
+- What fishing needs: the fishing data (what each water holds, from Classic's loot and Forever's own
+  items and zones), shared by the Fishing module and the Wiki.
+- Our windows (Wiki, Fish Collection, Destroy) can go on a button, a touchpad corner or a wheel.
+- Dropdown menus in the game's style, books with tabs, and side tabs with their L1 / R1 glyphs.
+- Support for the Interface, Minimap (formerly Gather) and Party modules.
+
+## Wiki 0.8.0
+
+- **Search**: find any item of Forever by name, with filters.
+- An item that can be fished shows its **fishing waters**: where, how likely, the pools.
+- The Wiki opens on its search from the new Improved Forever wheel, a button or a corner.
+
+## Wheel 0.9.0
+
+- New built-in wheel, **Improved Forever**: fills itself with our windows you have (this settings
+  panel, the Journal, the Wiki, the Fish Collection, the Destroy panel).
+- Consumables show their stat values under each slot's icon.
+- The recent action slot sits beside the gamepad diamonds of the Interface module.
+
+## Junk 0.7.2
+
+- The Destroy panel opens from a wheel's slot, a button or a touchpad corner too.
+
+## Map 0.7.0
+
+- The peek map can be moved and zoomed while held, and shows quest names.
+
+## QuestTracker 0.6.3
+
+- The quest focus stays where it was after the tracker reorders its quests.
+
+## Minimap 0.7.0
+
+- **Gather is now Minimap** (your settings come along; remove the old Gather folder if the app doesn't).
+- Quest and objective labels in the minimap's own style, fixed to the map, kept apart from each other.
+- Labels no longer overlap, whatever their kind; Forever's herb variants and quest objects are named.
+
 ## Core 0.9.0
 
 - **Touchpad**: new default actions, and the ones that need a module wait until you're in the world.

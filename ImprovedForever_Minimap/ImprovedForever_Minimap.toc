@@ -2,7 +2,7 @@
 ## Title: Improved Forever: Minimap
 ## Notes: Names beside the minimap's dots: herbs, ore, quests, NPCs.
 ## Author: markg
-## Version: 0.6.3
+## Version: 0.7.0
 ## X-Website: https://github.com/markgravity/ImprovedForever
 ## X-License: MIT
 ## X-Curse-Project-ID: 1736863

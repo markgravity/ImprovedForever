@@ -36,6 +36,7 @@ the core, **Improved Forever**:
 | `ImprovedForever_Junk` | Finds and marks junk, sells it with the vendor's Sell All Junk, destroys it from the bags or the loot window. Formerly Destroy. |
 | `ImprovedForever_Wiki` | Everything about an item. |
 | `ImprovedForever_Journal` | A diary of your days, read as a book. |
+| `ImprovedForever_Fishing` | Fishing from the controller: fishing mode, a cast bar of its own, the session's stringer, the Fish Collection. |
 | `ImprovedForever_Interface` | The game's HUD rearranged: the target's health across the top, yours bottom left in the same look, your pet and party as cards on the experience line, the gamepad bar as Hogwarts Legacy's spell diamonds bottom right, the chat as just its lines until used. |
 | `ImprovedForever_QuestTracker` | The objective tracker, rebuilt as the game's own: sorted quests (zone, level, title, distance, completed), an objective complete sound, full controller support. Formerly Improved Quest Tracker. |
 
@@ -60,6 +61,11 @@ the core, **Improved Forever**:
   it, who sells it, the recipes that make or use it, its quests and auction prices. Drops, vendors and
   quests come from [QuestieDB](https://github.com/Questie/QuestieDB)'s data: the addon when installed, else
   a copy that ships with the core.
+- **Fishing**: with a pole in hand, R2 twice (or a double right-click) starts fishing mode: R2 casts, R2
+  twice puts your best lure on, Circle or Esc stops. Each cast is its own scene (the HUD steps back, the
+  camera comes in, the fish of that water swim round your bobber), the catches hang on a stringer under
+  the minimap, and the **Fish Collection** (D-pad up) keeps every fish you've caught, with a cinematic
+  for each new one. Triangle frames the fishing camera.
 - **Journal**: a diary of each day you play, per character: the lands you passed through, the quests you
   finished, your fights and falls, what you looted, earned and made, written in your own words. Read it in
   a book like the Wiki's (`/if journal`, a key binding or a wheel); with the Wiki, a quest, creature or item
