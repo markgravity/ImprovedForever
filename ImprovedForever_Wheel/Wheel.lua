@@ -5,8 +5,9 @@ local IF = ImprovedForever
 
 IF.AddModule({ key = "wheel", label = "Wheels", icon = IF.TEX .. "ic_mod_wheel", addon = ... })
 
-IF.RINGS = { "native", "quest", "consumables", "emotes", "group" }
-IF.RING_LABELS = { native = "Native (Look Here)", quest = "Quest Items", consumables = "Consumables", emotes = "Emotes", group = "Group" }
+IF.RINGS = { "native", "quest", "consumables", "emotes", "group", "panels" }
+IF.RING_LABELS = { native = "Native (Look Here)", quest = "Quest Items", consumables = "Consumables", emotes = "Emotes",
+    group = "Group", panels = "Improved Forever" }
 
 local DEFAULT_COMBOS = { R3 = "native", L1 = "quest", L2 = "emotes", R1 = "consumables", R2 = "native" }
 

@@ -451,6 +451,19 @@ function Search:filterEntries()
     return entries
 end
 
+-- The Wiki opened on its search, from nothing (a wheel's slot, a press, a
+-- corner: its button, Actions.lua); open, closed
+function LB.ToggleSearch()
+    local book = LB.book
+    if book:IsShown() then return book:Close() end
+    if IF.InCombat() then return end
+    local p = setmetatable({ tab = "notes", views = {} }, Search)
+    p:typed(LB.lastSearch or "")
+    LB.origin = nil
+    book:Open(p, {})
+end
+IF.Actions.PressButton("ImprovedForeverWikiToggle", function() LB.ToggleSearch() end)
+
 -- Triangle on a page of the Wiki: the search, what was typed last in it
 function LB.Search()
     local book = LB.book

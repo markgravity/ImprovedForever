@@ -1192,6 +1192,8 @@ local function OpenByHand()
 end
 
 IF.AddCommand("destroy", OpenByHand, ": open or close the Destroy panel")
+-- (its button: a wheel's slot, a press, a corner opens it: Actions.lua)
+IF.Actions.PressButton("ImprovedForeverDestroyToggle", OpenByHand)
 
 -- Its binding, on the Bindings tab (Binds.lua)
 local B = IF.Binds

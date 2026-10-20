@@ -19,8 +19,9 @@ local ITEMS = {
         key = "guide", group = "fishing", label = "Start / stop guide",
         tip = "A fishing pole in hand doesn't start fishing: a line on the screen says how. R2 twice, or a "
             .. "double right-click on the world, starts it (R2 then casts, R2 twice puts a lure on); Circle "
-            .. "or Esc stops it, when no window is open (else they close the window). Off: no line, the "
-            .. "presses still work.",
+            .. "or Esc stops it, D-pad up (or Up) opens the Fish Collection, Triangle (or Alt + F) frames the "
+            .. "camera, when no window is open (else they're the window's). Off: no line, the presses still "
+            .. "work.",
     }, Toggle("guide", "Start / stop guide", function() end)),
     Item({
         key = "bar", group = "fishing", label = "Fishing bar",
@@ -65,7 +66,7 @@ local ITEMS = {
         tip = "With the fishing view: the camera at your fishing distance, over your shoulder and pitched "
             .. "down, so you stand low on the left (the game's ActionCam settings: the game asks once to "
             .. "allow them, Accept). Your camera comes back when you stop fishing. To frame it: in fishing "
-            .. "mode, Triangle (or Alt + F; the Bindings tab, Misc) and move it as the line top left says.",
+            .. "mode, Triangle (or Alt + F) and move it as the line top left says.",
     }, Toggle("camera", "Fishing camera", function() F.ApplyView() end)),
     Item({
         key = "chat", group = "view", label = "Fishing chat",

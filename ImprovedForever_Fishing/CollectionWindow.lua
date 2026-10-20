@@ -572,6 +572,8 @@ function B.Toggle()
     if win:IsShown() then return win:Hide() end
     B.Open()
 end
+-- (its button: a wheel's slot, a press, a corner opens it: Actions.lua)
+IF.Actions.PressButton("ImprovedForeverFishCollectionToggle", function() B.Toggle() end)
 
 -- (the collection grew while it's open)
 F.OnCatch(function() if win:IsShown() then view:Render() end end)

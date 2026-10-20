@@ -1,7 +1,6 @@
 -- The fishing camera framed in game: in fishing mode (the fishing view and
--- its camera on, nothing else open), its press starts the camera edit:
--- Triangle (the controller's, set on the Bindings tab, Misc) or Alt-F (the
--- keyboard's). In it:
+-- its camera on, nothing else open), Triangle or Alt-F starts the camera
+-- edit (Mode.lua's presses: F.CameraStart). In it:
 --   the controller: L2 / R2 held bring the camera in / out, L1 / R1 held
 --     move you left / right on the screen, the D-pad up / down lower /
 --     raise you; Cross keeps, Circle leaves;
@@ -13,20 +12,17 @@
 -- (View.lua: settings and distance, as DialogueUI frames its scenes; the
 -- camera's turn isn't kept). Left: the kept one back. A fight ends it, the
 -- kept one back.
--- Its controller press is watched, not taken (Triangle is a crossbar press
--- of the game's, Mode.lua); in the edit the presses it uses are bound to a
--- button of ours doing nothing (their own actions don't run: the crossbar's,
--- walking), read by IsKeyDown; keep and leave act at their release (so the
--- release isn't the game's).
+-- In the edit the presses it uses are bound to a button of ours doing
+-- nothing (their own actions don't run: the crossbar's, walking), read by
+-- IsKeyDown; keep and leave act at their release (so the release isn't the
+-- game's).
 local IF = ImprovedForever
 local F = IF.Fishing
 
-local DEFAULT_KEY = "PAD4"
 local PAD_KEYS = { "PADLTRIGGER", "PADRTRIGGER", "PADLSHOULDER", "PADRSHOULDER", "PADDUP", "PADDDOWN", "PAD1", "PAD2",
     "PAD3", "PAD4", "PADDLEFT", "PADDRIGHT" }
 local KEYBOARD_KEYS = { "A", "D", "W", "S", "LEFT", "RIGHT", "UP", "DOWN", "ENTER" }
 local PREFIXES = { "", "SHIFT-", "CTRL-", "ALT-", "CTRL-SHIFT-", "ALT-SHIFT-", "ALT-CTRL-", "ALT-CTRL-SHIFT-" }
-local COMBO = { "PADLTRIGGER", "PADLSHOULDER", "PADRSHOULDER", "PADRTRIGGER" }
 -- (how fast, held: the distance in yards a second, the others a second)
 local ZOOM_RATE, SHOULDER_RATE, PITCH_RATE = 4, 1.5, 0.2
 
@@ -42,20 +38,6 @@ local function Usable()
         and not IF.InCombat() or false
 end
 F.CameraEditUsable = Usable
-
--- Its controller press: a button, or one held + one pressed ("PADLSHOULDER+PAD4")
-function F.CameraKey()
-    if not IF.db then return DEFAULT_KEY end
-    local key = F.Settings().cameraKey
-    if key == false then return nil end
-    return key or DEFAULT_KEY
-end
-
-local function Parts(spec)
-    local held, pressed = spec:match("^(.-)%+(.+)$")
-    if held then return held, pressed end
-    return nil, spec
-end
 
 ---------------------------------------------------------------------------
 -- The presses: bound to nothing while editing (their own actions kept from
@@ -126,13 +108,6 @@ local function Clamp(key, value)
     return math.max(limit[1], math.min(limit[2], value))
 end
 
-local function ComboHeld(except)
-    for _, key in ipairs(COMBO) do
-        if key ~= except and IsKeyDown(key) then return true end
-    end
-    return false
-end
-
 local function Down(...)
     for i = 1, select("#", ...) do
         if IsKeyDown((select(i, ...))) then return 1 end
@@ -148,24 +123,9 @@ local function Edge(key)
     return down and not before, not down and before, down
 end
 
-local start = {}
 local watch = CreateFrame("Frame")
 watch:SetScript("OnUpdate", function(_, elapsed)
-    if not (IF.db and IsKeyDown) then return end
-    if not editing then
-        -- (its press alone (or with its held one), begun with nothing else
-        -- open: on its release)
-        local key = F.CameraKey()
-        if not key then return end
-        local held, pressed = Parts(key)
-        local down, up = Edge(pressed)
-        if down then
-            start.ours = Usable() and F.NothingOpen and F.NothingOpen()
-                and (held and IsKeyDown(held) or (not held and not ComboHeld(pressed))) or false
-        end
-        if up and start.ours then Start() end
-        return
-    end
+    if not (IF.db and IsKeyDown and editing) then return end
     if not Usable() then return Stop(false) end
     -- (keep: Cross or Enter; leave: Circle (Esc: its binding): at their release)
     local _, keepPad = Edge("PAD1")
@@ -207,30 +167,7 @@ events:SetScript("OnEvent", function()
     if editing then Stop(false) end
 end)
 
----------------------------------------------------------------------------
--- Its binding, on the Bindings tab (Misc): the controller's press, watched;
--- the keyboard's, a key (Binds.lua)
----------------------------------------------------------------------------
-local B = IF.Binds
-local def = B.Add({
-    id = "fishcamera", label = "Fishing camera", group = "Other", tab = "fishing",
-    icon = IF.TEX .. "ic_mod_fishing", context = "world", order = 37,
-    desc = "In fishing mode: frame the fishing camera",
-    tip = "In fishing mode, nothing else open: the camera edit. The controller: L2 / R2 closer / further, "
-        .. "L1 / R1 left / right, the D-pad lower / higher, Cross keeps, Circle leaves. The keyboard: the "
-        .. "mouse wheel closer / further, A / D left / right, W / S lower / higher, Enter keeps, Esc leaves. "
-        .. "Watched only: the controller's buttons keep their own actions too.",
-    accepts = B.NotDouble,
-    specs = function() return B.One(F.CameraKey()) end,
-    set = function(spec) F.Settings().cameraKey = spec or false end,
-    run = function(down)
-        if down and not editing and F.NothingOpen and F.NothingOpen() then Start() end
-    end,
-    defaultKey = "ALT-F",
-})
-
--- Its keyboard key's name ("Alt + F"), or nil
-function F.CameraKeyText()
-    local key = B.KeyBind and B.KeyBind(def)
-    return key and B.KeyText(key) or nil
+-- The camera edit begun (Mode.lua's press), when it can be
+function F.CameraStart()
+    if F.NothingOpen and F.NothingOpen() then Start() end
 end

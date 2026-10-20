@@ -131,6 +131,14 @@ local WINDOWS = {
         macroIcon = "Interface\\Icons\\INV_Misc_Book_09", buttons = { "ImprovedForeverJournalToggle" } },
     { key = "icmenu", label = "Improved Forever panel", ours = true, desc = "Opens this settings panel", icon = IF.TEX .. "ic_addon",
         macroIcon = "Interface\\Icons\\INV_Misc_Gear_01", buttons = { "ImprovedForeverMenuToggle" } },
+    -- (other modules' windows: each there with its module)
+    { key = "wiki", label = "Wiki", ours = true, desc = "Opens the Wiki on its search", icon = IF.TEX .. "ic_mod_wiki",
+        macroIcon = "Interface\\Icons\\INV_Misc_Book_09", buttons = { "ImprovedForeverWikiToggle" } },
+    { key = "fishcollection", label = "Fish Collection", ours = true, desc = "Opens the Fish Collection",
+        icon = IF.TEX .. "ic_mod_fishing", macroIcon = "Interface\\Icons\\Trade_Fishing",
+        buttons = { "ImprovedForeverFishCollectionToggle" } },
+    { key = "destroy", label = "Destroy", ours = true, desc = "Opens the Destroy panel", icon = IF.TEX .. "ic_mod_destroy",
+        macroIcon = "Interface\\Icons\\INV_Misc_Bag_08", buttons = { "ImprovedForeverDestroyToggle" } },
     -- (its press runs /reload itself: a /click to a button of ours is
     -- lost on key-down presses, the button answering only its release)
     { key = "reload", label = "Reload", ours = true, desc = "Reloads the interface (/reload)", macro = "/reload",

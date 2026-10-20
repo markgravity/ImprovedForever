@@ -315,7 +315,8 @@ end)
 -- in the game's Key Bindings, Bindings.xml) that opens it, or closes it if
 -- it is already up. Any key or pad button the player binds works, in combat
 -- too.
-IF.WHEEL_BINDING_KEYS = { "quest", "consumables", "emotes", "group", "my1", "my2", "my3", "my4", "my5", "my6", "my7", "my8" }
+IF.WHEEL_BINDING_KEYS = { "quest", "consumables", "emotes", "group", "panels", "my1", "my2", "my3", "my4", "my5", "my6",
+    "my7", "my8" }
 -- (a name kept: Buffs gave its place to Quest Items, and a key or crossbar
 -- slot bound to its button opens that now)
 local RENAMED = { buffs = "quest" }

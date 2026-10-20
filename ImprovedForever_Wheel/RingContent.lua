@@ -241,8 +241,27 @@ end
 
 IF.BuildConsumables = BuildConsumables
 
+-- Improved Forever's own windows: each one whose module is here (its
+-- button made: Actions.lua), opened by a /click of it
+local PANELS = { "icmenu", "journal", "wiki", "fishcollection", "destroy" }
+local function BuildPanels()
+    local AC = IF.Actions
+    local here = {}
+    for _, key in ipairs(AC.Windows()) do here[key] = true end
+    local entries = {}
+    for _, key in ipairs(PANELS) do
+        local macro = here[key] and AC.Macro(key)
+        if macro then
+            entries[#entries + 1] = { label = AC.Label(key), icon = AC.Icon(key), type = "macro", value = macro,
+                action = key }
+        end
+    end
+    return entries
+end
+
 -- (Quest items: WheelKinds.lua adds its own)
 IF.RingBuilders = {
     consumables = BuildConsumables,
     emotes = BuildEmotes,
+    panels = BuildPanels,
 }

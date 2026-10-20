@@ -4,21 +4,21 @@
 -- the camera comes in (View.lua), the session runs (Session.lua), auto
 -- loot is on (AutoLoot.lua); the line then says how to stop: Circle or
 -- Esc. Out of it by those, the pole put away, a fight, or dying.
--- Esc and Circle stop it only when nothing else is open (a window, the
--- bags, a dialog, one of ours, the game's pad focus on a window): else
--- they're that thing's, to close it. Esc: an override binding of ours,
--- only then (cleared the moment something opens). Circle and R2's double
--- press: watched, not taken (they're the game's crossbar presses: never
--- bound over, Native.lua), the press counted only if it began with nothing
--- open; R2 a tap each (held, it pages the crossbar). Kept per character
--- through a /reload (IF.charDB.fishingMode).
+-- In it, nothing else open (a window, the bags, a dialog, one of ours, the
+-- game's pad focus on a window), its presses are ours: Circle / Esc stop
+-- it, D-pad up / Up the Fish Collection, Triangle / Alt-F the camera edit
+-- (override bindings, only then: cleared the moment something opens, the
+-- press then that thing's, to close it). R2's double press to start:
+-- watched, not taken (out of the mode it's the game's crossbar modifier),
+-- the press counted only if it began with nothing open, a tap each (held,
+-- it pages the crossbar). Kept per character through a /reload
+-- (IF.charDB.fishingMode).
 local IF = ImprovedForever
 local F = IF.Fishing
 
 local DOUBLE, TAP, STILL = 0.45, 0.3, 8     -- (a double press: the second within DOUBLE; each under TAP; the mouse moved under STILL px)
 local QUIET = 0.3                           -- (something closed lately: its press, not ours)
 local ENTER_KEY, EXIT_KEY = "PADRTRIGGER", "PAD2"
-local COMBO = { "PADLTRIGGER", "PADLSHOULDER", "PADRSHOULDER", "PADRTRIGGER" }  -- (held with Circle: another press)
 
 local on = false
 local listeners = {}
@@ -79,25 +79,47 @@ local function OtherOpen()
 end
 
 ---------------------------------------------------------------------------
--- Esc: ours only while in the mode with nothing else open
+-- In the mode, nothing else open: its presses, ours (override bindings,
+-- cleared the moment something opens; each acting at its release, so the
+-- release isn't the game's): Circle / Esc stop, D-pad up / Up the Fish
+-- Collection (CollectionWindow.lua), Triangle / Alt-F the camera edit
+-- (CameraEdit.lua)
 ---------------------------------------------------------------------------
 local owner = CreateFrame("Frame", "ImprovedForeverFishingModeBinds")
-local stop = CreateFrame("Button", "ImprovedForeverFishingStop", UIParent)
-stop:SetSize(1, 1)
-stop:SetPoint("TOPLEFT", UIParent, "TOPLEFT", -20, 20)
-stop:RegisterForClicks("AnyDown")
-stop:SetScript("OnClick", function() Set(false) end)
+local PRESSES = {
+    { keys = { "PAD2", "ESCAPE" }, run = function() Set(false) end },
+    { keys = { "PADDUP", "UP" }, run = function() if F.Book and F.Book.Toggle then F.Book.Toggle() end end },
+    { keys = { "PAD4", "ALT-F" }, run = function() if F.CameraStart then F.CameraStart() end end },
+}
+for i, press in ipairs(PRESSES) do
+    local b = CreateFrame("Button", "ImprovedForeverFishingPress" .. i, UIParent)
+    b:SetSize(1, 1)
+    b:SetPoint("TOPLEFT", UIParent, "TOPLEFT", -20, 20)
+    b:RegisterForClicks("AnyDown", "AnyUp")
+    b:SetScript("OnClick", function(self, _, down)
+        if down then
+            self.pressed = true
+        elseif self.pressed then
+            self.pressed = false
+            press.run()
+        end
+    end)
+    press.button = b:GetName()
+end
 
-local escBound = false
-local function BindEscape(want)
-    if want == escBound or InCombatLockdown() then return end
-    escBound = want
+local bound = false
+local function BindPresses(want)
+    if want == bound or InCombatLockdown() then return end
+    bound = want
     ClearOverrideBindings(owner)
-    if want then SetOverrideBindingClick(owner, false, "ESCAPE", stop:GetName()) end
+    if not want then return end
+    for _, press in ipairs(PRESSES) do
+        for _, key in ipairs(press.keys) do SetOverrideBindingClick(owner, true, key, press.button) end
+    end
 end
 
 ---------------------------------------------------------------------------
--- The presses watched: R2 twice, a right-click twice, Circle
+-- The presses watched: R2 twice, a right-click twice
 ---------------------------------------------------------------------------
 -- (a double tap: down / up edges in, true on the second's release)
 local function Tapper()
@@ -131,7 +153,6 @@ local lastFree = false
 function F.NothingOpen()
     return lastFree
 end
-local circle = { down = false }
 local openAt = -math.huge
 
 local function OverWorld()
@@ -139,13 +160,6 @@ local function OverWorld()
     local f = foci and foci[1]
     if not foci and GetMouseFocus then f = GetMouseFocus() end
     return f == nil or f == WorldFrame
-end
-
-local function ComboHeld()
-    for _, key in ipairs(COMBO) do
-        if IsKeyDown(key) then return true end
-    end
-    return false
 end
 
 local watch = CreateFrame("Frame")
@@ -157,19 +171,11 @@ watch:SetScript("OnUpdate", function()
     if other then openAt = now end
     local free = not other and now - openAt > QUIET
     lastFree = free
-    -- (the camera edit has its own Esc and Circle, CameraEdit.lua)
+    -- (the camera edit has its own presses, CameraEdit.lua)
     local editing = F.CameraEditing and F.CameraEditing()
-    BindEscape(on and free and not editing)
+    BindPresses(on and free and not editing)
     if not IsKeyDown then return end
     if on then
-        -- (Circle alone, begun with nothing open: on its release)
-        local down = IsKeyDown(EXIT_KEY)
-        if down and not circle.down then
-            circle.ours = free and not ComboHeld() and not editing
-        elseif not down and circle.down and circle.ours and free then
-            Set(false)
-        end
-        circle.down = down
         r2.down, r2.taps, right.down, right.taps = IsKeyDown(ENTER_KEY), 0, false, 0
     else
         local can = free and CanFish()
@@ -177,7 +183,6 @@ watch:SetScript("OnUpdate", function()
         local x, y = GetCursorPosition()
         local clicked = IsMouseButtonDown and IsMouseButtonDown("RightButton") or false
         if Tap(right, clicked, now, can and OverWorld(), x, y) then Set(true) end
-        circle.down = IsKeyDown(EXIT_KEY)
     end
 end)
 
@@ -264,15 +269,12 @@ local function Line(fishing)
         return MouseRight() .. "Double right-click  " .. GOLD .. "Start fishing|r"
     end
     if pad then
-        local key = camera and F.CameraKey and F.CameraKey()
-        local held, pressed = key and key:match("^(.-)%+(.+)$")
-        local glyphs = key and (held and (Glyph(held) .. Glyph(pressed)) or Glyph(key))
         return Glyph(ENTER_KEY) .. " Cast     " .. Glyph(ENTER_KEY) .. Glyph(ENTER_KEY) .. " Lure     "
-            .. (glyphs and (glyphs .. " Camera     ") or "")
+            .. Glyph("PADDUP") .. " Collection     " .. (camera and (Glyph("PAD4") .. " Camera     ") or "")
             .. Glyph(EXIT_KEY) .. " " .. GOLD .. "Stop fishing|r"
     end
-    local key = camera and F.CameraKeyText and F.CameraKeyText()
-    return (key and (Key(key) .. "  Camera     ") or "") .. Key("Esc") .. "  " .. GOLD .. "Stop fishing|r"
+    return Key("Up") .. "  Collection     " .. (camera and (Key("Alt + F") .. "  Camera     ") or "")
+        .. Key("Esc") .. "  " .. GOLD .. "Stop fishing|r"
 end
 
 -- (start: bright a while, then quieter; in it: quiet)
