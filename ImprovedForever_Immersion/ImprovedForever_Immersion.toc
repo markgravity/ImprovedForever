@@ -3,11 +3,13 @@
 ## Notes: The game's HUD made immersive: the target's health and casts on top, your frame bottom left, your pet and party as cards on the experience line, the gamepad bar as Hogwarts Legacy's spell diamonds, NPCs talking as subtitles, the chat as just its lines until used, and a cinematic fishing view.
 ## Author: markg
 ## Version: 0.1.0
+## X-Curse-Project-ID: 1755571
 ## X-Website: https://github.com/markgravity/ImprovedForever
 ## X-License: MIT
 ## IconTexture: Interface\AddOns\ImprovedForever\textures\ic_mod_immersion
 ## Group: ImprovedForever
-## Dependencies: ImprovedForever
+## Dependencies: ImprovedForever, Spoken
+## OptionalDeps: Spoken_Quests
 
 Module.lua
 UnitFrames.lua

@@ -1,5 +1,16 @@
 # Changelog
 
+## Immersion 0.1.0
+
+- New module (formerly Interface): **the HUD made for the controller and the scene**. Needs *Spoken*.
+- The gamepad bar as spell diamonds laid out like your buttons, with cooldown rings and beats, cast progress
+  round each diamond, and small diamonds for your bag slots, a hunter's ammo and a warlock's soul shards.
+- Portrait cards for you, your pet and your party on the experience line; your health as a bar over it.
+- The target's health and cast across the top; your cast as a long line over the cards, with a crosshair
+  diamond that greys out of range; your buffs and cooldowns in rows along the bottom; the chat as just its lines.
+- NPCs talk as subtitles, following Spoken's voice, answered from the controller; quest rewards as round
+  icons with their comparison beside the panel, and Complete waits until one is picked.
+
 ## Fishing 0.1.0
 
 - New module: **fishing from the controller**. With a pole in hand, tap R2 twice (or double right-click)

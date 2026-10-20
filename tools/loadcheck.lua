@@ -288,7 +288,9 @@ local function loadAddon(folder, loaded, wanted)
     if not toc then return false end
     loaded[folder] = "loading"
     for _, d in ipairs(toc.deps) do
-        if not wanted[d] or not loadAddon(d, loaded, wanted) then
+        -- (another author's addon (Spoken): not in this repo, taken as
+        -- there, the API stub standing in for it)
+        if readToc(d) and (not wanted[d] or not loadAddon(d, loaded, wanted)) then
             print("  " .. folder .. ": missing dependency " .. d .. " (not loaded)")
             loaded[folder] = nil
             return false
