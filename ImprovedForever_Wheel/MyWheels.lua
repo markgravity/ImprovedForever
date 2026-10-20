@@ -16,9 +16,9 @@ MW.MAX = 8
 MW.POSITIONS = { "Top", "Top right", "Right", "Bottom right", "Bottom", "Bottom left", "Left", "Top left" }
 
 -- The built-in rings; the wheels are added after them
-local BUILT_IN = { "native", "quest", "consumables", "emotes", "group", "panels" }
+local BUILT_IN = { "native", "quest", "consumables", "emotes", "group", "camping", "panels" }
 -- The built-in wheels, shown before the player's own
-MW.BUILT_IN_WHEELS = { "quest", "consumables", "emotes", "group", "panels" }
+MW.BUILT_IN_WHEELS = { "quest", "consumables", "emotes", "group", "camping", "panels" }
 
 ---------------------------------------------------------------------------
 -- The wheels: charDB.wheels = { { id = 1-8, name, kind (nil: "custom"),
@@ -231,6 +231,10 @@ function MW.Wheels(all)
                 .. " target. Usable in combat; the group updates after a fight.",
             reset = G.ResetSpells, resetLabel = "Default spells" }
     end
+    wheels[#wheels + 1] = { key = "camping", label = IF.RING_LABELS.camping, builtin = true, max = IF.MAX_SLOTS,
+        info = "Fills itself with the camping gear: the campfire kits, Camp Tent, Camp Chair, Fish Bowl, Fishing Rack"
+            .. " and Hut, Incense Candle, First Aid Kit and Cookie's Feast in your bags, and any you know how to make. R2 uses one; Square crafts it (out of combat). Nothing to"
+            .. " set here but its hotkey." }
     wheels[#wheels + 1] = { key = "panels", label = IF.RING_LABELS.panels, builtin = true, max = IF.MAX_SLOTS,
         info = "Fills itself with Improved Forever's own windows, each one whose module you have: this"
             .. " settings panel, the Journal, the Wiki, the Fish Collection, the Destroy panel. Nothing to set"

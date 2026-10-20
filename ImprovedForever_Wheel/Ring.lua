@@ -315,7 +315,7 @@ end)
 -- in the game's Key Bindings, Bindings.xml) that opens it, or closes it if
 -- it is already up. Any key or pad button the player binds works, in combat
 -- too.
-IF.WHEEL_BINDING_KEYS = { "quest", "consumables", "emotes", "group", "panels", "my1", "my2", "my3", "my4", "my5", "my6",
+IF.WHEEL_BINDING_KEYS = { "quest", "consumables", "emotes", "group", "camping", "panels", "my1", "my2", "my3", "my4", "my5", "my6",
     "my7", "my8" }
 -- (a name kept: Buffs gave its place to Quest Items, and a key or crossbar
 -- slot bound to its button opens that now)
@@ -662,10 +662,29 @@ local prompts = ring:CreateFontString(nil, "OVERLAY")
 prompts:SetFont("Fonts\\FRIZQT__.TTF", 12, "")
 prompts:SetShadowOffset(1, -1)
 prompts:SetPoint("TOP", selected, "BOTTOM", 0, -6)
+-- (a craftable slot: what Square makes it from, under its name: have / need)
+local reagentLine = ring:CreateFontString(nil, "OVERLAY")
+reagentLine:SetFont("Fonts\\FRIZQT__.TTF", 11, "")
+reagentLine:SetShadowOffset(1, -1)
+reagentLine:SetPoint("TOP", selected, "BOTTOM", 0, -3)
 -- (pages: a wheel of more than one, D-pad left / right turns them; bind:
 -- the picked slot can go on the crossbar, Square; upDown: what D-pad up /
 -- down changes on the picked slot, "Channel" (a chat phrase), "Spell" (a
 -- group member), or false)
+local function ShowReagents(entry)
+    local parts = {}
+    for _, reagent in ipairs(entry and entry.reagents or {}) do
+        local id, need = reagent[1], reagent[2]
+        local getCount = (C_Item and C_Item.GetItemCount) or GetItemCount
+        local have = getCount and getCount(id) or 0
+        local getName = (C_Item and C_Item.GetItemNameByID) or GetItemInfo
+        local color = have >= need and "ff40ff40" or "ffff5555"
+        parts[#parts + 1] = "|c" .. color .. have .. "/" .. need .. "|r " .. (getName and getName(id) or ("item:" .. id))
+    end
+    reagentLine:SetText(#parts > 0 and table.concat(parts, "   ") or "")
+    prompts:ClearAllPoints()
+    prompts:SetPoint("TOP", selected, "BOTTOM", 0, #parts > 0 and -22 or -6)
+end
 local promptPages, promptBind, promptUpDown
 local function SetPrompts(pages, canBind, upDown)
     if pages ~= nil then promptPages = pages end
@@ -673,7 +692,7 @@ local function SetPrompts(pages, canBind, upDown)
     if upDown ~= nil then promptUpDown = upDown end
     local bindLabel = _G.CONTEXT_ACTION_LABEL_BIND_TO_GAMEPAD_ACTION_BAR or "Bind"
     prompts:SetText(Glyph("RT") .. " Use      "
-        .. (promptBind and (Glyph("X") .. " " .. bindLabel .. "      ") or "")
+        .. (promptBind and (Glyph("X") .. " " .. (promptBind == true and bindLabel or promptBind) .. "      ") or "")
         .. Glyph("B") .. " Close"
         .. (promptPages and ("      " .. Glyph("DPAD_LR") .. " Page") or "")
         .. (promptUpDown and ("      " .. Glyph("DPAD_UD") .. " " .. promptUpDown) or ""))
@@ -846,6 +865,17 @@ local function LabelColor(entry)
     if Pending(entry) then return PENDING end
     local usable = entry.type ~= "item" or ItemCount(entry.value) > 0
     return usable and GOLD or GREY
+end
+
+-- A recipe a slot makes (entry.craft: its spell ID) while Square can craft
+-- it: out of combat, the recipe known; else nil
+local CRAFT_LABEL = "Craft"
+function IF.RingCraftSpell(entry)
+    local spellID = entry and entry.craft
+    if not spellID or IF.InCombat() then return nil end
+    local known = IsPlayerSpell or IsSpellKnown
+    if known and not known(spellID) then return nil end
+    return spellID
 end
 
 -- The action a ring entry goes on the crossbar as ("item:<id>",
@@ -1022,7 +1052,7 @@ local function ShowTooltip(entry)
     local tip = GameTooltip
     local unit = entry and entry.unit
     if unit and not (UnitExists and UnitExists(unit)) then unit = nil end
-    if not (entry and (unit or entry.spellID or entry.type == "item" or entry.tip)) then
+    if not (entry and (unit or entry.spellID or entry.type == "item" or entry.tip or entry.reagents)) then
         if tip:GetOwner() == ring then tip:Hide() end
         return
     end
@@ -1037,6 +1067,8 @@ local function ShowTooltip(entry)
     else
         tip:SetHyperlink(entry.tip or entry.value)
     end
+    -- (an item the game hasn't cached has no text yet: its name at least)
+    if tip:NumLines() == 0 then tip:AddLine(entry.label, 1, 1, 1) end
     tip:Show()
 end
 
@@ -1059,8 +1091,10 @@ local function Highlight(pick)
                 or (entries[pick].where and ("  (" .. entries[pick].where .. ")")) or ""))
         end
         ShowTooltip(entries[pick])
+        ShowReagents(entries[pick])
     else
         highlight:Hide()
+        ShowReagents(nil)
         selected:SetText(#entries == 0 and EmptyText(pageInfo[ring:GetAttribute("ic-active")]) or "")
         ShowTooltip(nil)
     end
@@ -1093,7 +1127,8 @@ ring:SetScript("OnUpdate", function(_, elapsed)
         UpdateUnitSlots()
     end
     -- Square's prompt, while the picked slot can go on the crossbar
-    local canBind = IF.RingBindAction(pick and entries[pick]) ~= nil
+    local picked = pick and entries[pick]
+    local canBind = IF.RingCraftSpell(picked) and CRAFT_LABEL or IF.RingBindAction(picked) ~= nil
     if canBind ~= promptBind then SetPrompts(nil, canBind) end
 end)
 
@@ -1111,6 +1146,13 @@ end
 function IF.RingBindPicked()
     if not ring:IsShown() or IF.InCombat() then return end
     local entries = ringData[ring:GetAttribute("ic-active")] or {}
+    -- (a camping slot: Square crafts it, as the recipe's profession makes it)
+    local craft = IF.RingCraftSpell(highlighted and entries[highlighted])
+    if craft then
+        ring:Hide()
+        IF.CraftRecipe(craft)
+        return
+    end
     local action = IF.RingBindAction(highlighted and entries[highlighted])
     if not action then return end
     ring:Hide()
@@ -1122,6 +1164,7 @@ ring:HookScript("OnShow", function()
 end)
 ring:HookScript("OnHide", function()
     highlighted = nil
+    ShowReagents(nil)
     ShowTooltip(nil)
     SetPrompts(nil, false)
 end)
