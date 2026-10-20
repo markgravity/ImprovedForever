@@ -1,5 +1,5 @@
 -- The fishing skill as a line along the screen's bottom edge, its whole
--- width, while the fishing view is on: the Interface module's experience
+-- width, while the fishing view is on: the Immersion module's experience
 -- line (XPBar.lua) in the water's colour. A dark track in a thin grey
 -- frame, cut in 20 by notches, the fill (the water's blue, lighter at its
 -- top as the game's fills are) to your skill of its most, a lure's bonus

@@ -1,6 +1,6 @@
 -- The fishing bar: each cast of Fishing as a scene on the right of the
 -- screen (the fishing view frames you low on the left, View.lua), in
--- place of the cast bar (the Interface module's cast line, PlayerCast.Claim;
+-- place of the cast bar (the Immersion module's cast line, PlayerCast.Claim;
 -- else the game's, faded).
 --   The cast: from the rod's tip (left) the bobber flies out in an arc to
 --   its spot (right), the line following it; landed, it bobs, rings
@@ -168,7 +168,7 @@ for i = 1, SEGMENTS do
 end
 -- (the time gone, lit along the line from the tip toward the bobber, a
 -- spark at its head)
--- (the time's colour: the bobber's icon's main one (the Interface module's
+-- (the time's colour: the bobber's icon's main one (the Immersion module's
 -- icon colours, PlayerCast.IconColor), lifted a little toward white to
 -- show on the dark water; else a warm gold. SetLitColor)
 local LIT_COLOR = { 1, 0.85, 0.45 }
@@ -1135,7 +1135,7 @@ F.OnEscape(function(kind)
     if On() then F.BarMiss(kind) end
 end)
 
--- (the cast line of the Interface module leaves ours to us; without it,
+-- (the cast line of the Immersion module leaves ours to us; without it,
 -- the game's casting bar faded while ours shows)
 IF.OnLogin(function()
     local PC = IF.Interface and IF.Interface.PlayerCast

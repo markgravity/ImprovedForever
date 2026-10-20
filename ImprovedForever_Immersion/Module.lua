@@ -9,7 +9,7 @@
 -- from it taints); the player moves it there once.
 local IF = ImprovedForever
 
-IF.AddModule({ key = "interface", label = "Interface", icon = IF.TEX .. "ic_mod_interface", addon = ... })
+IF.AddModule({ key = "interface", label = "Immersion", icon = IF.TEX .. "ic_mod_immersion", addon = ... })
 
 local IN = {}
 IF.Interface = IN
@@ -89,7 +89,7 @@ function IN.Watcher(name, every, fn)
         local ok, err = pcall(fn)
         if not ok then
             self:SetScript("OnUpdate", nil)
-            IF.Print("Interface: " .. name .. " stopped after an error: " .. tostring(err))
+            IF.Print("Immersion: " .. name .. " stopped after an error: " .. tostring(err))
         end
     end)
     return f

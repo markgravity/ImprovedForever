@@ -9,7 +9,7 @@
 ## IconTexture: Interface\AddOns\ImprovedForever\textures\ic_mod_fishing
 ## Group: ImprovedForever
 ## Dependencies: ImprovedForever, ImprovedForever_Wiki
-## OptionalDeps: ImprovedForever_Interface, ImprovedForever_Wheel
+## OptionalDeps: ImprovedForever_Immersion, ImprovedForever_Wheel
 
 Module.lua
 Fishing.lua

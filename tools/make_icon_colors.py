@@ -1,4 +1,4 @@
-"""Build IconColors.lua (Interface module): each spell icon's main colour, for
+"""Build IconColors.lua (Immersion module): each spell icon's main colour, for
 the cast line (PlayerCast.lua) to draw a cast in its icon's colour.
 
 The icons are every spell's in Forever's own build (SpellMisc's
@@ -28,7 +28,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import make_library as ml  # noqa: E402
 
 ROOT = Path(__file__).resolve().parent.parent
-OUT = ROOT / "ImprovedForever_Interface" / "IconColors.lua"
+OUT = ROOT / "ImprovedForever_Immersion" / "IconColors.lua"
 CACHE = ROOT / "tools" / "__pycache__" / "icons"
 CASC = "https://wago.tools/api/casc/{}?download"
 

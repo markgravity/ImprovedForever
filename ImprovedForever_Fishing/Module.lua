@@ -24,7 +24,7 @@ local DEFAULTS = {
     guide = true,       -- the line on the screen: how to start fishing, how to stop (Mode.lua)
     skillLine = true,   -- with the fishing view, the fishing skill along the bottom edge (SkillLine.lua)
 }
--- (these were the Interface module's once: moved over, then gone from it)
+-- (these were the Immersion module's once: moved over, then gone from it)
 local MOVED = { fishLoot = "panel", fishCatch = "bar", fishMode = "view", fishCamera = "camera", fishCam = "cam" }
 
 function F.Settings()
@@ -45,7 +45,7 @@ function F.Settings()
     return s
 end
 
--- Edit Mode open (the Interface module's own frames then the game's, to be
+-- Edit Mode open (the Immersion module's own frames then the game's, to be
 -- moved): ours step aside too
 function F.EditMode()
     local UF = IF.Interface and IF.Interface.UnitFrames
@@ -56,7 +56,7 @@ end
 -- A watcher: fn() every `every` seconds. One that errors stops, said once
 -- in chat: an error each tick would flood the game's error handler, whose
 -- popup then runs from our stack and taints the controller's focus (the
--- Interface module's IN.Watcher, for the same reason).
+-- Immersion module's IN.Watcher, for the same reason).
 function F.Watcher(name, every, fn)
     local f = CreateFrame("Frame")
     local since = 0

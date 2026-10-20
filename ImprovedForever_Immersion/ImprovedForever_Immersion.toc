@@ -1,11 +1,11 @@
 ## Interface: 16001, 16002, 16003, 16100, 16101, 16200
-## Title: Improved Forever: Interface
-## Notes: The game's HUD rearranged: the target's health and casts on top, your frame bottom left, your pet and party as cards on the experience line, the experience along the bottom edge, the gamepad bar as Hogwarts Legacy's spell diamonds, the chat as just its lines until used.
+## Title: Improved Forever: Immersion
+## Notes: The game's HUD made immersive: the target's health and casts on top, your frame bottom left, your pet and party as cards on the experience line, the gamepad bar as Hogwarts Legacy's spell diamonds, NPCs talking as subtitles, the chat as just its lines until used, and a cinematic fishing view.
 ## Author: markg
 ## Version: 0.1.0
 ## X-Website: https://github.com/markgravity/ImprovedForever
 ## X-License: MIT
-## IconTexture: Interface\AddOns\ImprovedForever\textures\ic_mod_interface
+## IconTexture: Interface\AddOns\ImprovedForever\textures\ic_mod_immersion
 ## Group: ImprovedForever
 ## Dependencies: ImprovedForever
 

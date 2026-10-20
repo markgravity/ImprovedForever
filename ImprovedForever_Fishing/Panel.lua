@@ -1,6 +1,6 @@
 -- The fishing session as a fish stringer (Session.lua), in the fishing
 -- bar's look (CastBar.lua): while a pole is in hand, down the right of the
--- screen from under the minimap to the bottom (over the Interface module's
+-- screen from under the minimap to the bottom (over the Immersion module's
 -- gamepad bar while it shows; with the fishing view on it's faded, View.lua).
 -- A rope tied on the minimap's rim, hanging the whole way down, bowed, a
 -- wave running down it, its end swinging; on it, one under another in the

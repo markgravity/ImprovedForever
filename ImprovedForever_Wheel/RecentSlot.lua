@@ -47,7 +47,7 @@ label:SetPoint("BOTTOM", slot, "TOP", 0, 4)
 label:SetWidth(110)
 label:SetWordWrap(false)
 
--- The Interface module's spell diamonds shown (ImprovedForever_Interface,
+-- The Immersion module's spell diamonds shown (ImprovedForever_Immersion,
 -- GamepadBar.lua): the slot one of their tiles instead (their look and
 -- effects: cooldown, cast and food rings, GB.Mirror over a stand-in for a
 -- game button), placed left of their D-pad's diamond. Returns their bar's
@@ -344,7 +344,7 @@ slot:SetScript("OnUpdate", function(_, dt)
     if elapsed < 0.05 then return end
     elapsed = 0
     Refresh(false)
-    -- (the Interface module's diamonds shown or not: the look swapped; its
+    -- (the Immersion module's diamonds shown or not: the look swapped; its
     -- tile's effects each update, as theirs)
     local GB = Diamonds()
     if (GB ~= nil) ~= diamond then Refresh(true) end

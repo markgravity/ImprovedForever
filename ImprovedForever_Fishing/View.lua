@@ -1,6 +1,6 @@
 -- Fishing as a scene of its own: in fishing mode (Mode.lua), out of a
 -- fight, the HUD steps back and the camera comes in. Faded
--- (IF.Focus.Fade): the Interface module's gamepad bar, the Wheel module's
+-- (IF.Focus.Fade): the Immersion module's gamepad bar, the Wheel module's
 -- R3 slot, your frame, your pet's and your party's cards, the buffs and
 -- the cooldowns, the experience line, the chat, the objectives. Left: the
 -- health line, the target's bar, the minimap, the session's panel and the
@@ -24,7 +24,7 @@ local FADED = { "ImprovedForeverGamepadBar", "ImprovedForeverRecentSlot", "Impro
     "ImprovedForeverPartyCard3", "ImprovedForeverPartyCard4", "ImprovedForeverPartyCasts",
     "ImprovedForeverBuffList", "ImprovedForeverCooldownTimeline", "ImprovedForeverXPLine",
     "ImprovedForeverChatView", "ImprovedForeverPlayerHealth", "IFObjectiveTrackerFrame" }
--- (without the Interface module, the game's own: its unit frames, its
+-- (without the Immersion module, the game's own: its unit frames, its
 -- gamepad bar, its XP bar, its buffs. With it, it fades these itself, its
 -- own shown over them, and would show one again we'd faded: not twice)
 local NATIVE = { "PlayerFrame", "PetFrame", "TargetFrame", "FocusFrame", "PartyFrame", "CompactPartyFrame",

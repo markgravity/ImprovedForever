@@ -23,7 +23,7 @@ ICONS = {
     "Icon Controller": ("ic_mod_controller", "Controller"),
     "Icon Fishing": ("ic_mod_fishing", "Fishing"),
     "Icon Gather": ("ic_mod_gather", "Gather"),
-    "Icon Interface": ("ic_mod_interface", "Interface"),
+    "Icon Immersion": ("ic_mod_immersion", "Immersion"),
     "Icon Journal": ("ic_mod_journal", "Journal"),
     "Icon Junk": ("ic_mod_junk", "Junk"),
     "Icon Wiki": ("ic_mod_wiki", "Wiki"),

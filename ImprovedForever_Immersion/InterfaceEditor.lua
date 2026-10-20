@@ -183,5 +183,5 @@ local GROUPS = {
     { key = "chat", label = "Chat" },
 }
 
-IF.InterfaceEditor = IF.SettingsPage({ key = "interface", label = "Interface", module = "interface", order = 35 },
+IF.InterfaceEditor = IF.SettingsPage({ key = "interface", label = "Immersion", module = "interface", order = 35 },
     GROUPS, ITEMS)

@@ -24,7 +24,7 @@ local GetRegions = M.GetRegions
 local rmt = getmetatable(probe:CreateTexture())
 local R = (rmt and type(rmt.__index) == "table") and rmt.__index or {}
 
--- Which of several frames showing one unit: the Interface module's cards
+-- Which of several frames showing one unit: the Immersion module's cards
 -- first (the game's party frames are faded under them), then group frames
 -- (by the names LibGetFrame knows), the player / target frames last
 local PREFER = {
@@ -46,7 +46,7 @@ local function Rank(name)
     return 50
 end
 
--- (never reached into: restricted, or ours but the Interface module's
+-- (never reached into: restricted, or ours but the Immersion module's
 -- party and minion cards)
 local function Skipped(frame)
     if IsForbidden and IsForbidden(frame) then return true end

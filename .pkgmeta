@@ -12,7 +12,7 @@ move-folders:
   ImprovedForever/ImprovedForever_Junk: ImprovedForever_Junk
   ImprovedForever/ImprovedForever_Wiki: ImprovedForever_Wiki
   ImprovedForever/ImprovedForever_Journal: ImprovedForever_Journal
-  ImprovedForever/ImprovedForever_Interface: ImprovedForever_Interface
+  ImprovedForever/ImprovedForever_Immersion: ImprovedForever_Immersion
 
 manual-changelog:
   filename: CHANGELOG.md

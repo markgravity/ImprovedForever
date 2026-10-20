@@ -1761,7 +1761,7 @@ ticker:SetScript("OnUpdate", function()
     if not ok then
         ticker:SetScript("OnUpdate", nil)
         Off()
-        IF.Print("Interface: NPC dialog stopped after an error: " .. tostring(err))
+        IF.Print("Immersion: NPC dialog stopped after an error: " .. tostring(err))
     end
 end)
 

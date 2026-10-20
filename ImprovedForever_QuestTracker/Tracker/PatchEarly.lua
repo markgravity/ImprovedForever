@@ -60,8 +60,8 @@ function M:IsInDefaultPosition()
 	return false
 end
 
--- (its bottom kept FLOOR_GAP above the Interface module's spell diamonds,
--- when they're under it: ImprovedForever_Interface's GamepadBar.Rect, in
+-- (its bottom kept FLOOR_GAP above the Immersion module's spell diamonds,
+-- when they're under it: ImprovedForever_Immersion's GamepadBar.Rect, in
 -- screen pixels; the container fits what it has into the height left, as
 -- the game's does)
 local FLOOR_GAP, MIN_HEIGHT = 12, 80

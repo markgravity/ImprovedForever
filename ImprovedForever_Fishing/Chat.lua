@@ -1,6 +1,6 @@
 -- The chat while fishing: the game's lines by the stringer (Panel.lua),
 -- bottom right over its tally, set right: every line barely there, a new
--- one bright for a while, fading back (as the Interface module's chat).
+-- one bright for a while, fading back (as the Immersion module's chat).
 -- Shown with the fishing view (View.lua). Typing: the game's chat in its
 -- own place, ours hidden; the typing done, ours back at once. The game's
 -- whole too with the pad on its window, the mouse on it, Edit Mode (ours
@@ -10,7 +10,7 @@
 -- after BRIGHT seconds. The lines come from the game's chat frames as
 -- they're added (hooksecurefunc, after the game's own AddMessage), the tab
 -- shown in its dock only; they can be secret: only handed on, never read.
--- Without the Interface module the game's chat drawn at 0 meanwhile (its
+-- Without the Immersion module the game's chat drawn at 0 meanwhile (its
 -- lines, tabs, edit box, border: IF.Focus.Fade, an animation of ours; never
 -- the chat window itself, the pad's focus can be on it). With it, its own
 -- chat fading does that.
@@ -118,7 +118,7 @@ local function Place()
 end
 
 ---------------------------------------------------------------------------
--- The game's chat drawn at 0 (without the Interface module)
+-- The game's chat drawn at 0 (without the Immersion module)
 ---------------------------------------------------------------------------
 local BORDER = { "Background", "TopLeftTexture", "BottomLeftTexture", "TopRightTexture", "BottomRightTexture",
     "LeftTexture", "RightTexture", "BottomTexture", "TopTexture" }
