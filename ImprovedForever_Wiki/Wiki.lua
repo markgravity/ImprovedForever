@@ -433,9 +433,47 @@ local GATHER = {
     fish = { icon = ICON .. "Trade_Fishing", line = "Fishing pool" },
 }
 
+-- The waters it's fished up in (the core's FishingData.lua: Classic's
+-- loot, Forever's zones): a line a zone or subzone, its odds and its season,
+-- the player's zone first, then the likeliest
+local function Waters(itemID)
+    local D = IF.FishingData
+    if not (D and D.zones and itemID) then return {} end
+    local here = PlayerArea()
+    local lines = {}
+    local function Read(area, text, zone)
+        for id, chance, event in (text or ""):gmatch("(%d+):([%d%.e%-]+):(%d+)") do
+            if tonumber(id) == itemID then
+                chance, event = tonumber(chance), tonumber(event)
+                local name = ZoneName(area) .. (zone and (", " .. ZoneName(zone)) or "")
+                local season = event ~= 0 and D.events and D.events[event] and D.events[event]:match("^(.-)|")
+                local mine = area == here or zone == here
+                lines[#lines + 1] = { kind = "water", zone = zone or area, plain = name, chance = chance, here = mine,
+                    name = name .. (mine and "  (here)" or ""), icon = ICON .. "Trade_Fishing",
+                    line = Join({ ("Fished up %s"):format(chance >= 1 and (math.floor(chance + 0.5) .. "%")
+                        or ("%.2g%%"):format(chance)), season }) }
+                return
+            end
+        end
+    end
+    for area, row in pairs(D.zones) do Read(area, row:match("^.-|(.*)$")) end
+    for area, row in pairs(D.areas or {}) do
+        local zone, text = row:match("^.-|(%d+)|(.*)$")
+        Read(area, text, tonumber(zone))
+    end
+    table.sort(lines, function(a, b)
+        if a.here ~= b.here then return a.here end
+        if a.chance ~= b.chance then return a.chance > b.chance end
+        return a.plain < b.plain
+    end)
+    return lines
+end
+LB.Waters = Waters
+
 -- Where it drops, by kind: { creatures, chests (chests and other objects),
--- herb, ore, fish (what is gathered), items (items it comes inside) }, each
--- a list of lines by zone (lines.total: all of them)
+-- herb, ore, fish (what is gathered), items (items it comes inside), waters
+-- (the waters it's fished up in) }, each a list of lines by zone
+-- (lines.total: all of them)
 function LB.Drops(itemID)
     local Q = LB.Q()
     if not Q then return {} end
@@ -481,7 +519,7 @@ function LB.Drops(itemID)
         items[#items + 1] = { kind = "item", item = id, tip = id, icon = ItemIcon(id) }
     end
     return { creatures = ByZone(creatures), chests = ByZone(chests), herb = ByZone(gathered.herb),
-        ore = ByZone(gathered.ore), fish = ByZone(gathered.fish), items = items }
+        ore = ByZone(gathered.ore), fish = ByZone(gathered.fish), items = items, waters = Waters(itemID) }
 end
 
 -- A person of the other faction, said in red on their line (they won't sell

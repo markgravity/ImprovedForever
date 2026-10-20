@@ -28,6 +28,13 @@ end
 
 local ITEMS = {
     Item({
+        key = "guide", group = "fishing", label = "Start / stop guide",
+        tip = "A fishing pole in hand doesn't start fishing: a line on the screen says how. R2 twice, or a "
+            .. "double right-click on the world, starts it (R2 then casts, R2 twice puts a lure on); Circle "
+            .. "or Esc stops it, when no window is open (else they close the window). Off: no line, the "
+            .. "presses still work.",
+    }, Toggle("guide", "Start / stop guide", function() end)),
+    Item({
         key = "bar", group = "fishing", label = "Fishing bar",
         tip = "Each cast of Fishing as a scene on the right of the screen: the bobber thrown out on its line, "
             .. "bobbing, a ring round it draining with the time left; a catch splashing in its colour and "
@@ -36,6 +43,18 @@ local ITEMS = {
             .. "it: /if fishshow, /if fishshow rare, /if fishshow miss, /if fishshow early, /if fishshow cancel.",
     }, Toggle("bar", "Fishing bar", function() F.ApplyBar() end)),
     Item({
+        key = "firstCatch", group = "fishing", label = "First catch",
+        tip = "Something you've never caught before: a moment of its own on the right of the screen once the "
+            .. "fishing bar's done (its icon, rays of its colour, sparks, how far your collection's got). Try "
+            .. "it: /if fishshow first.",
+    }, Toggle("firstCatch", "First catch", function() F.ApplyFirst() end)),
+    Item({
+        key = "book", group = "fishing", label = "Fish Collection",
+        tip = "What you've fished up, recorded: every fish and item (junk left out) by rarity, a tick on "
+            .. "each you've caught, when and where first. Cross on one reads its Wiki page. /if fishbook "
+            .. "opens it too.",
+    }, { button = "Open", run = function() F.Book.Open() end }),
+    Item({
         key = "panel", group = "fishing", label = "Session panel",
         tip = "While a fishing pole is in hand: the session's casts, catches, misses and time over the gamepad "
             .. "bar, and what it caught, the rarest first, the latest catch lit. /if fishreset starts a new "
@@ -43,26 +62,31 @@ local ITEMS = {
     }, Toggle("panel", "Session panel", function() F.ApplyPanel() end)),
     Item({
         key = "autoLoot", group = "fishing", label = "Auto loot",
-        tip = "With a fishing pole in hand, the game's auto loot on: a catch is taken at once and the loot "
+        tip = "In fishing mode, the game's auto loot on: a catch is taken at once and the loot "
             .. "window closes by itself (the fishing bar shows the catch). Your own setting comes back with "
             .. "the pole put away.",
     }, Toggle("autoLoot", "Auto loot", function() F.ApplyAutoLoot() end)),
     Item({
         key = "view", group = "view", label = "Fishing view",
-        tip = "With a fishing pole in hand, out of a fight: the HUD steps back (only the health line, the "
+        tip = "In fishing mode, out of a fight: the HUD steps back (only the health line, the "
             .. "target, the minimap, the session panel and the fishing bar left) and the camera comes in. "
-            .. "Everything back with the pole put away or a fight begun.",
+            .. "Everything back when you stop fishing, put the pole away or a fight begins.",
     }, Toggle("view", "Fishing view", function() F.ApplyView() end)),
     Item({
         key = "camera", group = "view", label = "Fishing camera",
         tip = "With the fishing view: the camera at your fishing distance, over your shoulder and pitched "
             .. "down, so you stand low on the left (the game's ActionCam settings: the game asks once to "
-            .. "allow them, Accept). Your camera comes back with the pole put away. /if fishcam keeps the "
+            .. "allow them, Accept). Your camera comes back when you stop fishing. /if fishcam keeps the "
             .. "distance you're at; /if fishcam shoulder 0.8, /if fishcam pitch 0.3 frame you.",
     }, Toggle("camera", "Fishing camera", function() F.ApplyView() end)),
+    Item({
+        key = "chat", group = "view", label = "Fishing chat",
+        tip = "With the fishing view: the chat by the session panel, bottom right, every line faint and a "
+            .. "new one bright for a while. Typing in the chat, or the mouse on it, brings the game's back.",
+    }, Toggle("chat", "Fishing chat", function() F.ApplyChat() end)),
     {
         key = "zoom", group = "view", section = "Camera framing", label = "Distance",
-        tip = "How far the camera sits from you while fishing. With a pole in hand you see it change as you "
+        tip = "How far the camera sits from you while fishing. In fishing mode you see it change as you "
             .. "slide. /if fishcam keeps the distance you're at.",
         slider = CameraSlider("zoom", 0.5, function(v) return ("%.1f yd"):format(v) end),
     },

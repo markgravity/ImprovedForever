@@ -1,11 +1,13 @@
--- The fishing session: from the pole put in hand to it put away, what it
+-- The fishing session: from fishing mode begun to it ended (Mode.lua), what it
 -- caught (each item, how many, its quality and icon), how many casts,
 -- catches and fish that got away, when each began. Read by the session's
 -- panel and the fishing bar (Panel.lua, CastBar.lua) through
 -- F.Session(); told of each change through F.OnChange(fn), of each catch
 -- through F.OnCatch(fn(catch)) and each miss through F.OnEscape(fn(kind)).
--- Kept per character (IF.charDB.fishingSession): a /reload or a pole put
--- away and back within RESUME seconds goes on with the same session.
+-- Kept per character (IF.charDB.fishingSession): a /reload or the mode
+-- left and begun again within RESUME seconds goes on with the same session.
+-- A catch out of the mode (a cast from the action bar) still goes to the
+-- collection and the fishing bar, not to a session.
 local IF = ImprovedForever
 local F = IF.Fishing
 
@@ -43,8 +45,11 @@ function F.Session()
     return session
 end
 
--- (a pole in hand: a session going, resumed if the last one was lately)
+-- (the mode begun: a session going, resumed if the last one was lately;
+-- not before the saved one's read at login)
+local loaded = false
 local function Begin()
+    if not loaded then return end
     local now = time()
     if session and session.active then return end
     if not (session and session.last and now - session.last <= RESUME) then
@@ -75,31 +80,38 @@ local looted = false
 local function Loot()
     if looted or not (IsFishingLoot and IsFishingLoot()) then return end
     looted = true
-    if not (session and session.active) then Begin() end
     local now = time()
+    local on = session and session.active
     local caught = false
     local catch = { items = {}, at = GetTime() }
     for slot = 1, GetNumLootItems() or 0 do
         local ok, icon, name, quantity, _, quality = pcall(GetLootSlotInfo, slot)
         local id = ok and ItemID(GetLootSlotLink(slot))
         if id and name then
-            local item = session.items[id]
+            local item = on and session.items[id]
             local count = math.max(1, tonumber(quantity) or 1)
             catch.items[#catch.items + 1] = { id = id, name = name, icon = icon, quality = quality or 1,
-                count = count, new = item == nil }
-            if not item then
-                item = { id = id, name = name, icon = icon, quality = quality or 1, count = 0, first = now }
-                session.items[id] = item
+                count = count, new = on and item == nil }
+            if on then
+                if not item then
+                    item = { id = id, name = name, icon = icon, quality = quality or 1, count = 0, first = now }
+                    session.items[id] = item
+                end
+                item.count = item.count + count
+                item.last = now
+                session.newest, session.newestAt = id, GetTime()
             end
-            item.count = item.count + count
-            item.last = now
-            session.newest, session.newestAt = id, GetTime()
             caught = true
         end
     end
     if caught then
-        session.catches = session.catches + 1
-        session.last = now
+        if on then
+            session.catches = session.catches + 1
+            session.last = now
+        end
+        -- (the collection first: a thing never caught before comes marked
+        -- firstEver to everyone told, Collection.lua)
+        if F.Collect then F.Collect(catch) end
         Changed()
         for _, fn in ipairs(catchers) do pcall(fn, catch) end
     end
@@ -113,10 +125,11 @@ local function Escape(message)
     local kind = (message == ERR_FISH_ESCAPED and "escaped") or (message == ERR_FISH_NOT_HOOKED and "early") or nil
     if not kind or GetTime() - escapedAt < 0.5 then return end
     escapedAt = GetTime()
-    if not (session and session.active) then Begin() end
-    if kind == "escaped" then session.escapes = (session.escapes or 0) + 1 end
-    session.last = time()
-    Changed()
+    if session and session.active then
+        if kind == "escaped" then session.escapes = (session.escapes or 0) + 1 end
+        session.last = time()
+        Changed()
+    end
     for _, fn in ipairs(escapers) do pcall(fn, kind) end
 end
 
@@ -138,7 +151,6 @@ local function Shown(v)
 end
 
 local events = CreateFrame("Frame")
-events:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
 events:RegisterEvent("LOOT_OPENED")
 events:RegisterEvent("LOOT_READY")
 events:RegisterEvent("LOOT_CLOSED")
@@ -157,8 +169,6 @@ events:SetScript("OnEvent", function(_, event, a1, a2, spellID)
     if event == "UI_ERROR_MESSAGE" or event == "UI_INFO_MESSAGE" then
         Escape(a2)
         Escape(a1)
-    elseif event == "PLAYER_EQUIPMENT_CHANGED" then
-        if F.PoleEquipped() then Begin() else Finish() end
     elseif event == "LOOT_OPENED" or event == "LOOT_READY" then
         Loot()
     elseif event == "LOOT_CLOSED" then
@@ -166,8 +176,7 @@ events:SetScript("OnEvent", function(_, event, a1, a2, spellID)
     elseif event == "UNIT_SPELLCAST_CHANNEL_START" and type(spellID) ~= "nil" then
         if issecretvalue and issecretvalue(spellID) then return end
         local name = type(spellID) == "number" and C_Spell and C_Spell.GetSpellName and C_Spell.GetSpellName(spellID)
-        if name and name == FishingName() then
-            if not (session and session.active) then Begin() end
+        if name and name == FishingName() and session and session.active then
             session.casts = session.casts + 1
             session.last = time()
             Changed()
@@ -186,12 +195,17 @@ end
 IF.OnLogin(function()
     session = IF.charDB and IF.charDB.fishingSession or nil
     if session then session.active = false end
-    if F.PoleEquipped() then Begin() else Changed() end
+    loaded = true
+    if F.InMode() then Begin() else Changed() end
+end)
+
+F.OnMode(function(on)
+    if on then Begin() else Finish() end
 end)
 
 -- /if fishreset: a new session now
 IF.AddCommand("fishreset", function()
     session = nil
-    if F.PoleEquipped() then Begin() else Changed() end
+    if F.InMode() then Begin() else Changed() end
     IF.Print("Fishing: a new session.")
 end, ": start a new fishing session")

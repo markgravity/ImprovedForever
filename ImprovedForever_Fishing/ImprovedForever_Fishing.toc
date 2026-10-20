@@ -1,20 +1,26 @@
 ## Interface: 16001, 16002, 16003, 16100, 16101, 16200
 ## Title: Improved Forever: Fishing
-## Notes: Fishing from the controller: with a fishing pole in hand, R2 casts Fishing, R2 twice puts your best lure on the pole; each cast as a scene of its own, the HUD stepping back and the camera coming in.
+## Notes: Fishing from the controller: a pole in hand, R2 twice (or a double right-click) starts fishing, Circle or Esc stops; R2 casts Fishing, R2 twice puts your best lure on the pole; each cast as a scene of its own, the HUD stepping back and the camera coming in.
 ## Author: markg
 ## Version: 0.1.0
 ## X-Website: https://github.com/markgravity/ImprovedForever
 ## X-License: MIT
-## IconTexture: Interface\Icons\Trade_Fishing
+## IconTexture: Interface\AddOns\ImprovedForever\textures\ic_mod_fishing
 ## Group: ImprovedForever
-## Dependencies: ImprovedForever
+## Dependencies: ImprovedForever, ImprovedForever_Wiki
 ## OptionalDeps: ImprovedForever_Interface, ImprovedForever_Wheel
 
 Module.lua
 Fishing.lua
+Mode.lua
 Session.lua
+Collection.lua
 AutoLoot.lua
 View.lua
 Panel.lua
+Chat.lua
 CastBar.lua
+FirstCatch.lua
+Book.lua
+CollectionWindow.lua
 FishingEditor.lua

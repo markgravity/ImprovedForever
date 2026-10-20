@@ -202,6 +202,11 @@ local function Said(p)
                 .. Names(Shorten(names, 3)) .. ".")
         end
     end
+    -- (open water: the likeliest waters, and when it's only in season)
+    local waters = Unique(drops.waters)
+    if #waters > 0 then
+        table.insert(said.gathering, "Fishermen bring it up from the waters of " .. Names(Shorten(waters, 3)) .. ".")
+    end
     local items = {}
     for _, l in ipairs(drops.items or {}) do items[#items + 1] = ItemName(l.item) end
     if #items > 0 then table.insert(said.items, "It also turns up inside " .. Names(Shorten(items, 3)) .. ".") end
@@ -395,6 +400,12 @@ local function Subjects(p)
                 .. (#names == 1 and names[1] or (names[1] .. " and " .. (#names - 1) .. " more"))
             gatherIcon = gatherIcon or GATHERING[kind].icon
         end
+    end
+    -- (fished up in open water: "Fished in Tirisfal Glades and 4 more")
+    local waters = Unique(drops.waters)
+    if #waters > 0 then
+        gathered[#gathered + 1] = "fished in " .. (#waters == 1 and waters[1] or (waters[1] .. " and " .. (#waters - 1) .. " more"))
+        gatherIcon = gatherIcon or GATHERING.fish.icon
     end
     if #gathered > 0 then add("gathering", Capital(table.concat(gathered, ", ")), gatherIcon) end
     -- Containers: chests, and the items it comes inside ("Found in 14
@@ -660,7 +671,8 @@ local function Build(p)
     local gathering = {}
     Section(gathering, "Herbs", d.herb)
     Section(gathering, "Mining", d.ore)
-    Section(gathering, "Fishing", d.fish)
+    Section(gathering, "Fishing waters", d.waters)
+    Section(gathering, "Fishing pools", d.fish)
     local containers = {}
     Section(containers, "Chests", d.chests)
     Section(containers, "Items", d.items)

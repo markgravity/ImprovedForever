@@ -134,12 +134,16 @@ end
 ---------------------------------------------------------------------------
 -- The pages' tabs down the window's right: the game's side tabs (as the
 -- character window's), the right stick's glyph above them (tilted up /
--- down it moves through them). tabs:Render(list, selected): list = { {
--- key, label, icon } }; onSelect(key) as one is clicked.
+-- down it moves through them; opts.keys = { above, below }: those glyphs
+-- instead, one above the tabs and one below, as the Legacy window's L1 /
+-- R1). tabs:Render(list, selected): list = { { key, label, icon } };
+-- onSelect(key) as one is clicked.
 ---------------------------------------------------------------------------
-function UI.SideTabs(win, onSelect)
+function UI.SideTabs(win, onSelect, opts)
+    opts = opts or {}
     local tabs = { buttons = {} }
     local glyph = win:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    local below = win:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 
     local function Button(i)
         if tabs.buttons[i] then return tabs.buttons[i] end
@@ -192,7 +196,12 @@ function UI.SideTabs(win, onSelect)
         for i = #list + 1, #self.buttons do self.buttons[i]:Hide() end
         glyph:ClearAllPoints()
         if self.buttons[1] then glyph:SetPoint("BOTTOM", self.buttons[1], "TOP", -3, 4) end
-        glyph:SetText((#list > 1 and IF.Input.Pad()) and IF.GlyphText("RS", 26) or "")
+        local pad = #list > 1 and IF.Input.Pad()
+        local keys = opts.keys
+        glyph:SetText(pad and IF.GlyphText(keys and keys[1] or "RS", keys and 22 or 26) or "")
+        below:ClearAllPoints()
+        if previous then below:SetPoint("TOP", previous, "BOTTOM", -3, -4) end
+        below:SetText(pad and keys and IF.GlyphText(keys[2], 22) or "")
     end
 
     -- The first tab button (a tooltip placed beside the window goes past them)

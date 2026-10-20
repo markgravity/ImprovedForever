@@ -422,6 +422,11 @@ end)
 
 -- Where an item hangs (or will), in the screen's units (UIParent's), or
 -- nil: not on the cord
+-- The stringer's tally at its foot, while it shows (Chat.lua sits over it)
+function F.RackTally()
+    return panel:IsVisible() and stats:IsShown() and stats or nil
+end
+
 function F.RackSpot(id)
     if not (panel:IsShown() and panel:GetAlpha() > 0) then return nil end
     for _, h in ipairs(hung) do

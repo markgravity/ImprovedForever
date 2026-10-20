@@ -33,6 +33,7 @@ Touchpad.lua
 BindEditor.lua
 RecipeData.lua
 WorldData.lua
+FishingData.lua
 GameData.lua
 Upgrades.lua
 ItemValue.lua

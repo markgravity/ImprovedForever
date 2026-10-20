@@ -66,6 +66,15 @@ local CIRCLE_MASK = "Interface\\CharacterFrame\\TempPortraitAlphaMask"
 local STAR = "Interface\\Cooldown\\star4"
 local WHITE = "Interface\\Buttons\\WHITE8x8"
 local FISH_ICON = "Interface\\Icons\\INV_Misc_Fish_02"
+-- (the bobber: the game's own model (world/goober/g_fishingbobber.m2) over
+-- dark water; until it's loaded, or when it can't be, our drawing of it
+-- (tools/make_fishing_icons.py); the time lit in the game's own channel
+-- green, as its cast bar fills a channel)
+local BOBBER_MODEL = 201000
+local BOBBER_ART = "Interface\\AddOns\\ImprovedForever\\textures\\fishing_bobber"
+local WATER_ART = "Interface\\AddOns\\ImprovedForever\\textures\\fishing_water"
+local MODEL_VIEW, MODEL_FOV = math.rad(25), math.rad(30)   -- (seen from a little above)
+local BOBBER_COLOR = { 0.1, 1, 0.15 }
 
 local function Secret(v)
     return type(issecretvalue) == "function" and issecretvalue(v)
@@ -129,13 +138,13 @@ end
 ---------------------------------------------------------------------------
 -- Its parts
 ---------------------------------------------------------------------------
--- (over the bobber, to its right edge: the lure; over it another cast's
+-- (over the rod's tip, from its left: the lure; over it another cast's
 -- name, BarSpell)
 local lureText = Shadowed(bar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall"), GREY)
-lureText:SetPoint("BOTTOMRIGHT", bar, "BOTTOMLEFT", BOB_X + RING_R, BOB_Y + RING_R + 10)
-lureText:SetJustifyH("RIGHT")
+lureText:SetPoint("BOTTOMLEFT", bar, "BOTTOMLEFT", TIP_X - 3, TIP_Y + 12)
+lureText:SetJustifyH("LEFT")
 local header = Shadowed(bar:CreateFontString(nil, "OVERLAY", "GameFontNormal"), GOLD)
-header:SetPoint("BOTTOMRIGHT", lureText, "TOPRIGHT", 0, 3)
+header:SetPoint("BOTTOMLEFT", lureText, "TOPLEFT", 0, 3)
 
 -- (the rod's tip: a small light)
 local tip = bar:CreateTexture(nil, "ARTWORK")
@@ -408,11 +417,247 @@ local function DrawSplash(x, y, q, color)
     splash:SetAlpha(0.95 * (1 - q))
 end
 
+-- (the game's bobber in it: a model scene of ours over the water, its
+-- camera fitted to the model once it's loaded)
+local scene, actor, modelReady
+do
+    local ok = pcall(function()
+        scene = CreateFrame("ModelScene", nil, bobber)
+        scene:SetSize(BOBBER * 1.5, BOBBER * 1.5)
+        scene:SetPoint("CENTER", 0, 2)
+        scene:SetFrameLevel(bobber:GetFrameLevel() + 1)
+        scene:Hide()
+        actor = scene:CreateActor()
+    end)
+    if not ok then scene, actor = nil, nil end
+end
+
+local function FitModel()
+    local x0, y0, z0, x1, y1, z1 = actor:GetActiveBoundingBox()
+    if not (x0 and x1) then return false end
+    local size = math.max(x1 - x0, y1 - y0, z1 - z0, 0.01)
+    local d = size * 0.5 / math.tan(MODEL_FOV / 2) * 1.2
+    local ce, se = math.cos(MODEL_VIEW), math.sin(MODEL_VIEW)
+    scene:SetCameraFieldOfView(MODEL_FOV)
+    scene:SetCameraNearClip(0.01)
+    scene:SetCameraFarClip(100)
+    scene:SetCameraPosition((x0 + x1) / 2 - d * ce, (y0 + y1) / 2, (z0 + z1) / 2 + d * se)
+    -- (forward, right, up: looking along +x, down a little)
+    scene:SetCameraOrientationByAxisVectors(ce, 0, -se, 0, -1, 0, se, 0, ce)
+    pcall(function()
+        scene:SetLightVisible(true)
+        scene:SetLightDirection(0.4, -0.5, -0.75)
+        scene:SetLightAmbientColor(0.7, 0.7, 0.7)
+        scene:SetLightDiffuseColor(0.9, 0.88, 0.82)
+    end)
+    return true
+end
+
+local function ModelLoaded()
+    if modelReady or not pcall(function() modelReady = FitModel() end) then return end
+    if modelReady and scene.wanted then
+        bobber.icon:SetTexture(WATER_ART)
+        scene:Show()
+    end
+end
+
+-- (the bobber: the game's over the water, else ours)
+local function ShowBobberModel(on)
+    if not scene then on = false end
+    if on and not modelReady and not scene.asked then
+        scene.asked = true
+        pcall(function()
+            actor:SetScript("OnModelLoaded", ModelLoaded)
+            actor:SetModelByFileID(BOBBER_MODEL)
+        end)
+        ModelLoaded()
+    end
+    local model = on and modelReady
+    if scene then
+        scene.wanted = on
+        scene:SetShown(model or false)
+    end
+    if on then
+        bobber.icon:SetTexture(model and WATER_ART or BOBBER_ART)
+        bobber.icon:SetTexCoord(0, 1, 0, 1)
+    end
+    if actor then pcall(actor.SetDesaturation, actor, 0) end
+end
+
 local function DrawBobber(x, y, alpha, scale)
     bobber:SetScale(math.max(0.01, scale or 1))
     At(bobber, x, y)
     bobber:SetAlpha(alpha)
     bobber:SetShown(alpha > 0)
+    if actor and scene:IsShown() then pcall(actor.SetAlpha, actor, alpha) end
+end
+
+---------------------------------------------------------------------------
+-- The water's fish: what this water holds (the Fish Collection's index,
+-- Book.lua: B.Here), seen from above under the surface, swimming round the
+-- bobber; now and then one noticing the bait, nosing in to it, nudging it
+-- and turning away. One you've caught in its colours, its icon on its back;
+-- one you haven't a dark shape. Gone off in a flash when the cast ends.
+---------------------------------------------------------------------------
+local SCHOOL, FISH_LEN, FISH_ICON_SIZE = 8, 24, 15
+local SWIM_R, SWIM_EDGE = 40, 62        -- (how far out they swim: least, most)
+local NOTICE_IN, NOTICE_HOLD, NOTICE_OUT = 1.4, 0.8, 1.2
+local DEEP = { 0.5, 0.64, 0.74 }        -- (one not caught yet: a pale shape under the water)
+-- (wider than the bar: a line reaching past its frame isn't drawn, and they
+-- swim out past its right edge)
+local fishFrame = CreateFrame("Frame", nil, bar)
+fishFrame:SetPoint("TOPLEFT", bar, "TOPLEFT", -20, 20)
+fishFrame:SetPoint("BOTTOMRIGHT", bar, "BOTTOMRIGHT", 120, -40)
+fishFrame:SetFrameLevel(bar:GetFrameLevel())
+local school = {}
+
+local function NewFish()
+    local f = {}
+    f.shadow = fishFrame:CreateLine(nil, "BACKGROUND")
+    f.shadow:SetTexture(CIRCLE_MASK)
+    f.shadow:SetThickness(10)
+    f.shadow:SetVertexColor(0, 0, 0, 0.35)
+    f.tail = fishFrame:CreateLine(nil, "BORDER")
+    f.tail:SetTexture(CIRCLE_MASK)
+    f.tail:SetThickness(7)
+    f.body = fishFrame:CreateLine(nil, "BORDER", nil, 1)
+    f.body:SetTexture(CIRCLE_MASK)
+    f.body:SetThickness(9)
+    f.icon = fishFrame:CreateTexture(nil, "ARTWORK")
+    f.icon:SetSize(FISH_ICON_SIZE, FISH_ICON_SIZE)
+    f.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+    local mask = fishFrame:CreateMaskTexture()
+    mask:SetTexture(CIRCLE_MASK, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+    mask:SetAllPoints(f.icon)
+    f.icon:AddMaskTexture(mask)
+    return f
+end
+
+local function ShowFish(f, shown)
+    for _, part in ipairs({ f.shadow, f.tail, f.body, f.icon }) do part:SetShown(shown) end
+end
+
+local function HideSchool()
+    for _, f in ipairs(school) do ShowFish(f, false) end
+end
+
+-- (the school for a cast: the likeliest fish here, a few dark shapes when
+-- the water's not known)
+local function MakeSchool(s)
+    local here = F.Book and F.Book.Here and F.Book.Here() or {}
+    local caught = F.Collection and F.Collection() or {}
+    local PC = IF.Interface and IF.Interface.PlayerCast
+    s.school = {}
+    local n = math.min(SCHOOL, #here > 0 and #here or 3)
+    local start = math.random() * 2 * math.pi
+    for i = 1, n do
+        local f = school[i] or NewFish()
+        school[i] = f
+        local fish = here[i]
+        f.id = fish and fish.id
+        f.caught = f.id and caught[f.id] ~= nil
+        local color = DEEP
+        if f.caught then
+            local icon = F.Book.Icon(f.id)
+            f.icon:SetTexture(icon)
+            local ok, c = pcall(function() return PC and PC.IconColor and PC.IconColor(icon) end)
+            color = ok and c and { c[1] * 0.7, c[2] * 0.7, c[3] * 0.7 } or { 0.35, 0.45, 0.5 }
+        end
+        f.color = color
+        -- (spread round it, each at its own distance, half each way round)
+        f.theta = start + (i - 1) * 2 * math.pi / n + 0.4 * (math.random() - 0.5)
+        f.spin = (i % 2 == 0 and -1 or 1) * (0.3 + 0.3 * math.random())
+        f.r = SWIM_R + (SWIM_EDGE - SWIM_R - 6) * ((i - 1) % 3) / 2 + 3 * math.random()
+        f.phase = math.random() * 2 * math.pi
+        f.heading = nil
+        s.school[i] = f
+    end
+    for i = #s.school + 1, #school do ShowFish(school[i], false) end
+    s.noticeAt, s.notice, s.lastNow = nil, nil, nil
+end
+
+-- (how far into its noticing of the bait a fish is: 0 not, 1 at it)
+local function Noticing(s, now)
+    if not s.notice then return 0 end
+    local t = now - s.notice.at
+    if t < NOTICE_IN then return Ease(t / NOTICE_IN) end
+    if t < NOTICE_IN + NOTICE_HOLD then return 1 end
+    return 1 - Ease((t - NOTICE_IN - NOTICE_HOLD) / NOTICE_OUT)
+end
+
+-- (the bait nudged by the one at it: 0 to 1, a few taps)
+local function Nudge(s, now)
+    if not s.notice then return 0 end
+    local t = now - s.notice.at - NOTICE_IN
+    if t < 0 or t > NOTICE_HOLD then return 0 end
+    return math.max(0, math.sin(t / NOTICE_HOLD * 3 * math.pi))
+end
+
+-- (the school round (cx, cy): since, the time it's been in the water;
+-- gone, 0 to 1 the way off it's swum (the cast ended))
+local function DrawSchool(s, now, cx, cy, since, gone)
+    if not s.school then return end
+    local dt = s.lastNow and math.min(0.1, now - s.lastNow) or 0
+    s.lastNow = now
+    gone = gone or 0
+    -- (one noticing the bait, now and then; none once it's ending)
+    if gone == 0 then
+        if s.notice and now - s.notice.at > NOTICE_IN + NOTICE_HOLD + NOTICE_OUT then s.notice = nil end
+        s.noticeAt = s.noticeAt or (now + 1.5 + 1.5 * math.random())
+        if not s.notice and now >= s.noticeAt then
+            s.notice = { at = now, fish = s.school[math.random(#s.school)] }
+            s.noticeAt = now + NOTICE_IN + NOTICE_HOLD + NOTICE_OUT + 1 + 3 * math.random()
+        end
+    end
+    local come = Ease(since / 1.6)
+    -- (swimming off: from however much of it showed)
+    if gone == 0 then s.schoolAlpha = Clamp(since / 1.2) end
+    local alpha = (s.schoolAlpha or 0) * (1 - Clamp(gone * 1.6))
+    for i, f in ipairs(s.school) do
+        local a = s.notice and s.notice.fish == f and Noticing(s, now) or 0
+        f.theta = f.theta + f.spin * (1 - 0.85 * a) * (1 + 2.5 * gone) * dt
+        local r = f.r + 5 * math.sin(now * 0.7 + f.phase)
+        r = Lerp(r, RING_R + 9, a) + 30 * (1 - come) + 70 * Ease(gone)
+        local x, y = cx + r * math.cos(f.theta), cy + r * math.sin(f.theta)
+        -- (its heading: along its way, turned to the bait as it noses in)
+        local vx, vy = x - (f.x or x), y - (f.y or y)
+        if vx * vx + vy * vy < 1e-4 then
+            local tangent = f.theta + (f.spin > 0 and 1 or -1) * math.pi / 2
+            vx, vy = math.cos(tangent), math.sin(tangent)
+        end
+        local move = math.atan2(vy, vx)
+        local bait = math.atan2(cy - y, cx - x)
+        local want = math.atan2((1 - a) * math.sin(move) + a * math.sin(bait), (1 - a) * math.cos(move) + a * math.cos(bait))
+        if not f.heading then
+            f.heading = want
+        else
+            local d = (want - f.heading + math.pi) % (2 * math.pi) - math.pi
+            f.heading = f.heading + d * math.min(1, dt * 6)
+        end
+        f.x, f.y = x, y
+        local hx, hy = math.cos(f.heading), math.sin(f.heading)
+        local half = FISH_LEN / 2
+        local nx, ny, bx, by = x + hx * half, y + hy * half, x - hx * half, y - hy * half
+        f.body:SetStartPoint("BOTTOMLEFT", bar, bx, by)
+        f.body:SetEndPoint("BOTTOMLEFT", bar, nx, ny)
+        f.shadow:SetStartPoint("BOTTOMLEFT", bar, bx + 3, by - 4)
+        f.shadow:SetEndPoint("BOTTOMLEFT", bar, nx + 3, ny - 4)
+        -- (its tail beating, faster as it noses in)
+        local beat = math.sin(now * (6 + 6 * a + 6 * gone) + f.phase) * 0.55
+        local th = f.heading + math.pi + beat
+        f.tail:SetStartPoint("BOTTOMLEFT", bar, bx + hx * 2, by + hy * 2)
+        f.tail:SetEndPoint("BOTTOMLEFT", bar, bx + math.cos(th) * 10, by + math.sin(th) * 10)
+        local c = f.color
+        local deep = f.caught and 0.85 or 0.4
+        f.body:SetVertexColor(c[1], c[2], c[3], deep * alpha)
+        f.tail:SetVertexColor(c[1], c[2], c[3], deep * 0.8 * alpha)
+        f.shadow:SetVertexColor(0, 0, 0, 0.3 * alpha)
+        f.icon:ClearAllPoints()
+        f.icon:SetPoint("CENTER", bar, "BOTTOMLEFT", x, y)
+        f.icon:SetAlpha(0.95 * alpha)
+        ShowFish(f, alpha > 0)
+        f.icon:SetShown(alpha > 0 and f.caught)
+    end
 end
 
 ---------------------------------------------------------------------------
@@ -452,10 +697,13 @@ local function HideCatch()
     title:SetAlpha(0)
 end
 
+local FadeNative
 local function End()
     S = nil
     HideCatch()
+    HideSchool()
     bar:Hide()
+    if FadeNative then FadeNative() end
 end
 
 local function Begin(phase)
@@ -464,6 +712,7 @@ local function Begin(phase)
     S = { phase = phase, at = GetTime(), bx = TIP_X, by = TIP_Y }
     Place()
     HideCatch()
+    HideSchool()
     splash:SetAlpha(0)
     bobber.icon:SetDesaturated(false)
     bobber.ring:SetVertexColor(1, 1, 1)
@@ -475,6 +724,8 @@ local function Begin(phase)
     lureText:SetTextColor(color[1], color[2], color[3])
     bar:SetAlpha(0)
     bar:Show()
+    -- (the game's cast bar faded at once, not a moment on: it'd flash)
+    if FadeNative then FadeNative() end
     return S
 end
 
@@ -487,10 +738,12 @@ local function Times(startMs, endMs)
     return startMs, endMs
 end
 
-local function SetLitColor(texture)
+local function SetLitColor(texture, color)
     local PC = IF.Interface and IF.Interface.PlayerCast
     local ok, c = pcall(function() return PC and PC.IconColor and PC.IconColor(texture) end)
-    if ok and c then
+    if color then
+        c = color
+    elseif ok and c then
         c = { c[1] + (1 - c[1]) * 0.25, c[2] + (1 - c[2]) * 0.25, c[3] + (1 - c[3]) * 0.25 }
     else
         c = LIT_COLOR
@@ -507,10 +760,9 @@ end
 function F.BarCast(startMs, endMs)
     local s = Begin("fishing")
     s.startMs, s.endMs = Times(startMs, endMs)
-    local ok, icon = pcall(C_Spell.GetSpellTexture, FISHING)
-    icon = ok and icon or FISH_ICON
-    bobber.icon:SetTexture(icon)
-    SetLitColor(icon)
+    ShowBobberModel(true)
+    SetLitColor(BOBBER_ART, BOBBER_COLOR)
+    MakeSchool(s)
 end
 
 -- The channel's end: waiting a moment for what came of it
@@ -587,12 +839,13 @@ function F.BarMiss(kind)
     At(label, ROW_X, ROW_Y + BIG / 2 + 14)
     At(title, ROW_X, ROW_Y - BIG / 2 - 16)
     -- (the fish that got away; nothing hooked: the bobber, bare)
-    local icon = FISH_ICON
-    if kind == "early" then
-        local ok, tex = pcall(C_Spell.GetSpellTexture, FISHING)
-        icon = ok and tex or FISH_ICON
+    local bare = kind == "early"
+    missIcon.icon:SetTexture(bare and BOBBER_ART or FISH_ICON)
+    if bare then
+        missIcon.icon:SetTexCoord(0, 1, 0, 1)
+    else
+        missIcon.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
     end
-    missIcon.icon:SetTexture(icon)
     missIcon:SetAlpha(0)
     missIcon:Show()
 end
@@ -601,7 +854,9 @@ end
 function F.BarSpell(name, icon, startMs, endMs)
     local s = Begin("spell")
     s.startMs, s.endMs = Times(startMs, endMs)
+    ShowBobberModel(false)
     bobber.icon:SetTexture(icon or 134400)
+    bobber.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
     if not pcall(header.SetText, header, name) then header:SetText("") end
 end
 
@@ -623,7 +878,7 @@ local function Fishing(s, now, t)
         DrawLine(TIP_X, TIP_Y, BOB_X, BOB_Y, SAG, LINE_COLOR, 0.8, e)
     else
         local settle = Ease((t - FLIGHT) / SETTLE)
-        s.bx, s.by = BOB_X, BOB_Y + math.sin((t - FLIGHT) * 2.2) * 2.5 * settle
+        s.bx, s.by = BOB_X, BOB_Y + math.sin((t - FLIGHT) * 2.2) * 2.5 * settle - 2.5 * Nudge(s, now)
         s.sag = SAG + math.sin(now * 0.9) * SWAY * settle
         -- (the line up to the time ring round the bobber, not into it: the
         -- curve's the same either way along)
@@ -634,7 +889,8 @@ local function Fishing(s, now, t)
     local landed = u >= 1
     DrawSplash(BOB_X, BOB_Y, landed and (t - FLIGHT) / 0.5 or 0, LINE_COLOR)
     DrawRipples(BOB_X, BOB_Y, t - FLIGHT, landed and Clamp((t - FLIGHT) / 0.4) or 0, LINE_COLOR,
-        landed and Clamp(1 - (t - FLIGHT) / 0.8) or 0)
+        landed and math.max(Clamp(1 - (t - FLIGHT) / 0.8), 0.35 * Nudge(s, now)) or 0)
+    if landed then DrawSchool(s, now, BOB_X, BOB_Y, t - FLIGHT, 0) end
     -- (the time gone, while it's waited for: one run, from the tip along
     -- the line to where it meets the bobber's ring, then round it; times
     -- kept secret: none)
@@ -680,6 +936,7 @@ local function Reel(s, now, t)
     DrawBobber(s.bx, s.by, 1 - p, 1 - 0.4 * p)
     DrawRing(0, 0, 0, 0)
     DrawRipples(BOB_X, BOB_Y, 0, 0, LINE_COLOR)
+    DrawSchool(s, now, BOB_X, BOB_Y, 99, Clamp(t / 0.7))
     if t > REEL then
         local f = (t - REEL) / (OUT / 2)
         bar:SetAlpha(1 - Clamp(f))
@@ -695,6 +952,7 @@ local function Catch(s, now, t)
     -- colour, and reeled in, the bobber along it to the tip)
     DrawSplash(fx, fy, t / 0.6, c)
     DrawRipples(fx, fy, t, Clamp(1 - t / 1.2), c, Clamp(1 - t / 0.9))
+    DrawSchool(s, now, BOB_X, BOB_Y, 99, Clamp(t / 0.7))
     local k = Clamp(t / 0.15)
     local lit = { Lerp(LINE_COLOR[1], c[1], k), Lerp(LINE_COLOR[2], c[2], k), Lerp(LINE_COLOR[3], c[3], k) }
     local r = Ease((t - 0.1) / PULL)
@@ -772,8 +1030,10 @@ local function Miss(s, now, t)
     s.by = fy - 14 * sink
     DrawLine(TIP_X, TIP_Y, fx, s.by, Lerp(SAG, 46, Ease(t / 0.6)), MISS_LINE, 0.75 * (1 - 0.5 * sink))
     bobber.icon:SetDesaturated(true)
+    if actor then pcall(actor.SetDesaturation, actor, 1) end
     DrawBobber(fx, s.by, 1 - sink)
     DrawRipples(fx, fy, t, Clamp(1 - t / 1.2), MISS_LINE, Clamp(1 - t / 0.9) * 0.6)
+    DrawSchool(s, now, BOB_X, BOB_Y, 99, Clamp(t / 0.7))
     DrawRing(0, 0, 0, 0)
     DrawSplash(0, 0, 0, MISS)
     header:SetAlpha(Clamp(1 - t / 0.4))
@@ -882,14 +1142,21 @@ IF.OnLogin(function()
     if PC and PC.Claim then PC.Claim(Ours) end
 end)
 local faded = false
-F.Watcher("fishing bar", 0.1, function()
+FadeNative = function()
     if IF.Interface then return end
-    local want = bar:IsShown()
+    local want = bar:IsShown() or (F.InMode and F.InMode()) or false
     if want ~= faded then
         faded = want
         IF.Focus.Fade(_G.PlayerCastingBarFrame, want)
     end
-end)
+end
+F.Watcher("fishing bar", 0.1, FadeNative)
+F.OnMode(function() FadeNative() end)
+
+-- Something showing on it now (a cast, its catch, its miss)
+function F.BarBusy()
+    return bar:IsShown()
+end
 
 function F.ApplyBar()
     if not On() then End() end
@@ -903,6 +1170,11 @@ local SAMPLE = {
 }
 IF.AddCommand("fishshow", function(args)
     local how = args[1]
+    if how == "first" then
+        return F.FirstCatch({ name = "Raw Brilliant Smallfish", icon = FISH_ICON, quality = 1,
+            progress = "Added to your fishing book  ·  13 of 32 fish",
+            where = (GetZoneText and GetZoneText() or "") .. "  ·  " .. date("%d %b %Y, %H:%M") })
+    end
     local now = GetTime() * 1000
     F.BarCast(now, now + 6000)
     local after = C_Timer and C_Timer.After

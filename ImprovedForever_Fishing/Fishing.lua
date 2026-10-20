@@ -1,4 +1,4 @@
--- With a fishing pole in the main hand, R2 is ours: pressed, it casts
+-- In fishing mode (Mode.lua: a pole in hand, R2 twice), R2 is ours: pressed, it casts
 -- Fishing; pressed twice quickly, it puts the best lure in your bags on
 -- the pole (Aquadynamic Fish Attractor, Flesh Eating Worm, Bright Baubles,
 -- Aquadynamic Fish Lens, Nightcrawlers, Shiny Bauble), stopping the cast
@@ -9,7 +9,7 @@
 -- reads. Bound only while the game has the gamepad's focus (Binds.InGame:
 -- no window of its gamepad UI holds it) and out of combat (bindings can't
 -- change in one: kept as they were through it). R2 then doesn't page the
--- crossbar; the pole put away, it's the game's again.
+-- crossbar; out of the mode, it's the game's again.
 local IF = ImprovedForever
 local F = IF.Fishing
 
@@ -96,11 +96,11 @@ local function SetMacros()
     button:SetAttribute("ic-double", lure and ("/stopcasting\n/use item:" .. lure .. "\n/use " .. MAIN_HAND) or nil)
 end
 
--- R2 ours while a pole is in hand and the game has the gamepad's focus
+-- R2 ours in fishing mode while the game has the gamepad's focus
 local bound = false
 local function Bind()
     if InCombatLockdown() or not IF.db then return end
-    local want = F.PoleEquipped() and IF.Binds.InGame() or false
+    local want = F.InMode and F.InMode() and IF.Binds.InGame() or false
     if want == bound then return end
     bound = want
     ClearOverrideBindings(owner)

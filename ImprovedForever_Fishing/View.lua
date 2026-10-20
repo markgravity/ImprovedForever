@@ -1,4 +1,4 @@
--- Fishing as a scene of its own: with a fishing pole in hand, out of a
+-- Fishing as a scene of its own: in fishing mode (Mode.lua), out of a
 -- fight, the HUD steps back and the camera comes in. Faded
 -- (IF.Focus.Fade): the Interface module's gamepad bar, the Wheel module's
 -- R3 slot, your frame, your pet's and your party's cards, the buffs and
@@ -24,6 +24,12 @@ local FADED = { "ImprovedForeverGamepadBar", "ImprovedForeverRecentSlot", "Impro
     "ImprovedForeverPartyCard3", "ImprovedForeverPartyCard4", "ImprovedForeverPartyCasts",
     "ImprovedForeverBuffList", "ImprovedForeverCooldownTimeline", "ImprovedForeverXPLine",
     "ImprovedForeverChatView", "ImprovedForeverPlayerHealth", "IFObjectiveTrackerFrame" }
+-- (without the Interface module, the game's own: its unit frames, its
+-- gamepad bar, its XP bar, its buffs. With it, it fades these itself, its
+-- own shown over them, and would show one again we'd faded: not twice)
+local NATIVE = { "PlayerFrame", "PetFrame", "TargetFrame", "FocusFrame", "PartyFrame", "CompactPartyFrame",
+    "GamepadMainActionBarFrame", "MainStatusTrackingBarContainer", "SecondaryStatusTrackingBarContainer",
+    "BuffFrame", "DebuffFrame", "TemporaryEnchantFrame" }
 
 local CAMERA_DEFAULTS = { zoom = 3.5, shoulder = 2, pitch = 0.12 }
 -- (each kept within what still frames you)
@@ -103,6 +109,12 @@ local function Fade(on)
     if not rawget(_G, "IFObjectiveTrackerFrame") and _G.ObjectiveTrackerFrame then
         IF.Focus.Fade(ObjectiveTrackerFrame, on)
     end
+    if not IF.Interface then
+        for _, name in ipairs(NATIVE) do
+            local f = rawget(_G, name)
+            if f then IF.Focus.Fade(f, on) end
+        end
+    end
     local PC = IF.Interface and IF.Interface.PartyCards
     for _, label in ipairs(PC and PC.labels or {}) do IF.Focus.Fade(label, on) end
 end
@@ -177,7 +189,7 @@ function F.ViewActive()
 end
 
 local function Wanted()
-    return F.Settings().view and F.PoleEquipped and F.PoleEquipped() and not IF.InCombat()
+    return F.Settings().view and F.InMode and F.InMode() and not IF.InCombat()
         and not F.EditMode() or false
 end
 

@@ -29,6 +29,12 @@
 -- time: names come in late) }.
 -- opts.search: { text, open(book) }: Triangle on a page without a field
 -- (the mouse: a button) opens the module's search.
+-- opts.tabs: { { label, open(book) }, ... }: the game's tabs along the
+-- window's foot, each opening its own first page (book:SetTab(i)); with
+-- tabs L1 / R1 change the tab and L2 / R2 turn the page (no switch to
+-- another window then).
+-- An entry's done = true: a gold tick on its icon; dim = true: its icon
+-- greyed, its words faint (not found, not had yet).
 -- Never in combat.
 local IF = ImprovedForever
 
@@ -327,6 +333,17 @@ local function IconFrame(parent, size)
     function f:SetFocus(on)
         self.glow:SetShown(on and true or false)
         self.glow:SetAlpha(0.5)
+    end
+    -- (done: a gold tick on its bottom right; dim: its picture greyed)
+    f.tick = f:CreateTexture(nil, "OVERLAY", nil, 3)
+    f.tick:SetSize(18 * k, 18 * k)
+    f.tick:SetPoint("CENTER", f, "BOTTOMRIGHT", -3 * k, 3 * k)
+    if not Atlas(f.tick, "common-icon-checkmark-yellow") then f.tick:SetTexture("Interface\\RaidFrame\\ReadyCheck-Ready") end
+    f.tick:Hide()
+    function f:SetMarks(done, dim)
+        self.tick:SetShown(done and true or false)
+        self.icon:SetDesaturated(dim and true or false)
+        self.icon:SetAlpha(dim and 0.6 or 1)
     end
     return f
 end
@@ -627,6 +644,39 @@ function BK.New(opts)
     -- level with the page number)
     legend.row:ClearAllPoints()
     legend.row:SetPoint("LEFT", page, "BOTTOMLEFT", LEFT - 8, 38)
+
+    -- The tabs along the window's foot (opts.tabs): the game's own; the
+    -- pad's legend under them
+    local tabButtons = {}
+    for i, t in ipairs(opts.tabs or {}) do
+        local name = (opts.name or "ImprovedForeverBook") .. "Tab" .. i
+        local okTab, b = pcall(K.NewFrame, "Button", name, window, "PanelTabButtonTemplate")
+        if not okTab or not b then
+            b = K.NewFrame("Button", name, window, "UIPanelButtonTemplate")
+            b:SetSize(100, 24)
+        end
+        b:SetID(i)
+        b:SetText(t.label)
+        if i == 1 then b:SetPoint("TOPLEFT", window, "BOTTOMLEFT", 12, 2)
+        else b:SetPoint("LEFT", tabButtons[i - 1], "RIGHT", 4, 0) end
+        b:SetScript("OnClick", function() book:SetTab(i) end)
+        pcall(PanelTemplates_TabResize, b, 0)
+        tabButtons[i] = b
+    end
+    if #tabButtons > 0 then
+        window.Tabs = tabButtons
+        pcall(PanelTemplates_SetNumTabs, window, #tabButtons)
+        legend:ClearAllPoints()
+        legend:SetPoint("TOP", window, "BOTTOM", 0, -36)
+    end
+
+    -- A tab: its own first page (opts.tabs[i].open)
+    function book:SetTab(i)
+        if not (opts.tabs and opts.tabs[i]) then return end
+        self.tab = i
+        pcall(PanelTemplates_SetTab, window, i)
+        opts.tabs[i].open(self)
+    end
 
     -- A page laid out: its paragraphs (and who wrote them), then its lines
     local function PageLayout(texts, signed, lines, areaH)
@@ -945,8 +995,13 @@ function BK.New(opts)
             return typing
         end
         local defs = { { glyph = "DPAD", text = "Move" } }
+        local tabbed = opts.tabs and #opts.tabs > 1
+        if tabbed then
+            defs[#defs + 1] = { { "PADLSHOULDER", "PADRSHOULDER" }, { "LB", "RB" }, "Tab" }
+        end
         if view and #view.pages > 1 then
-            defs[#defs + 1] = { { "PADLSHOULDER", "PADRSHOULDER" }, { "LB", "RB" }, "Turn Page" }
+            defs[#defs + 1] = tabbed and { { "PADLTRIGGER", "PADRTRIGGER" }, { "LT", "RT" }, "Turn Page" }
+                or { { "PADLSHOULDER", "PADRSHOULDER" }, { "LB", "RB" }, "Turn Page" }
         end
         local verb = line and (line.go and "Read" or p.verb and p:verb(line))
         -- (with the mouse a click on the entry, a right-click for Square's)
@@ -962,7 +1017,7 @@ function BK.New(opts)
             defs[#defs + 1] = { "PAD4", "Y", opts.search.text or "Search" }
         end
         if filter then defs[#defs + 1] = { "PADLSTICK", "LS", filter.text or "Filters" } end
-        local hint = switch:Hint()
+        local hint = not tabbed and switch:Hint()
         if hint then defs[#defs + 1] = hint end
         defs[#defs + 1] = { "PAD2", "B", p.tab ~= "notes" and (opts.notes or "Notes")
             or #book.stack > 1 and "Back" or "Close" }
@@ -993,6 +1048,9 @@ function BK.New(opts)
             if line.kind == "recipe" then sub = nil end
         end
         c.icon:Set(line.icon or (line.item and ItemIcon(line.item)), round)
+        c.icon:SetMarks(line.done, line.dim)
+        c.name:SetAlpha(line.dim and 0.6 or 1)
+        c.sub:SetAlpha(line.dim and 0.6 or 1)
         -- A creature, a person: its own face
         if line.kind == "npc" or line.portrait then BK.Portrait(line.portrait or line.id, c.icon.icon) end
         Script(c.name, name, "SystemFont_Large", "GameFontNormalLarge")
@@ -1206,6 +1264,11 @@ function BK.New(opts)
             return
         end
         if name == "UP" or name == "DOWN" or name == "LEFT" or name == "RIGHT" then Move(name)
+        elseif opts.tabs and #opts.tabs > 1 and (name == "LB" or name == "RB") then
+            local n = #opts.tabs
+            self:SetTab(((self.tab or 1) - 1 + (name == "RB" and 1 or -1)) % n + 1)
+        elseif opts.tabs and #opts.tabs > 1 and (name == "LT" or name == "RT") then
+            Turn(name == "RT" and 1 or -1)
         elseif name == "LB" then Turn(-1)
         elseif name == "RB" then Turn(1)
         elseif name == "LT" or name == "RT" then switch:Press(name)

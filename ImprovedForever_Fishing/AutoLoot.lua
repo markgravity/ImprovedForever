@@ -1,10 +1,10 @@
--- The game's loot window kept away while fishing: with a pole in hand the
+-- The game's loot window kept away while fishing: in fishing mode the
 -- game's own auto loot is on (autoLootDefault), so a catch is taken at
 -- once and its window closes by itself (the fishing bar shows the catch
 -- instead, CastBar.lua). Your own
--- setting is put back when the pole is put away; kept per character
--- (IF.charDB.fishingLootSaved) until then, so a /reload or a logout with
--- the pole in hand still puts it back. Off: /if fishloot.
+-- setting is put back when the mode ends; kept per character
+-- (IF.charDB.fishingLootSaved) until then, so a /reload or a logout in
+-- the mode still puts it back. Off: /if fishloot.
 local IF = ImprovedForever
 local F = IF.Fishing
 
@@ -21,10 +21,10 @@ local function Set(value)
     if set then pcall(set, CVAR, value) end
 end
 
--- (on with a pole in hand, the player's own value back without one)
+-- (on in fishing mode, the player's own value back out of it)
 local function Apply()
     if not (IF.db and IF.charDB) then return end
-    local want = F.Settings().autoLoot and F.PoleEquipped()
+    local want = F.Settings().autoLoot and F.InMode()
     local saved = IF.charDB.fishingLootSaved
     if want and saved == nil then
         local now = Get()
@@ -43,6 +43,7 @@ local events = CreateFrame("Frame")
 events:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
 events:SetScript("OnEvent", Apply)
 IF.OnLogin(Apply)
+F.OnMode(Apply)
 
 -- /if fishloot: the auto loot while fishing on or off
 IF.AddCommand("fishloot", function()

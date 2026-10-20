@@ -441,6 +441,14 @@ function F.Dock(win, opts)
     end
 end
 
+-- Is a window of ours up: one docked and shown, or one holding the pad
+function F.OursOpen()
+    for f in pairs(docked) do
+        if f:IsShown() then return true end
+    end
+    return next(dimmed) ~= nil
+end
+
 ---------------------------------------------------------------------------
 -- The focus indicator: the game's gamepad cursor (SmartNavigation's
 -- Pointer: its large arrow, in GAMEPAD_SMARTNAV_CURSOR_COLOR, left of what
