@@ -127,8 +127,21 @@ local function Apply()
     scroll:SetAlpha(PeekMap.Settings().alpha)
 end
 
+-- Spoken's place story panel and its side tab: under the gamepad UI they are
+-- UIParent's, shown with the map, so they stay over a peek. Faded by an
+-- animation of ours (their own alpha is Spoken's to set).
+local SPOKEN_PANELS = { "SpokenZonesPanel", "SpokenZonesPanelToggle" }
+
+local function FadeSpoken(hide)
+    for _, name in ipairs(SPOKEN_PANELS) do
+        local frame = _G[name]
+        if frame then IF.Focus.Fade(frame, hide) end
+    end
+end
+
 local function Restore()
     local scroll = WorldMapFrame and WorldMapFrame.ScrollContainer
+    FadeSpoken(false)
     if not saved then return end
     IF.Focus.DimNative(place, false)
     PeekMap.Keys(false)
@@ -148,6 +161,7 @@ end
 local refade = CreateFrame("Frame")
 refade:SetScript("OnUpdate", function()
     if not (peeking and saved and WorldMapFrame) then return end
+    FadeSpoken(true)
     for _, child in ipairs({ WorldMapFrame:GetChildren() }) do
         if child ~= WorldMapFrame.ScrollContainer and saved.alphas[child] == nil then Fade(child) end
     end
