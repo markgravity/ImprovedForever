@@ -23,11 +23,13 @@ local FADED = { "ImprovedForeverGamepadBar", "ImprovedForeverRecentSlot", "Impro
     "ImprovedForeverMinionCard1", "ImprovedForeverPartyCard1", "ImprovedForeverPartyCard2",
     "ImprovedForeverPartyCard3", "ImprovedForeverPartyCard4", "ImprovedForeverPartyCasts",
     "ImprovedForeverBuffList", "ImprovedForeverCooldownTimeline", "ImprovedForeverXPLine",
-    "ImprovedForeverChatView", "IFObjectiveTrackerFrame" }
+    "ImprovedForeverChatView", "ImprovedForeverPlayerHealth", "IFObjectiveTrackerFrame" }
 
-local CAMERA_DEFAULTS = { zoom = 4.5, shoulder = 0.8, pitch = 0.3 }
+local CAMERA_DEFAULTS = { zoom = 3.5, shoulder = 2, pitch = 0.12 }
 -- (each kept within what still frames you)
-local CAMERA_LIMITS = { zoom = { 1, 15 }, shoulder = { -3, 3 }, pitch = { 0, 1 } }
+-- (pitch: the game's share of the screen kept under your feet; past about
+-- 0.4 it changes nothing)
+local CAMERA_LIMITS = { zoom = { 1, 15 }, shoulder = { -3, 3 }, pitch = { 0, 0.4 } }
 local CVARS = { "test_cameraOverShoulder", "test_cameraDynamicPitch", "test_cameraDynamicPitchBaseFovPad" }
 -- (the game's gamepad mode keeps the character centred with a temporary
 -- value of its own (Blizzard_Gamepad/Core.lua: SetupTempCVar), over the
@@ -122,6 +124,20 @@ local function CameraIn()
     SetCVarSafe("test_cameraDynamicPitch", 1)
     SetCVarSafe("test_cameraDynamicPitchBaseFovPad", cam.pitch)
     ZoomTo(cam.zoom)
+end
+
+-- The fishing camera's framing (FishingEditor.lua's sliders): zoom,
+-- shoulder, pitch, each within its limits; set, and seen at once while
+-- the fishing view is on
+F.CAMERA_LIMITS = CAMERA_LIMITS
+function F.CameraGet(key)
+    return Camera()[key]
+end
+function F.CameraSet(key, value)
+    local limit = CAMERA_LIMITS[key]
+    if not (limit and tonumber(value)) then return end
+    Camera()[key] = math.max(limit[1], math.min(limit[2], tonumber(value)))
+    if F.ViewActive() then CameraIn() end
 end
 
 -- (yours back; the distance only when it's back from fishing)
