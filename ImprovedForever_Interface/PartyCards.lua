@@ -481,6 +481,8 @@ local function Label(text, anchor, point)
 end
 local minionLabel = Label("Minions", minions[1], "LEFT")
 local partyLabel = Label("Party", party[1], "LEFT")
+-- (for the fishing view, ImprovedForever_Fishing/View.lua: faded with the cards)
+PC.labels = { minionLabel, partyLabel }
 
 local function AnyShown(list)
     for _, b in ipairs(list) do

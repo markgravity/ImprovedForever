@@ -281,14 +281,34 @@ end
 
 -- What you cast now: kind ("cast" / "channel") and its info (its spell:
 -- name, texture, ID, for the diamond)
+-- Casts another bar of ours draws (the Fishing module's fishing bar):
+-- PlayerCast.Claim(fn), fn(kind, spellID, spellName) true for one it
+-- takes; that one isn't ours (as though nothing were cast)
+local claims = {}
+function PlayerCast.Claim(fn)
+    claims[#claims + 1] = fn
+end
+
+local function Claimed(kind, spell)
+    for _, fn in ipairs(claims) do
+        local ok, yes = pcall(fn, kind, spell[3], spell[1])
+        if ok and yes then return true end
+    end
+    return false
+end
+
 local function Casting()
     local cname, text, texture, startMs, endMs, _, _, notInterruptible, spellID = UnitCastingInfo("player")
     if Present(cname) then
-        return "cast", text, startMs, endMs, notInterruptible, { cname, texture, spellID }
+        local spell = { cname, texture, spellID }
+        if Claimed("cast", spell) then return nil end
+        return "cast", text, startMs, endMs, notInterruptible, spell
     end
     local chname, chtext, chtexture, chstart, chend, _, chnot, chspell = UnitChannelInfo("player")
     if Present(chname) then
-        return "channel", chtext, chstart, chend, chnot, { chname, chtexture, chspell }
+        local spell = { chname, chtexture, chspell }
+        if Claimed("channel", spell) then return nil end
+        return "channel", chtext, chstart, chend, chnot, spell
     end
 end
 
