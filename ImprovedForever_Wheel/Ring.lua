@@ -776,6 +776,20 @@ for index = 1, SLOTS_PER_PAGE do
         mask:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
     end
     slot.icon:AddMaskTexture(mask)
+    -- A craft ring round the icon: the slot's recipe is known (Square makes it)
+    slot.craftRing = ring:CreateTexture(nil, "OVERLAY", nil, -1)
+    slot.craftRing:SetSize(ICON_SIZE + 8, ICON_SIZE + 8)
+    slot.craftRing:SetPoint("CENTER", slot.icon, "CENTER")
+    slot.craftRing:SetColorTexture(unpack(GOLD))
+    local ringMask = ring:CreateMaskTexture()
+    ringMask:SetAllPoints(slot.craftRing)
+    if HasAtlas("CircleMask") then
+        ringMask:SetAtlas("CircleMask")
+    else
+        ringMask:SetTexture("Interface\\CharacterFrame\\TempPortraitAlphaMask", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+    end
+    slot.craftRing:AddMaskTexture(ringMask)
+    slot.craftRing:Hide()
     -- Its cooldown (an item's, a spell's), a round swipe over the icon
     -- (not a protected frame: set in combat too)
     slot.cooldown = CreateFrame("Cooldown", nil, ring, "CooldownFrameTemplate")
@@ -863,7 +877,7 @@ local function LabelColor(entry)
         return usable and (color or GOLD) or GREY
     end
     if Pending(entry) then return PENDING end
-    local usable = entry.type ~= "item" or ItemCount(entry.value) > 0
+    local usable = (entry.type ~= "item" or ItemCount(entry.value) > 0) and not entry.missing
     return usable and GOLD or GREY
 end
 
@@ -969,6 +983,7 @@ local function RefreshVisuals()
         slot.label:SetShown(entry ~= nil)
         slot.count:SetShown(entry ~= nil)
         slot.health:Hide()
+        slot.craftRing:Hide()
         slot.stat:SetText(entry and not entry.unit and entry.stat or "")
         slot.stat:SetShown(entry ~= nil and entry.stat ~= nil and not entry.unit)
         ShowCooldown(slot.cooldown, entry)
@@ -979,8 +994,9 @@ local function RefreshVisuals()
             SetSlotIcon(slot.icon, entry.icon or 134400)
             slot.count:SetText(entry.type == "item" and ItemCount(entry.value) or "")
             slot.label:SetText(entry.label)
-            local usable = entry.type ~= "item" or ItemCount(entry.value) > 0
+            local usable = (entry.type ~= "item" or ItemCount(entry.value) > 0) and not entry.missing
             slot.icon:SetDesaturated(not usable)
+            slot.craftRing:SetShown(entry.craft ~= nil)
             slot.label:SetTextColor(unpack(LabelColor(entry)))
         end
     end

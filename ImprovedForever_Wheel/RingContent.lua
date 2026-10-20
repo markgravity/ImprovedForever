@@ -320,6 +320,8 @@ local function BuildCamping()
                 -- (none in the bags: nothing to use, only to make)
                 type = count > 0 and "item" or "macro", value = count > 0 and ("item:" .. camp.item) or "",
                 action = "item:" .. camp.item, tip = "item:" .. camp.item,
+                -- (none in the bags: shown grey)
+                missing = count == 0,
             }
         end
     end

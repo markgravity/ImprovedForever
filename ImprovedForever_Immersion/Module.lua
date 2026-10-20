@@ -73,6 +73,7 @@ local DEFAULTS = {
     pad = true,         -- the gamepad bar as Hogwarts Legacy's spell diamonds, bottom right
     padStyle = "square", -- its tiles: "diamond", "square" (rows and columns) or "circle" (GamepadBar.lua)
     partyPad = false,   -- L1 ours: + the D-pad picks a party spell, + a face button casts it on party 1 to 4 (a test)
+    camp = true,        -- sitting by a campfire as a cinematic scene: HUD faded, camera in, time left until its benefits (Camp.lua)
 }
 
 -- A watcher: fn() every `every` seconds. One that errors stops, said once
