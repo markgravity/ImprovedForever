@@ -315,7 +315,7 @@ end)
 -- in the game's Key Bindings, Bindings.xml) that opens it, or closes it if
 -- it is already up. Any key or pad button the player binds works, in combat
 -- too.
-IF.WHEEL_BINDING_KEYS = { "quest", "consumables", "emotes", "group", "camping", "panels", "my1", "my2", "my3", "my4", "my5", "my6",
+IF.WHEEL_BINDING_KEYS = { "quest", "consumables", "emotes", "group", "panels", "my1", "my2", "my3", "my4", "my5", "my6",
     "my7", "my8" }
 -- (a name kept: Buffs gave its place to Quest Items, and a key or crossbar
 -- slot bound to its button opens that now)
@@ -323,7 +323,7 @@ local RENAMED = { buffs = "quest" }
 local buttonNames = {}
 for _, key in ipairs(IF.WHEEL_BINDING_KEYS) do buttonNames[#buttonNames + 1] = key end
 for old in pairs(RENAMED) do buttonNames[#buttonNames + 1] = old end
-for _, name in ipairs(buttonNames) do
+local function MakeOpenButton(name)
     local key = RENAMED[name] or name
     local open = SecureButton("ImprovedForeverWheel_" .. name)
     -- (a key: on its press; a macro's /click ... Macro, on a crossbar slot
@@ -347,6 +347,11 @@ for _, name in ipairs(buttonNames) do
         ring:Show()
         return false
     ]])
+end
+for _, name in ipairs(buttonNames) do MakeOpenButton(name) end
+-- (a built-in wheel another module adds: MyWheels.lua's IF.AddBuiltInWheel)
+function IF.MakeWheelButton(key)
+    if not _G["ImprovedForeverWheel_" .. key] then MakeOpenButton(key) end
 end
 
 -- Stick directions (as keys): move the sticky pick. A key going down means

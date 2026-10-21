@@ -8,8 +8,9 @@
 ## IconTexture: Interface\AddOns\ImprovedForever\textures\ic_mod_camp
 ## Group: ImprovedForever
 ## Dependencies: ImprovedForever
-## OptionalDeps: ImprovedForever_Immersion, ImprovedForever_Journal, ImprovedForever_Minimap, ImprovedForever_QuestTracker
+## OptionalDeps: ImprovedForever_Immersion, ImprovedForever_Journal, ImprovedForever_Minimap, ImprovedForever_QuestTracker, ImprovedForever_Wheel
 
 Module.lua
 Scene.lua
 CampEditor.lua
+CampWheel.lua
