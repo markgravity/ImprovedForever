@@ -74,6 +74,8 @@ IF.AddCommand("leveltest", function(args) IN.LevelBanner.Test(args[1]) end,
     "[level]: show the level up banner (your next level, made-up gains)")
 -- /if progresstest: a made-up objective counting up (QuestProgress.lua)
 IF.AddCommand("progresstest", function() IN.QuestProgress.Test() end, ": show quest progress counting up (made up)")
+-- /if rangeprobe: what the target header's range check reads (TargetHeader.lua)
+IF.AddCommand("rangeprobe", function() IN.TargetHeader.RangeProbe() end, ": what the target's range check reads")
 -- /if chatprobe: what keeps the game's chat shown (ChatFade.lua)
 IF.AddCommand("chatprobe", function() IN.ChatFade.Probe() end, ": what keeps the game's chat shown")
 
@@ -89,7 +91,7 @@ local DEFAULTS = {
     hudCooldowns = true, -- the Cooldown Manager left of the spell diamonds (in the Edit Mode layout; an experiment)
     chatDim = true,     -- the chat as only its lines while not in use
     castBar = true,     -- your casts as a long line over the party cards, filling out from the middle
-    castRange = true,   -- with the cast line: its diamond alone while not casting, grey with your target out of range
+    castRange = true,   -- the target header greyed while an enemy is out of your reach
     hpLine = true,      -- your health as a bar over the power line
     mpLine = true,      -- your power (mana, rage, energy...) as a bar along the screen's bottom edge
     questArrow = true,  -- the focused quest's way: a header near the top (its name, the yards left), a diamond arrow on its rule

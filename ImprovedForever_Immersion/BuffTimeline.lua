@@ -484,7 +484,7 @@ local function SpellOf(storage)
     return not Secret(id) and type(id) == "number" and id or nil
 end
 
--- (for the cast line's range diamond, PlayerCast.lua)
+-- (for your reach, PlayerCast.lua: the target header's range)
 BT.PadSlots, BT.SpellOf = PadSlots, SpellOf
 
 -- A slot's length from its tooltip ("8 sec cooldown", an item's "(2 Min

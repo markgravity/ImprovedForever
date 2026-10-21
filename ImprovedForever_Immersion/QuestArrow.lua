@@ -15,7 +15,8 @@
 -- the target, a zone's name or a level up take its place in turn
 -- (HeaderSlot.lua); gone when there's nothing to point at (no
 -- focused quest, another continent, an instance), on a flight, while an
--- NPC talks (NpcDialog.lua), and once you're there.
+-- NPC talks (NpcDialog.lua), and once you're there (at its point, or
+-- inside its area on the map).
 -- Only read: the quest log's waypoints and map POIs, the player's map
 -- position and facing. The game's own in-world marker (SuperTrackedFrame)
 -- is left as it is.
@@ -395,6 +396,14 @@ local function Quiet()
     return dialog and dialog:IsShown()
 end
 
+-- (inside the quest's area: the shape the map and the minimap draw for a
+-- quest whose objectives are spread over a place; the game's own answer)
+local function InArea(quest)
+    if not (C_Minimap and C_Minimap.IsInsideQuestBlob) then return false end
+    local ok, inside = pcall(C_Minimap.IsInsideQuestBlob, quest)
+    return ok and not Secret(inside) and inside == true
+end
+
 -- (the angle to turn to: clockwise from straight ahead, in radians)
 local goalAngle, yards
 
@@ -409,13 +418,17 @@ local function Read()
     yards = math.sqrt(east * east + north * north)
     -- bearing clockwise from north; facing turns anticlockwise from north
     goalAngle = math.atan2(east, north) + facing
+    local inside = InArea(t.quest)
     if probe then
         probe = nil
-        IF.Print(("Quest arrow: quest %d from %s, map %d (%.3f, %.3f), %d yds, bearing %.0f, facing %.0f, turn %.0f")
-            :format(t.quest, t.source, t.map, t.x, t.y, yards, math.deg(math.atan2(east, north)) % 360,
-                math.deg(facing) % 360, math.deg(goalAngle) % 360))
+        IF.Print(("Quest arrow: quest %d from %s, map %d (%.3f, %.3f), %d yds, bearing %.0f, facing %.0f, turn %.0f, "
+            .. "in its area %s"):format(t.quest, t.source, t.map, t.x, t.y, yards,
+                math.deg(math.atan2(east, north)) % 360, math.deg(facing) % 360, math.deg(goalAngle) % 360,
+                tostring(inside)))
     end
-    if yards < ARRIVED then goalAngle = nil end
+    -- (there: at its point, or inside its area (the shape the map and the
+    -- minimap draw round it): nothing more to point at)
+    if yards < ARRIVED or inside then goalAngle = nil end
     title:SetText(t.name or "")
     words:SetText(t.text or "")
     local yd = math.floor(yards + 0.5)

@@ -72,12 +72,11 @@ local ITEMS = {
             .. "be interrupted, red when it's cut. Edit Mode shows the game's bar.",
     }, Toggle("castBar", "Cast line", function() IN.PlayerCast.Apply() end)),
     Item({
-        key = "castRange", group = "frames", label = "Range diamond",
-        tip = "With the cast line, while you aren't casting and have an enemy targeted: its diamond alone, "
-            .. "with the icon and reach of the longest-reaching harmful spell on your gamepad bar (a wand's "
-            .. "Shoot, a bow's Auto Shot, a Frostbolt...), grey while the target is out of its range. A "
-            .. "cast turns it into the cast's diamond.",
-    }, Toggle("castRange", "Range diamond", function() IN.PlayerCast.Apply() end)),
+        key = "castRange", group = "frames", label = "Target range",
+        tip = "With an enemy targeted, the target header shows whether it's in reach of the longest-reaching "
+            .. "harmful spell on your gamepad bar (a wand's Shoot, a bow's Auto Shot, a Frostbolt...): out of "
+            .. "it, its portrait turns grey and its health line faint.",
+    }, Toggle("castRange", "Target range", function() end)),
     Item({
         key = "hpLine", group = "frames", label = "Health line",
         tip = "Your health as a bar over the power line, drawn as it is: green, amber past half, red "
@@ -106,7 +105,8 @@ local ITEMS = {
             .. "to the target and to zone names, and comes back after. "
             .. "It points where "
             .. "the quest leads next (another zone's way in, its words small under the yards), else at the quest's "
-            .. "place on the map. Gone once you're there, on a flight, while an NPC talks, and where the game "
+            .. "place on the map. Gone once you're there (or inside its area on the map), on a flight, "
+            .. "while an NPC talks, and where the game "
             .. "gives no way (an instance, another continent).",
     }, Toggle("questArrow", "Quest arrow", function() IN.QuestArrow.Apply() end)),
     Item({

@@ -7,7 +7,9 @@
 -- rim; under them its name big, the quests it counts for (as its tooltip
 -- has them), else what more there is to say of it (a player's guild, race
 -- and class; an NPC's title and kind), then its casts as a thin line. In
--- a fight only the fight's: the name smaller, the casts.
+-- a fight only the fight's: the name smaller, the casts. An enemy out of
+-- your reach (your longest-reaching harmful spell, PlayerCast.lua): its
+-- portrait grey, its line faint.
 -- It comes in when you target something and goes when you don't (a moment
 -- after, so a quick change doesn't strobe; one target to another changes in
 -- place): the line grows out from the middle, the diamond pops up, the
@@ -435,6 +437,77 @@ castEvents:SetScript("OnEvent", function(_, event)
 end)
 
 ---------------------------------------------------------------------------
+-- Your reach: an enemy out of range of your longest-reaching harmful spell
+-- (PlayerCast.lua's pick) greys its portrait and dims its line. The range
+-- check's answer can be secret (in a fight): handed to the widgets as it
+-- is (SetVertexColorFromBoolean, SetAlphaFromBoolean), never compared.
+---------------------------------------------------------------------------
+local RANGE_CHECK, OUT_ALPHA = 0.1, 0.35
+local OUT_GREY = 0.4
+local WHITE_C, GREY_C
+local rangeSince = 0
+
+local function Reach(inRange)
+    local icon = tile.icon
+    if inRange == nil then
+        icon:SetDesaturated(false)
+        icon:SetVertexColor(1, 1, 1)
+        for _, h in ipairs(halves) do h.holder:SetAlpha(1) end
+        return
+    end
+    if Secret(inRange) then
+        WHITE_C = WHITE_C or CreateColor(1, 1, 1, 1)
+        GREY_C = GREY_C or CreateColor(OUT_GREY, OUT_GREY, OUT_GREY, 1)
+        icon:SetDesaturated(false)
+        if not Try(icon.SetVertexColorFromBoolean, icon, inRange, WHITE_C, GREY_C) then icon:SetVertexColor(1, 1, 1) end
+        for _, h in ipairs(halves) do
+            if not Try(h.holder.SetAlphaFromBoolean, h.holder, inRange, 1, OUT_ALPHA) then h.holder:SetAlpha(1) end
+        end
+        return
+    end
+    local out = inRange == false
+    icon:SetDesaturated(out)
+    local c = out and OUT_GREY or 1
+    icon:SetVertexColor(c, c, c)
+    for _, h in ipairs(halves) do h.holder:SetAlpha(out and OUT_ALPHA or 1) end
+end
+
+-- (an enemy targeted, alive)
+local function Enemy()
+    local ok, yes = pcall(function()
+        if not UnitExists("target") then return false end
+        local attack, dead = UnitCanAttack("player", "target"), UnitIsDeadOrGhost("target")
+        if Secret(attack) or Secret(dead) then return true end
+        return attack and not dead
+    end)
+    return ok and yes or false
+end
+
+local function CheckRange(elapsed)
+    rangeSince = rangeSince + (elapsed or 0)
+    if rangeSince < RANGE_CHECK then return end
+    rangeSince = 0
+    local PC = IN.PlayerCast
+    local spell = IN.Settings().castRange ~= false and PC and PC.RangeSpell and PC.RangeSpell()
+    if not (spell and Enemy()) then return Reach(nil) end
+    local ok, inRange = pcall(C_Spell.IsSpellInRange, spell, "target")
+    -- (false is an answer: out of reach; only an error is none)
+    if not ok then inRange = nil end
+    Reach(inRange)
+end
+
+-- /if rangeprobe: what the range check reads now
+function TH.RangeProbe()
+    local PC = IN.PlayerCast
+    local spell = PC and PC.RangeSpell and PC.RangeSpell()
+    local name = spell and C_Spell.GetSpellName and C_Spell.GetSpellName(spell)
+    local ok, inRange = pcall(C_Spell.IsSpellInRange, spell or 0, "target")
+    local shown = not ok and ("error " .. tostring(inRange)) or Secret(inRange) and "<hidden>" or tostring(inRange)
+    IF.Print(("Target range: spell %s (%s), enemy %s, setting %s, in range %s"):format(tostring(spell),
+        tostring(name), tostring(Enemy()), tostring(IN.Settings().castRange), shown))
+end
+
+---------------------------------------------------------------------------
 -- In the header's place while there's a target (and a moment after), the
 -- setting on, out of Edit Mode; drawn from its presence
 ---------------------------------------------------------------------------
@@ -482,6 +555,7 @@ local function Draw(elapsed)
         look:Show()
         Refresh(UF.target)
     end
+    CheckRange(elapsed)
     if p == drawn and calm == drawnCalm then return end
     drawn, drawnCalm = p, calm
     LineWidth(Ease(p, 0, 0.6))

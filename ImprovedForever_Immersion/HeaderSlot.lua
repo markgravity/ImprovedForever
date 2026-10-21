@@ -1,9 +1,10 @@
 -- The header's place under the top of the screen, and its look (the camp
 -- summary's, the Camp module's Scene.lua): a gold rule, a diamond on it,
--- a name big in Morpheus under it, small lines under that. Three take it
--- in turn: the zone's name as you enter one (ZoneBanner.lua), the target
--- (TargetHeader.lua), the focused quest's way (QuestArrow.lua), the first
--- of them that wants it. One goes out before the next comes in: each owner
+-- a name big in Morpheus under it, small lines under that. They take it
+-- in turn, the first that wants it: a level up (LevelBanner.lua), quest
+-- progress (QuestProgress.lua), the zone's name as you enter one
+-- (ZoneBanner.lua), the target (TargetHeader.lua), the focused quest's way
+-- (QuestArrow.lua). One goes out before the next comes in: each owner
 -- draws itself from its presence, 0 to 1 (going out: 1 to 0; coming in: 0
 -- to 1). The gold rule is the slot's own, shown while the owner in it
 -- uses it (the target's is its health), so it stays through a swap
