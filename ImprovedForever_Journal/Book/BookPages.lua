@@ -374,7 +374,23 @@ local PAGE = { x = 12, unit = 17, foot = 30, top = 40, plate = 262, row = 318, c
 -- A plate with `rich` cards or more has a page of its own; quieter ones
 -- share one while their cards come to no more than `shared[n]` for n
 -- plates.
-local SHARE = { rich = 3, shared = { [2] = 4, [3] = 3 } }
+local SHARE = { rich = 5, shared = { [2] = 7, [3] = 3 } }
+
+-- Two plates on a page of ours, in turn (and Social Diary's own for a
+-- full plate and a print, FL / LF), so the pages zigzag: the first plate
+-- high on one side with its caption and notes down the other, the second
+-- lower on the other side with its caption and notes beside it, the notes'
+-- columns wider than Social Diary's two-plate page gives (176 and 122).
+local TWO = {
+    { { x = 8, y = -2, w = 272, h = 220, t = -1.4, pad = 8, pc = 24, corners = FOUR,
+        cap = { x = 294, y = 14, w = 164, limit = 244 } },
+      { x = 186, y = 252, w = 272, h = 240, t = 1.8, pad = 8, pc = 24, corners = LOST, lift = "br",
+        cap = { x = 12, y = 268, w = 162, limit = BOTTOM, align = "RIGHT" } } },
+    { { x = 186, y = -2, w = 272, h = 220, t = 1.4, pad = 8, pc = 24, corners = FOUR,
+        cap = { x = 12, y = 14, w = 162, limit = 244, align = "RIGHT" } },
+      { x = 8, y = 252, w = 272, h = 240, t = -1.6, pad = 8, pc = 24, corners = LOST, lift = "br",
+        cap = { x = 294, y = 268, w = 164, limit = BOTTOM } } },
+}
 local WORDS_W = RIGHT_W - 2 * PAGE.x
 local BOTTOM = RIGHT_H - PAGE.foot
 local FOUR, LOST = { "tl", "tr", "bl", "br" }, { "tl", "tr", "bl" }
@@ -595,10 +611,10 @@ local function DayPages(key)
         end
         if #sc.plates == 0 then plan.pages[#plan.pages + 1] = { scene = sc } end
     end
-    -- Into pages: a rich plate alone, in the next of ALONE's shapes; the
-    -- quieter ones two or three to a page where Social Diary has a page
-    -- that holds them, else alone too
-    local i, turn = 1, 0
+    -- Into pages: two plates a page as a rule (three where all three are
+    -- quiet), a plate alone only where its margin is full (SHARE.rich), in
+    -- the next of ALONE's shapes, or where no page holds its neighbour
+    local i, turn, twos = 1, 0, 0
     local LayoutFor = YourDiary.LayoutFor
     while units[i] do
         local u = units[i]
@@ -629,6 +645,15 @@ local function DayPages(key)
         if #group == 2 and group[1].weight >= SHARE.rich then
             u.plate.heading, u.plate.say = u.full, u.first and u.scene.say or nil
             v.plate.heading, v.plate.say = nil, nil
+        elseif #group == 2 then
+            -- (Social Diary's own page for a full plate and a print, else
+            -- ours in turn; the headings ours, the words theirs)
+            local _, key = LayoutFor({ group[1].plate, group[2].plate })
+            if key ~= "FL" and key ~= "LF" then
+                twos = twos % #TWO + 1
+                pg.layout = TWO[twos]
+            end
+            for _, w in ipairs(group) do w.plate.heading, w.plate.say = w.full, nil end
         elseif #group == 1 then
             turn = turn % #ALONE + 1
             local shape = ALONE[turn]
@@ -642,9 +667,9 @@ local function DayPages(key)
                 p.heading, p.say = u.full, u.first and u.scene.say or nil
             end
         else
-            -- (Social Diary's own captions: "Tirisfal Glades, Monday",
-            -- "Forty minutes later", a few words of what it shows)
-            for _, w in ipairs(group) do w.plate.heading, w.plate.say = nil, nil end
+            -- (three: Social Diary's pages, the headings ours, the words
+            -- theirs)
+            for _, w in ipairs(group) do w.plate.heading, w.plate.say = w.full, nil end
         end
         plan.pages[#plan.pages + 1] = pg
         i = i + #group
@@ -701,6 +726,8 @@ local function DrawRight()
         local layout, pattern
         if #plates == 1 then
             layout, pattern = { pg.shape[1]() }, "F"
+        elseif pg.layout then
+            layout, pattern = pg.layout, "FF"
         else
             layout, pattern = YourDiary.LayoutFor(plates)
             if not layout then layout, pattern = YourDiary.LAYOUT[#plates], "" end
