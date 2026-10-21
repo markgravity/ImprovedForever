@@ -78,6 +78,12 @@ local pending = false
 -- after each click (from insecure code, fine in combat) tells it
 local DOUBLE = 0.35
 
+-- A pad button's place in GetGamePadState().buttons
+local function PadIndex(button)
+    local index = C_GamePad and C_GamePad.ButtonBindingToIndex and C_GamePad.ButtonBindingToIndex(button)
+    return index and index + 1 or nil
+end
+
 local function SecureButton(key)
     local b = buttons[key]
     if b then return b end
@@ -101,6 +107,21 @@ local function SecureButton(key)
     -- one), any other the single click's
     SecureHandlerWrapScript(b, "OnClick", b, [[
         if not down ~= not self:GetAttribute("ic-down") then return false end
+        -- A trigger held (L2 / R2; R2 is no modifier, the key comes the
+        -- same with it): the press is the game's crossbar button of that
+        -- layer, ic-layer-<LT | RT | LTRT> (the game's bars read the triggers
+        -- themselves)
+        local state = GetGamePadState()
+        local pad = state and state.buttons
+        local lt, rt = self:GetAttribute("ic-lt"), self:GetAttribute("ic-rt")
+        if pad and (lt or rt) then
+            local layer = ((lt and pad[lt]) and "LT" or "") .. ((rt and pad[rt]) and "RT" or "")
+            local held = layer ~= "" and self:GetAttribute("ic-layer-" .. layer)
+            if held then
+                self:SetAttribute("macrotext", held)
+                return
+            end
+        end
         local window = self:GetFrameRef("window")
         local double = self:GetAttribute("ic-double")
         if double and window and window:IsShown() then
@@ -131,6 +152,7 @@ function O.Apply()
     end
     pending = false
     ClearOverrideBindings(owner)
+    if IF.WandShoot then IF.WandShoot.Bind(nil) end
     -- Only while the game has the gamepad's focus (Binds.lua)
     if not IF.Binds.InGame() then return end
     -- Fires on the press or the release, as the game's action buttons do
@@ -166,11 +188,30 @@ function O.Apply()
             b:SetAttribute("useOnKeyDown", onDown)
             b:SetAttribute("ic-single", m.single)
             b:SetAttribute("ic-double", m.double)
+            b:SetAttribute("ic-lt", nil)
+            b:SetAttribute("ic-rt", nil)
             -- (with priority, as the wheels' and the bags' presses: the
             -- game's own gamepad bindings, its Main Menu wheel on Options,
             -- would win over a plain override)
             SetOverrideBindingClick(owner, true, key, b:GetName(), "LeftButton")
         end
+    end
+    -- Square with a wand: shoot instead of the melee swing (WandShoot.lua),
+    -- bound only while an enemy is targeted, unless the player set an
+    -- action of their own on it
+    local wand, layers
+    if IF.WandShoot then wand, layers = IF.WandShoot.Macro() end
+    local square = O.BindingKey("PAD3")
+    if wand and square and not macros[square] then
+        local b = SecureButton(square)
+        b:SetAttribute("ic-down", onDown)
+        b:SetAttribute("useOnKeyDown", onDown)
+        b:SetAttribute("ic-single", wand)
+        b:SetAttribute("ic-double", nil)
+        b:SetAttribute("ic-lt", PadIndex("PADLTRIGGER"))
+        b:SetAttribute("ic-rt", PadIndex("PADRTRIGGER"))
+        for _, layer in ipairs({ "LT", "RT", "LTRT" }) do b:SetAttribute("ic-layer-" .. layer, layers[layer]) end
+        IF.WandShoot.Bind(square, b:GetName())
     end
 end
 

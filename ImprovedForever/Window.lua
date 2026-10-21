@@ -173,35 +173,113 @@ function UI.SideTabs(win, onSelect, opts)
         return b
     end
 
-    function tabs:Render(list, selected)
-        local previous
+    -- More tabs than fit the window's height: the ones that fit, an arrow
+    -- and a count beyond each end that has more, the wheel over the tabs
+    -- scrolls; the picked tab is always in view
+    local TAB_H, TAB_GAP, TOP_ROOM, BOTTOM_ROOM = 54, 2, 52, 40
+    local function More(texture, rotate)
+        local m = { icon = win:CreateTexture(nil, "OVERLAY"), count = win:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall") }
+        m.icon:SetSize(18, 18)
+        m.icon:SetTexture(texture)
+        m.count:SetTextColor(1, 0.82, 0.3)
+        m.Show = function(self, shown) self.icon:SetShown(shown) self.count:SetShown(shown) end
+        m:Show(false)
+        return m
+    end
+    local up = More("Interface\\Buttons\\Arrow-Up-Up")
+    local down = More("Interface\\Buttons\\Arrow-Down-Up")
+    tabs.offset = 0
+
+    function tabs:Fit()
+        local room = (win:GetHeight() or 0) - TOP_ROOM - BOTTOM_ROOM
+        return math.max(3, math.floor(room / (TAB_H + TAB_GAP)))
+    end
+
+    function tabs:Scroll(delta)
+        if not self.list then return end
+        self.offset = self.offset + delta
+        self:Render(self.list, self.selected, true)
+    end
+
+    function tabs:Render(list, selected, keepOffset)
+        self.list, self.selected = list, selected
+        local fit = self:Fit()
+        local over = #list > fit
+        if not over then
+            self.offset = 0
+        else
+            -- (the picked tab in view when it changes; a scroll keeps its place)
+            if not keepOffset and selected ~= self.shownFor then
+                for i, t in ipairs(list) do
+                    if t.key == selected then
+                        if i <= self.offset then self.offset = i - 1 end
+                        if i > self.offset + fit then self.offset = i - fit end
+                    end
+                end
+            end
+            self.offset = math.max(0, math.min(self.offset, #list - fit))
+        end
+        self.shownFor = selected
+        local first, last = self.offset + 1, over and (self.offset + fit) or #list
+        local previous, firstButton
         for i, t in ipairs(list) do
             local b = Button(i)
-            b.key, b.label = t.key, t.label
-            -- (the template's icon takes its texture's own size: an atlas's;
-            -- ours are 128 px. Our art uncropped, the game's icons trimmed)
-            K.SetIcon(b.Icon, t.icon or 134400)
-            b.Icon:SetSize(32, 32)
-            if type(t.icon) == "string" and t.icon:find(IF.TEX, 1, true) == 1 then b.Icon:SetTexCoord(0, 1, 0, 1) end
-            b:ClearAllPoints()
-            if previous then
-                b:SetPoint("TOPLEFT", previous, "BOTTOMLEFT", 0, -2)
+            if i < first or i > last then
+                b:Hide()
             else
-                b:SetPoint("TOPLEFT", win, "TOPRIGHT", -2, -52)
+                b.key, b.label = t.key, t.label
+                b:EnableMouseWheel(true)
+                b:SetScript("OnMouseWheel", function(_, delta) tabs:Scroll(-delta) end)
+                -- (the template's icon takes its texture's own size: an atlas's;
+                -- ours are 128 px. Our art uncropped, the game's icons trimmed)
+                K.SetIcon(b.Icon, t.icon or 134400)
+                b.Icon:SetSize(32, 32)
+                if type(t.icon) == "string" and t.icon:find(IF.TEX, 1, true) == 1 then b.Icon:SetTexCoord(0, 1, 0, 1) end
+                b:ClearAllPoints()
+                if previous then
+                    b:SetPoint("TOPLEFT", previous, "BOTTOMLEFT", 0, -TAB_GAP)
+                else
+                    b:SetPoint("TOPLEFT", win, "TOPRIGHT", -2, -TOP_ROOM)
+                end
+                if b.SelectedTexture then b.SelectedTexture:SetShown(t.key == selected) end
+                b:Show()
+                previous = b
+                firstButton = firstButton or b
             end
-            if b.SelectedTexture then b.SelectedTexture:SetShown(t.key == selected) end
-            b:Show()
-            previous = b
         end
         for i = #list + 1, #self.buttons do self.buttons[i]:Hide() end
-        glyph:ClearAllPoints()
-        if self.buttons[1] then glyph:SetPoint("BOTTOM", self.buttons[1], "TOP", -3, 4) end
         local pad = #list > 1 and IF.Input.Pad()
         local keys = opts.keys
+        glyph:ClearAllPoints()
+        if firstButton then
+            -- (the glyph moves left for the arrow beside it)
+            if over then glyph:SetPoint("BOTTOMLEFT", firstButton, "TOPLEFT", -4, 4)
+            else glyph:SetPoint("BOTTOM", firstButton, "TOP", -3, 4) end
+        end
         glyph:SetText(pad and IF.GlyphText(keys and keys[1] or "RS", keys and 22 or 26) or "")
         below:ClearAllPoints()
         if previous then below:SetPoint("TOP", previous, "BOTTOM", -3, -4) end
         below:SetText(pad and keys and IF.GlyphText(keys[2], 22) or "")
+        -- the arrows: the tabs before and after the ones shown
+        local before, after = first - 1, over and (#list - last) or 0
+        if firstButton and before > 0 then
+            up.icon:ClearAllPoints()
+            up.icon:SetPoint("BOTTOMRIGHT", firstButton, "TOPRIGHT", -4, 4)
+            up.count:ClearAllPoints()
+            up.count:SetPoint("RIGHT", up.icon, "LEFT", 0, 0)
+            up.count:SetText(before)
+        end
+        up:Show(firstButton ~= nil and before > 0)
+        if previous and after > 0 then
+            down.icon:ClearAllPoints()
+            down.icon:SetPoint("TOPRIGHT", previous, "BOTTOMRIGHT", -4, -4)
+            down.count:ClearAllPoints()
+            down.count:SetPoint("RIGHT", down.icon, "LEFT", 0, 0)
+            down.count:SetText(after)
+            -- (the keys' glyph below, when there is one, moves left of it)
+            if pad and keys then below:ClearAllPoints() below:SetPoint("TOPLEFT", previous, "BOTTOMLEFT", -4, -4) end
+        end
+        down:Show(previous ~= nil and after > 0)
     end
 
     -- The first tab button (a tooltip placed beside the window goes past them)

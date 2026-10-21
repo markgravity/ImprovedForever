@@ -17,6 +17,7 @@ Pad.lua
 Input.lua
 Actions.lua
 Override.lua
+WandShoot.lua
 Probe.lua
 Binds.lua
 Native.lua
@@ -31,6 +32,7 @@ SettingsPage.lua
 Bags.lua
 Touchpad.lua
 BindEditor.lua
+General.lua
 RecipeData.lua
 WorldData.lua
 FishingData.lua
