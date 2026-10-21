@@ -1,7 +1,7 @@
 -- The Interface tab, a tab of settings (IF.SettingsPage, SettingsPage.lua):
 -- each change to the game's HUD on / off. UnitFrames.lua, XPBar.lua,
--- GamepadBar.lua, ChatView.lua, ChatFade.lua and NpcDialog.lua do the
--- work.
+-- GamepadBar.lua, ChatView.lua, ChatFade.lua, NpcDialog.lua, QuestArrow.lua,
+-- ZoneBanner.lua, LevelBanner.lua and TargetHeader.lua do the work.
 local IF = ImprovedForever
 local IN = IF.Interface
 
@@ -22,18 +22,21 @@ local FOCUS_NAMES = { auto = "Automatic", tank = "Tank", healer = "Healer", off 
 local ITEMS = {
     Item({
         key = "player", group = "frames", label = "Player frame",
-        tip = "Your name, health and power bottom left (your pet's beside it), in the look of the target's "
-            .. "health on top, in place of the game's player frame. Click it to target yourself, right click "
+        tip = "Your name, health and power bottom left (your pet's beside it), in place of the game's "
+            .. "player frame. Click it to target yourself, right click "
             .. "for your menu.",
     }, Toggle("player", "Player frame", function() IN.UnitFrames.Apply() end)),
     Item({
-        key = "target", group = "frames", label = "Target health on top",
-        tip = "The target's health across the top of the screen, its name over it, its casts under it, in "
-            .. "place of the game's target frame. The bar is filled and coloured as the target's nameplate is; "
-            .. "its level sits at the left (coloured by how hard it is, a skull when too high), and an elite, "
-            .. "rare or boss shows the nameplate's dragon at the right and a gold or silver border. Under it, "
-            .. "the quests it counts for and their progress. With the mouse over it, its numbers.",
-    }, Toggle("target", "Target health on top", function() IN.UnitFrames.Apply() end)),
+        key = "target", group = "frames", label = "Target header",
+        tip = "The target in the header's place under the top of the screen (the quest arrow's and the "
+            .. "zone names' look; it takes the place from the quest arrow while you have a target): its health "
+            .. "as the line, out from the middle both ways in its nameplate's colour; on it a diamond with its "
+            .. "portrait, its level under it (coloured by how hard it is, a skull when too high), an elite or "
+            .. "rare's dragon beside it and a gold or silver rim. Under them its name big, the quests it "
+            .. "counts for (else a player's guild, race and class, or an NPC's title and kind), then its "
+            .. "casts as a thin line. Click the diamond or the name to target it, right click for its menu. In "
+            .. "place of the game's target frame.",
+    }, Toggle("target", "Target header", function() IN.UnitFrames.Apply() end)),
     Item({
         key = "cards", group = "frames", label = "Minion and party cards",
         tip = "Your pet (Minions) and your party (Party) as cards standing along the bottom, either side "
@@ -91,6 +94,35 @@ local ITEMS = {
             .. "of the game's experience bar (its reputation bar at the top level stays). With your frame on. "
             .. "The mouse over your frame shows the numbers.",
     }, Toggle("xp", "Experience ring", function() IN.XPBar.Apply() end)),
+    Item({
+        key = "questArrow", group = "frames", label = "Quest arrow",
+        tip = "The way to your focused quest (the one picked in the tracker or on the map) near the top of "
+            .. "the screen, as the camp's summary header: a gold rule, under it the quest's name big in gold "
+            .. "and the yards left small and white, and on the rule a 3D diamond lying on its side in "
+            .. "perspective, hovering, turning as you do: green while you're headed its way, yellow, orange, "
+            .. "then red turned away from it, and brighter dead on. In a fight only the diamond, small and plain, past the end of the target's "
+            .. "health line (small in its place too while the game names a zone you enter). It gives its place "
+            .. "to the target and to zone names, and comes back after. "
+            .. "It points where "
+            .. "the quest leads next (another zone's way in, its words small under the yards), else at the quest's "
+            .. "place on the map. Gone once you're there, on a flight, while an NPC talks, and where the game "
+            .. "gives no way (an instance, another continent).",
+    }, Toggle("questArrow", "Quest arrow", function() IN.QuestArrow.Apply() end)),
+    Item({
+        key = "levelBanner", group = "frames", label = "Level ups",
+        tip = "Your level ups in the quest arrow's place and look, in place of the game's: the gold rule, on "
+            .. "it a diamond with the game's level up arrow, \"Level 12\" big under it, what it gave small and white "
+            .. "(+18 Health, +1 Strength...), what's new small in gold (talent points, the spells the game "
+            .. "names). In a fight with a target it waits for the fight to end. /if leveltest shows it.",
+    }, Toggle("levelBanner", "Level ups", function() IN.LevelBanner.Apply() end)),
+    Item({
+        key = "zoneBanner", group = "frames", label = "Zone names",
+        tip = "The zone's name as you enter one in the quest arrow's place and look, in place of the game's: "
+            .. "the gold rule, on it a diamond with the zone's picture (Spoken's, as its Compendium "
+            .. "shows it), the name big under it, the subzone and "
+            .. "the game's PvP words small under that. The quest arrow spins away for it and comes back "
+            .. "after. /if zonetest shows it for the zone you're in.",
+    }, Toggle("zoneBanner", "Zone names", function() IN.ZoneBanner.Apply() end)),
     Item({
         key = "pad", group = "pad", label = "Spell diamonds",
         tip = "The gamepad action bar laid out as Hogwarts Legacy's spells: bottom right, the face buttons' "

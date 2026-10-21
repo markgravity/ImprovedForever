@@ -5,7 +5,11 @@
 -- bar a ring round the player frame (XPBar.lua), the gamepad
 -- bar as two diamonds bottom right (GamepadBar.lua), the chat as only its
 -- lines while not in use (ChatView.lua, ChatFade.lua), set up in its tab
--- (InterfaceEditor.lua). The chat isn't moved: its place is Edit Mode's,
+-- (InterfaceEditor.lua), the focused quest's way as a header near the top
+-- with a diamond arrow on its rule (QuestArrow.lua), the zone's name in
+-- its place as you enter one (ZoneBanner.lua), your level ups there too
+-- (LevelBanner.lua), the target there (TargetHeader.lua), all taking
+-- turns (HeaderSlot.lua). The chat isn't moved: its place is Edit Mode's,
 -- and Forever drops a layout saved from addon code (switching layouts
 -- from it taints); the player moves it there once.
 local IF = ImprovedForever
@@ -61,12 +65,19 @@ IF.AddCommand("padprobe", function() IN.GamepadBar.Probe() end, ": what the game
 -- /if tlprobe: what the game keeps secret for the timelines (BuffTimeline.lua)
 IF.AddCommand("tlprobe", function() IN.BuffTimeline.Probe() end, ": log what the buff and cooldown timelines can read in a fight")
 IF.AddCommand("l1probe", function() IN.PartyPad.Probe() end, ": log what L1 and the face buttons run (party targeting test)")
+-- /if arrowprobe: where the quest arrow points, and from what (QuestArrow.lua)
+IF.AddCommand("arrowprobe", function() IN.QuestArrow.Probe() end, ": where the quest arrow points and from what")
+-- /if zonetest: the zone's name as entering it shows it (ZoneBanner.lua)
+IF.AddCommand("zonetest", function() IN.ZoneBanner.Test() end, ": show the zone name banner for the zone you're in")
+-- /if leveltest [level]: the level up banner, made-up gains (LevelBanner.lua)
+IF.AddCommand("leveltest", function(args) IN.LevelBanner.Test(args[1]) end,
+    "[level]: show the level up banner (your next level, made-up gains)")
 -- /if chatprobe: what keeps the game's chat shown (ChatFade.lua)
 IF.AddCommand("chatprobe", function() IN.ChatFade.Probe() end, ": what keeps the game's chat shown")
 
 local DEFAULTS = {
     player = true,      -- the player frame bottom left (and the pet's beside it)
-    target = true,      -- the target's health on top, its name over it
+    target = true,      -- the target in the header's place under the top: its health the rule, its name under it
     cards = true,       -- your pet and party as cards along the bottom
     cardFocus = "auto", -- the party cards as your role needs them: auto (your role), tank, healer, off
     chatAbove = true,   -- the chat over the player's frame (in the Edit Mode layout; an experiment)
@@ -79,6 +90,9 @@ local DEFAULTS = {
     castRange = true,   -- with the cast line: its diamond alone while not casting, grey with your target out of range
     hpLine = true,      -- your health as a bar over the power line
     mpLine = true,      -- your power (mana, rage, energy...) as a bar along the screen's bottom edge
+    questArrow = true,  -- the focused quest's way: a header near the top (its name, the yards left), a diamond arrow on its rule
+    levelBanner = true, -- your level ups: ours, in the header's place and look
+    zoneBanner = true,  -- the zone's name as you enter one: ours, in the quest arrow's place and look
     npcDialog = true,   -- talking to an NPC (quests, gossip) as subtitles low in the middle, Spoken's voice with it
     xp = true,          -- the experience as a ring round the player frame
     pad = true,         -- the gamepad bar as Hogwarts Legacy's spell diamonds, bottom right

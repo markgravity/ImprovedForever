@@ -23,7 +23,10 @@ local FADED = { "ImprovedForeverGamepadBar", "ImprovedForeverRecentSlot", "Impro
     "ImprovedForeverMinionCard1", "ImprovedForeverPartyCard1", "ImprovedForeverPartyCard2",
     "ImprovedForeverPartyCard3", "ImprovedForeverPartyCard4", "ImprovedForeverPartyCasts",
     "ImprovedForeverBuffList", "ImprovedForeverCooldownTimeline",
-    "ImprovedForeverChatView", "ImprovedForeverPlayerHealth", "IFObjectiveTrackerFrame" }
+    "ImprovedForeverChatView", "ImprovedForeverPlayerHealth", "IFObjectiveTrackerFrame",
+    "ImprovedForeverQuestArrow", "ImprovedForeverZoneBanner",
+    "ImprovedForeverHeaderRule", "ImprovedForeverTargetHeader",
+    "ImprovedForeverLevelBanner" }
 -- (without the Immersion module, the game's own: its unit frames, its
 -- gamepad bar, its XP bar, its buffs. With it, it fades these itself, its
 -- own shown over them, and would show one again we'd faded: not twice)
