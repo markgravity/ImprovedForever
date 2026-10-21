@@ -4,8 +4,8 @@
 -- panels are (IF.Focus.Dock), a catcher frame for the buttons, Escape and
 -- Circle on their release, the legend under it (with the mouse its
 -- buttons on the page). The D-pad: up / down the days (or the people),
--- left / right the open day's pages (with the mouse the wheel, or Previous /
--- Next in the page's corners); L1 / R1 the ribbons; Cross on
+-- left / right the open day's pages (with the mouse the wheel, or the page
+-- arrows in its corners); L1 / R1 the ribbons; Cross on
 -- a companion reads the last day we met. Never in combat. The Journal's
 -- entry points: IF.JournalBook.Open(key), .Toggle().
 local addonName, ns = ...

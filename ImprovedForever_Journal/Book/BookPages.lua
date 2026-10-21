@@ -643,14 +643,14 @@ local function DayPages(key)
     return plan
 end
 
--- The page's foot: "2 / 5 · half past eight in the morning · Tirisfal
--- Glades" in the middle, "« Previous" and "Next »" in its corners
+-- The page's foot: "half past eight in the morning · Tirisfal Glades" in
+-- the middle, the page arrows in its corners
 local function Foot(pg, n, of)
     local foot = diary.foot
     diary.back:SetShown(pg ~= nil and n > 1)
     diary.on:SetShown(pg ~= nil and n < of)
     if not pg then return foot:SetText("") end
-    local bits = { n .. " / " .. of }
+    local bits = {}
     local t = pg.plate and pg.plate.t or pg.scene.from
     if t and t > 0 and Jn.Clock and Jn.RealmAt then bits[#bits + 1] = (Jn.Clock(Jn.RealmAt(t))) end
     local mapID = pg.plate and pg.plate.mapID or pg.scene.map
@@ -827,13 +827,29 @@ local function BuildDiary(container)
     end)
     -- (the page's corners turn it: big enough to hit, a little more round
     -- them than the words show)
-    diary.back = Style.Link(page.right, FONT.body, function() BP.DiaryTurn(-1) end)
-    diary.back:SetPoint("BOTTOMLEFT", page.right, "TOPLEFT", PAGE.x, -(RIGHT_H - 4))
-    diary.back:SetText("\194\171 Previous")
-    diary.on = Style.Link(page.right, FONT.body, function() BP.DiaryTurn(1) end)
-    diary.on:SetPoint("BOTTOMRIGHT", page.right, "TOPLEFT", RIGHT_W - PAGE.x, -(RIGHT_H - 4))
-    diary.on:SetText("Next \194\187")
-    for _, link in ipairs({ diary.back, diary.on }) do link:SetHitRectInsets(-14, -14, -10, -10) end
+    -- (the page turned in its corners: a large « and » in ink, in the
+    -- title's face, darker under the mouse, a little more round them than
+    -- they show)
+    local function Arrow(glyph, step)
+        local b = CreateFrame("Button", nil, page.right)
+        b:SetSize(36, 32)
+        b.label = Style.Text(b, FONT.title)
+        b.label:SetPoint("CENTER", 0, 2)
+        b.label:SetText(glyph)
+        local I, S = Style.INK, Style.INK_STRONG
+        b.label:SetTextColor(I[1], I[2], I[3])
+        b:SetHitRectInsets(-8, -8, -6, -6)
+        b:SetScript("OnEnter", function() b.label:SetTextColor(S[1], S[2], S[3]) end)
+        b:SetScript("OnLeave", function() b.label:SetTextColor(I[1], I[2], I[3]) end)
+        b:SetScript("OnMouseDown", function() b.label:SetPoint("CENTER", 1, 1) end)
+        b:SetScript("OnMouseUp", function() b.label:SetPoint("CENTER", 0, 2) end)
+        b:SetScript("OnClick", function() BP.DiaryTurn(step) end)
+        return b
+    end
+    diary.back = Arrow("\194\171", -1)
+    diary.back:SetPoint("BOTTOMLEFT", page.right, "TOPLEFT", 6, -(RIGHT_H + 6))
+    diary.on = Arrow("\194\187", 1)
+    diary.on:SetPoint("BOTTOMRIGHT", page.right, "TOPLEFT", RIGHT_W - 12, -(RIGHT_H + 6))
     diary.foot = Style.Text(page.right, FONT.small)
     diary.foot:SetPoint("BOTTOM", page.right, "TOPLEFT", RIGHT_W / 2, -(RIGHT_H - 6))
     -- (the wheel turns the pages)
