@@ -47,7 +47,7 @@ function Text.Meeting(m, now, index)
         local lines = { Written(m.note.text) }
         if #about > 0 then lines[#lines + 1] = "About " .. List(about) end
         lines[#lines + 1] = When(m.t, m.level, now)
-        return "Your note", lines
+        return "My note", lines
     end
     return "", {}
 end
@@ -155,7 +155,7 @@ function Text.Face(face, e)
     end
     for _, mark in ipairs(e.fights or {}) do
         if mark.guid == face.guid then
-            return name .. "  \194\183  " .. (mark.outcome == "lost" and "killed you" or "a fight, won")
+            return name .. "  \194\183  " .. (mark.outcome == "lost" and "killed me" or "a fight, won")
         end
     end
     return name

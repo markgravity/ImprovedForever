@@ -4,7 +4,8 @@
 -- panels are (IF.Focus.Dock), a catcher frame for the buttons, Escape and
 -- Circle on their release, the legend under it (with the mouse its
 -- buttons on the page). The D-pad: up / down the days (or the people),
--- left / right the open day's words a page at a time; L1 / R1 the ribbons; Cross on
+-- left / right the open day's pages (with the mouse the wheel, or Previous /
+-- Next in the page's corners); L1 / R1 the ribbons; Cross on
 -- a companion reads the last day we met. Never in combat. The Journal's
 -- entry points: IF.JournalBook.Open(key), .Toggle().
 local addonName, ns = ...
@@ -56,7 +57,7 @@ local function Hints()
     if View() == "people" then
         defs[#defs + 1] = { "PAD1", "A", "Last Day Met", pad = true }
     else
-        defs[#defs + 1] = { { "PADDLEFT", "PADDRIGHT" }, { "LEFT", "RIGHT" }, "Turn the Words", pad = true }
+        defs[#defs + 1] = { { "PADDLEFT", "PADDRIGHT" }, { "LEFT", "RIGHT" }, "Turn the Page", pad = true }
     end
     defs[#defs + 1] = { { "PADLSHOULDER", "PADRSHOULDER" }, { "LB", "RB" }, View() == "people" and "Diary" or "Companions", pad = true }
     local hint = switch and switch:Hint()
@@ -245,7 +246,7 @@ end)
 -- key: a day ("YYYY-MM-DD") to open at; nil: as it was left
 function JB.Open(key)
     if IF.InCombat() then return IF.Print("Not in combat.") end
-    if key then BP.diary.open = key end
+    if key then BP.diary.open, BP.diary.leaf = key, 1 end
     J.view = "journey"
     ns.UI.ShowJournal()
     if key then BP.OpenDay(key, true) end

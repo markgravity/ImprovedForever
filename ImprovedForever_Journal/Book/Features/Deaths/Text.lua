@@ -16,9 +16,9 @@ local Capital, Glue, NUMBER, Times = Text.Capital, Text.Glue, Text.NUMBER, Text.
 -- together as a margin note's phrases are.
 function Deaths.Killed(n)
     n = n or 1
-    if n == 1 then return Glue("killed you") end
-    if n == 2 then return Glue("killed you twice") end
-    return Glue("killed you " .. (NUMBER[n] or tostring(n)) .. " times")
+    if n == 1 then return Glue("killed me") end
+    if n == 2 then return Glue("killed me twice") end
+    return Glue("killed me " .. (NUMBER[n] or tostring(n)) .. " times")
 end
 
 -- A creature's rank, as a tooltip says it.
@@ -34,7 +34,7 @@ local WORLD = { FALLING = "A fall", DROWNING = "Drowned", FATIGUE = "Exhaustion"
 function Deaths.KillerTip(k, now)
     local lines = {}
     if RANK[k.rank] then lines[#lines + 1] = RANK[k.rank] end
-    lines[#lines + 1] = Times(k.count or 1, "Killed you here", "Killed you here %s")
+    lines[#lines + 1] = Times(k.count or 1, "Killed me here", "Killed me here %s")
         .. (k.spell and (", with " .. k.spell) or "")
     if k.last then lines[#lines + 1] = "The last time " .. ns.UI.Format.At(k.last, now) end
     if k.probable then lines[#lines + 1] = "As near as the diary could tell" end

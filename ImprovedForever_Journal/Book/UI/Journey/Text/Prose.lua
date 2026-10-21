@@ -50,11 +50,11 @@ local function Opening(e, now)
         return nil
     end
     if not e.known then
-        return "This level went by while the diary was not keeping your road."
+        return "This level went by while the diary was not keeping my road."
     end
     if e.first then
         local place = e.places[1] and (e.places[1].name or MapName(e.places[1].mapID))
-        return ("Your road begins here, on %s%s."):format(Day(e.from, now), place and (", in " .. place) or "")
+        return ("My road begins here, on %s%s."):format(Day(e.from, now), place and (", in " .. place) or "")
     end
     local r = e.reached
     if not r then return nil end
@@ -74,10 +74,10 @@ end
 -- only where it differs from the first's, after one of the `openers`.
 local STOPS = {
     first = {
-        fighting = { "%D of fighting at %W.", "%W kept you fighting for %d." },
-        questing = { "%D of quests round %W.", "Quests kept you at %W for %d." },
-        resting = { "%D resting at %W.", "You rested %d at %W." },
-        none = { "%D at %W.", "You lingered at %W for %d." },
+        fighting = { "%D of fighting at %W.", "%W kept me fighting for %d." },
+        questing = { "%D of quests round %W.", "Quests kept me at %W for %d." },
+        resting = { "%D resting at %W.", "I rested %d at %W." },
+        none = { "%D at %W.", "I lingered at %W for %d." },
     },
     later = { fighting = "fighting near %W", questing = "quests at %W", resting = "a rest at %W" },
     openers = { "Later, ", "Then ", "After that, " },
@@ -272,9 +272,9 @@ end
 function Text.Hindsight(f)
     local name = Short(f.guid) or "someone"
     local zone = MapName(f.mapID)
-    local line = "You first saw " .. name .. (zone and (" in " .. zone) or "") .. "."
+    local line = "I first saw " .. name .. (zone and (" in " .. zone) or "") .. "."
     if f.metLevel and f.level and f.metLevel > f.level then
-        return line .. " You'd meet again at level " .. f.metLevel .. "."
+        return line .. " We'd meet again at level " .. f.metLevel .. "."
     end
-    return line .. " You'd meet again before the level was out."
+    return line .. " We'd meet again before the level was out."
 end

@@ -43,16 +43,16 @@ function Text.MarginWhat(moments, level)
     for _, m in ipairs(moments) do
         if m.kind == "fight" then
             if m.outcome == "lost" then
-                parts[#parts + 1] = m.guid and Glue("killed you") or "a fight, lost"
+                parts[#parts + 1] = m.guid and Glue("killed me") or "a fight, lost"
             else
-                parts[#parts + 1] = m.guid and "you won the fight" or "a fight, won"
+                parts[#parts + 1] = m.guid and "I won the fight" or "a fight, won"
             end
         end
     end
     for _, m in ipairs(moments) do
         if m.kind == "first" then
             local again = m.metLevel and level and m.metLevel > level
-                and ("you'd meet again at level " .. m.metLevel) or "you'd meet again"
+                and ("we'd meet again at level " .. m.metLevel) or "we'd meet again"
             parts[#parts + 1] = "first seen  \194\183  " .. again
         end
     end

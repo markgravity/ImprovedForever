@@ -88,7 +88,7 @@ end
 -- lost 1", "Lost 3, won 2", "Won both", "Lost all 3", and its flights on
 -- a line of their own, "They fled once", "You fled once, they fled
 -- twice". Figures, as tooltips count.
-local ONE = { won = "You won", lost = "You lost", they_fled = "They fled", fled = "You fled" }
+local ONE = { won = "I won", lost = "I lost", they_fled = "They fled", fled = "I fled" }
 
 function Duels.Tip(rec, now)
     local balance, up, down = Duels.Score(rec)
@@ -108,7 +108,7 @@ function Duels.Tip(rec, now)
         end
         local Times = ns.UI.Format.Times
         local flights = {}
-        if (rec.fled or 0) > 0 then flights[#flights + 1] = "you fled " .. Times(rec.fled) end
+        if (rec.fled or 0) > 0 then flights[#flights + 1] = "I fled " .. Times(rec.fled) end
         if (rec.theyFled or 0) > 0 then flights[#flights + 1] = "they fled " .. Times(rec.theyFled) end
         if #flights > 0 then lines[#lines + 1] = Capital(table.concat(flights, ", ")) end
     end

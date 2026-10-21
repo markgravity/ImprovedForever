@@ -75,6 +75,8 @@ Book/Features/Duels/Slip.lua
 Book/Features/ProfessionCaps/Kind.lua
 Book/Features/ProfessionCaps/Text.lua
 Book/Features/ProfessionCaps/Mark.lua
+Book/Features/Quests/Card.lua
+Book/Features/Foes/Card.lua
 Book/UI/Windows/Reunion/Toast.lua
 Book/UI/Windows/Reunion/Words.lua
 Book/BookData.lua

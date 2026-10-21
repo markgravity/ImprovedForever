@@ -2,8 +2,9 @@
 -- road cut into stops and roads (from day.track, Journal.lua; before
 -- there was one, from where things happened), its moments (a fall, a
 -- level, a find, a hunt, someone met, a long stay, the longest road), its
--- plates (where they happened, grouped as Social Diary groups them), and
--- the lists its cards read (deaths, finds, hunts). Given as the names the
+-- plates (where they happened, grouped as Social Diary groups them), a
+-- stretch of it (BD.Stretch: a page's moments and plates), and the lists
+-- its cards read (deaths, finds, hunts). Given as the names the
 -- copied files look up: ns.Journey.For, ns.JourneyRecap.{Plates, Sheet,
 -- Moments, Holds}, ns.db.characters.
 local addonName, ns = ...
@@ -395,6 +396,13 @@ local function Moments(c)
     end
     for _, ev in ipairs(day.events) do
         if ev.k == "level" then Add({ kind = "level", level = ev.level, t = ev.t, out = true }, ev.map, ev.x, ev.y) end
+        -- (ours: a task handed in, a fight, Features/Quests/ and Foes/)
+        if ev.k == "quest" then Add({ kind = "quest", quest = ev, t = ev.t }, ev.map, ev.x, ev.y) end
+        if ev.k == "hunt" and (ev.n or 0) > 0 then
+            Add({ kind = "foes", foes = ev.foes, n = ev.n, t = ev.t }, ev.map, ev.x, ev.y)
+        elseif ev.k == "kill" and ev.name then
+            Add({ kind = "foes", foes = { [ev.name] = 1 }, n = 1, t = ev.t }, ev.map, ev.x, ev.y)
+        end
     end
     for _, f in ipairs(j.firsts) do
         Add({ kind = "find", what = f.what, find = f.rec, t = f.rec.t }, f.rec.mapID, f.rec.x, f.rec.y)
@@ -432,10 +440,11 @@ end
 ---------------------------------------------------------------------------
 -- The plates: Social Diary's grouping (Core/JourneyRecap.lua's Plates),
 -- copied: moments go into the first plate whose window they fit, the
--- most telling first; at most three, oldest first
+-- most telling first; at most three (or `most`), oldest first
 ---------------------------------------------------------------------------
 local PLATES = { max = 3, inset = 0.8, window = 0.3 }
-local RANK = { session = 1, fight = 1, note = 1, first = 1, find = 2, skill = 2, luck = 3, fortune = 3, close = 3,
+local RANK = { session = 1, fight = 1, note = 1, first = 1, find = 2, skill = 2, quest = 2, foes = 2.5, luck = 3,
+    fortune = 3, close = 3,
     death = 3, arrive = 4, dungeon = 5, stay = 6, duel = 6.5, road = 7, level = 8 }
 local LIGHT = { arrive = true, dungeon = true, stay = true, road = true, level = true, fortune = true, skill = true,
     duel = true }
@@ -454,7 +463,7 @@ local function Holds(plate, w, h)
     return plate.x1 - plate.x0 <= w * PLATES.inset and plate.y1 - plate.y0 <= h * PLATES.inset
 end
 
-local function Plates(list, cover)
+local function Plates(list, cover, most)
     local moments = {}
     for i, m in ipairs(list) do moments[i] = m end
     table.sort(moments, function(a, b)
@@ -493,7 +502,7 @@ local function Plates(list, cover)
         if #a.moments ~= #b.moments then return #a.moments > #b.moments end
         return a.t < b.t
     end)
-    for i = #plates, PLATES.max + 1, -1 do plates[i] = nil end
+    for i = #plates, (most or PLATES.max) + 1, -1 do plates[i] = nil end
     for _, plate in ipairs(plates) do
         plate.cx, plate.cy = (plate.x0 + plate.x1) / 2, (plate.y0 + plate.y1) / 2
         table.sort(plate.moments, ByTime)
@@ -509,9 +518,9 @@ end
 ---------------------------------------------------------------------------
 local current
 
--- An entry's moments: the day's
-local function MomentsFor()
-    return current and current.moments or {}
+-- An entry's moments: a stretch's own (BD.Stretch), else the day's
+local function MomentsFor(e)
+    return e and e.moments or current and current.moments or {}
 end
 BD.MomentsFor = MomentsFor
 
@@ -524,6 +533,49 @@ function BD.Use(key)
 end
 
 function BD.Current() return current end
+
+-- The creatures' ids by name, of the day being read (the foes' cards)
+function BD.FoeIDs()
+    return current and current.day.stats.foeIDs or {}
+end
+
+-- A stretch of the day being read (from..to, BD.Use first): its moments,
+-- its hunts, and every plate they take, grouped for an art box `cover`
+-- gives (mapID → the map's width and height it shows), oldest first.
+-- Nothing marked in it: one plate where the road went then (its longest
+-- stop, else its longest road), with no marks.
+function BD.Stretch(from, to, cover)
+    if not current then return {}, {}, {} end
+    local list, hunts = {}, {}
+    for _, m in ipairs(current.moments) do
+        if m.t >= from and m.t < to then list[#list + 1] = m end
+    end
+    for _, h in ipairs(current.j.hunts) do
+        if h.t >= from and h.t < to then hunts[#hunts + 1] = h end
+    end
+    local plates = Plates(list, cover, math.huge)
+    if #plates == 0 then
+        local stop, road
+        for _, s in ipairs(current.j.segs) do
+            local t = math.min(to, s.to) - math.max(from, s.from)
+            if t >= 0 then
+                if s.kind == "stop" and (not stop or t > stop.t) then stop = { s = s, t = t } end
+                if s.kind == "road" and (not road or t > road.t) then road = { s = s, t = t } end
+            end
+        end
+        local s = stop and stop.s or road and road.s
+        if s then
+            local x, y = s.x, s.y
+            if not x then
+                local mid = math.floor(#s.pts / 4) * 2 + 1
+                x, y = s.pts[mid], s.pts[mid + 1]
+            end
+            plates[1] = { mapID = s.mapID, x0 = x, x1 = x, y0 = y, y1 = y, cx = x, cy = y,
+                t = math.max(from, s.from), rank = RANK.road, moments = {}, light = true }
+        end
+    end
+    return list, plates, hunts
+end
 
 ns.Journey.For = function() return current and current.j or nil end
 ns.Journey.List = function(j, list) return j and j[list] or {} end

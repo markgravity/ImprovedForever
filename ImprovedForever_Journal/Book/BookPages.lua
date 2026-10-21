@@ -1,10 +1,11 @@
 -- The book's pages, ours, laid out as Social Diary's Your Diary and People
 -- pages are (its UI/Journey/Left.lua and Page.lua, UI/Journal/People.lua
 -- and Profile.lua, not copied): the Diary (green ribbon) the days down the
--- left page, the open one's paragraphs under it a rubric each (its words,
--- JournalWriter.lua), the open paragraph's plates on the right page as a
--- level's (BookData.lua into the copied UI/Journey/Caption.lua); the
--- Companions (red ribbon)
+-- left page a rubric each, the open one's zones under it; the open day on
+-- the right page, a page at a time, in pictures: a stretch of it a page,
+-- a line of its words (JournalWriter.lua) over its plate and cards as a
+-- level's (BookData.lua into the copied UI/Journey/Caption.lua), a plate
+-- more its own page; the Companions (red ribbon)
 -- everyone met down the left page, one's page on the right: their
 -- portrait, our story of them, the days we met. The pad: BookPad.lua.
 local addonName, ns = ...
@@ -95,6 +96,12 @@ local function BuildRow(list)
     row.aside:SetPoint("LEFT", row.header, "RIGHT", 7, 0)
     row.rule = row:CreateTexture(nil, "ARTWORK")
     row.rule:SetHeight(1)
+    -- (the open day's rubric marked as a reader marks a line: a pale wash
+    -- of rubric under it, fading along)
+    row.wash = row:CreateTexture(nil, "BACKGROUND")
+    row.wash:SetPoint("TOPLEFT", 0, 0)
+    row.wash:SetPoint("BOTTOMRIGHT", 0, 1)
+    row.wash:Hide()
     row.zone = Style.Text(row, FONT.small)
     row.zone:SetPoint("LEFT", INDENT, 0)
     row.zone:SetWordWrap(false)
@@ -130,6 +137,7 @@ local function UpdateRow(row, item)
     row.paraph:SetShown(isTitle)
     row.rule:SetShown(isTitle)
     row.aside:SetShown(isTitle)
+    row.wash:SetShown(isTitle and item.open == true)
     row.text:SetShown(item.text ~= nil)
     row.zone:SetShown(isZone)
     row.time:SetShown(isZone)
@@ -141,9 +149,13 @@ local function UpdateRow(row, item)
         row.header:SetText(item.title)
         local paraph = PARAPHS[item.paraph % 2 == 1 and 1 or 2]
         row.paraph:SetColorTexture(paraph[1], paraph[2], paraph[3], 1)
+        row.paraph:SetSize(item.open and 8 or 6, item.open and 8 or 6)
         row.aside:SetText(item.aside or "")
         local R = Style.RUBRIC
-        Style.Shade(row.rule, "HORIZONTAL", R[1], R[2], R[3], 0.4, 0)
+        Style.Shade(row.rule, "HORIZONTAL", R[1], R[2], R[3], item.open and 0.7 or 0.4, 0)
+        -- (the open day stands out; the others a contents list, quieter)
+        row.header:SetAlpha((item.open or item.person) and 1 or 0.72)
+        if item.open then Style.Shade(row.wash, "HORIZONTAL", R[1], R[2], R[3], 0.13, 0) end
         row.rule:ClearAllPoints()
         row.rule:SetPoint("LEFT", row.aside, "RIGHT", 6, 0)
         row.rule:SetPoint("RIGHT", row, "RIGHT", -2, 0)
@@ -190,12 +202,10 @@ end
 ---------------------------------------------------------------------------
 -- The Diary, laid out as Social Diary's Your Diary, a day of ours where it
 -- has a level: the days down the left page a rubric each (what stood
--- out beside it), the open day's words under its rubric with where the
--- time went; its plates on the right page, through the copied pipeline
--- as a level's are (UI/Journey/Caption.lua: one to three, their captions,
--- their margin's cards and leaders)
+-- out beside it), the open day's ledger of where the time went under its
+-- rubric; the day itself on the right page, a page at a time (DayPages)
 ---------------------------------------------------------------------------
-local diary = { open = nil, sel = 1 }
+local diary = { open = nil, sel = 1, leaf = 1 }
 BP.diary = diary
 
 local FillHeader = function()
@@ -210,21 +220,91 @@ local FillHeader = function()
     diary.who:SetText(table.concat(parts, " "))
 end
 
--- What stood out in a day, in a word or two beside its rubric
-local function Aside(key, day)
+-- Beside a rubric: "so far" on today's, as Social Diary's level being
+-- played; the recap under the open one tells the rest
+local function Aside(key)
     if key == Jn.TodayKey() then return "so far" end
-    local bits, falls = {}, 0
-    for _, ev in ipairs(day.events) do
-        if ev.k == "death" then falls = falls + 1
-        elseif ev.k == "level" then bits[#bits + 1] = "lv " .. (ev.level or "?")
-        elseif ev.k == "duel" then bits[#bits + 1] = "a duel" end
-    end
-    if falls > 0 then table.insert(bits, 1, falls == 1 and "a fall" or (falls .. " falls")) end
-    -- (a few at most: the rubric's rule runs on after them)
-    return #bits > 0 and table.concat({ unpack(bits, 1, math.min(3, #bits)) }, ", ") or nil
+    return nil
 end
 
--- The left page's items: the days, the open one's words and ledger
+-- The open day's recap, as Social Diary recaps a level under its rubric:
+-- a line in faded ink (the levels, the land, the time on the road), its
+-- own paragraphs (UI/Journey/Text/Prose.lua's Text.Lines: where the time
+-- went, who was there, the firsts, the close calls, the slow hunts) over
+-- the day's entry (BookData.lua), and a line of ours (tasks done, foes cut
+-- down, falls)
+local JText = ns.UI.JourneyText
+local function Recap(key, day)
+    local de = BD.Use(key)
+    local c = BD.Current()
+    if not (de and c) then return {} end
+    local j, stats = c.j, day.stats
+    local out = {}
+    -- The opening
+    local from, to = stats.levelFrom, stats.levelTo or stats.levelFrom
+    local zones = Jn.Zones(day)
+    local bits = {}
+    if from and to and to > from then bits[1] = "Level " .. from .. " to " .. to
+    elseif to then bits[1] = "Level " .. to end
+    if zones[1] then bits[#bits + 1] = (#bits > 0 and "mostly in " or "Mostly in ") .. zones[1] end
+    local opening = table.concat(bits, ", ")
+    local played = stats.played or 0
+    if played >= 60 then
+        local spoken = JText.Spoken(played)
+        opening = opening ~= "" and (opening .. "; " .. spoken .. " on the road.") or (JText.Capital(spoken) .. " on the road.")
+    elseif opening ~= "" then
+        opening = opening .. "."
+    end
+    if opening ~= "" then out[#out + 1] = { text = opening, font = FONT.faded } end
+    -- Social Diary's paragraphs
+    local stops = {}
+    for _, s in ipairs(j.segs) do
+        if s.kind == "stop" and s.seconds >= 300 then stops[#stops + 1] = s end
+    end
+    table.sort(stops, function(a, b) return a.seconds > b.seconds end)
+    for i = #stops, 4, -1 do stops[i] = nil end
+    table.sort(stops, function(a, b) return a.from < b.from end)
+    local e = { kind = "level", level = to or 1, known = true, seconds = played, stops = {}, flights = {},
+        people = {}, fights = {}, finds = {}, closeCalls = j.closeCalls, skillCaps = j.skillCaps, hunts = {},
+        fortunes = {}, places = {} }
+    for i, s in ipairs(stops) do
+        local act = s.act or {}
+        local main = act.combat >= 30 and "fighting" or (act.questsIn + act.questsOut > 0) and "questing" or nil
+        e.stops[i] = { seg = s, seconds = s.seconds, main = main }
+    end
+    local together = {}
+    for _, sess in ipairs(j.sessions) do
+        for guid, p in pairs(sess.participants) do together[guid] = (together[guid] or 0) + p.seconds end
+    end
+    for guid, seconds in pairs(together) do e.people[#e.people + 1] = { guid = guid, seconds = seconds } end
+    table.sort(e.people, function(a, b) return a.seconds > b.seconds end)
+    for _, f in ipairs(j.firsts) do e.finds[#e.finds + 1] = { kind = f.what, rec = f.rec } end
+    for _, m in ipairs(c.moments or {}) do
+        if m.kind == "luck" then e.hunts[#e.hunts + 1] = m.hunt
+        elseif m.kind == "fortune" then e.fortunes[#e.fortunes + 1] = m.hunt end
+    end
+    local ok, lines = pcall(JText.Lines, e, ns.Now(), {})
+    for _, text in ipairs(ok and lines or {}) do out[#out + 1] = { text = text } end
+    -- Ours: what was done and what it cost
+    local quests, foes, falls = 0, 0, 0
+    for _, ev in ipairs(day.events) do
+        if ev.k == "quest" then quests = quests + 1
+        elseif ev.k == "hunt" then foes = foes + (ev.n or 0)
+        elseif ev.k == "kill" then foes = foes + 1
+        elseif ev.k == "death" then falls = falls + 1 end
+    end
+    local said = {}
+    if quests > 0 then said[#said + 1] = quests == 1 and "one task done" or (quests .. " tasks done") end
+    if foes > 0 then said[#said + 1] = foes .. " foes cut down" end
+    if falls > 0 then said[#said + 1] = falls == 1 and "one fall" or (falls .. " falls") end
+    if #said > 0 then
+        local text = table.concat(said, ", ")
+        out[#out + 1] = { text = JText.Capital(text) .. "." }
+    end
+    return out
+end
+
+-- The left page's items: the days, the open one's recap and ledger
 local function DiaryItems()
     local items, rubrics = {}, {}
     local keys = Jn.Days()
@@ -239,25 +319,21 @@ local function DiaryItems()
         local open = key == diary.open
         local day = Jn.Day(key)
         if open and i > 1 then items[#items + 1] = { height = OPEN_H - UNIT } end
-        items[#items + 1] = { title = Jn.DayTitle(key):upper(), aside = Aside(key, day), paraph = i, open = open,
+        items[#items + 1] = { title = Jn.DayTitle(key):upper(), aside = Aside(key), paraph = i, open = open,
             picked = i == diary.sel, height = open and OPEN_H or CLOSED,
             onClick = function() BP.OpenDay(key, true) end }
         rubrics[i] = #items
         if open then
-            local paras = Jn.Write(key, day)
-            for k, text in ipairs(paras or {}) do
+            for k, para in ipairs(Recap(key, day)) do
                 if k > 1 then items[#items + 1] = { height = PARA } end
-                for _, line in ipairs(Lines(text, FONT.body, LINE_W)) do
-                    items[#items + 1] = { text = line, font = FONT.body, height = UNIT }
+                for _, line in ipairs(Lines(para.text, para.font or FONT.body, LINE_W)) do
+                    items[#items + 1] = { text = line, font = para.font or FONT.body, height = UNIT }
                 end
             end
-            local zones = Jn.Zones(day)
-            if #zones > 0 then items[#items + 1] = { height = 8 } end
-            for _, name in ipairs(zones) do
+            items[#items + 1] = { height = 8 }
+            for _, name in ipairs(Jn.Zones(day)) do
                 items[#items + 1] = { zone = name, time = Jn.Played(day.stats.zones[name]), height = UNIT }
             end
-            local sig = Jn.Signature and Jn.Signature()
-            if sig then items[#items + 1] = { text = sig, font = FONT.noteWritten, height = UNIT + 4 } end
             items[#items + 1] = { height = AFTER }
         end
     end
@@ -276,32 +352,381 @@ local function RebuildDiary()
 end
 
 ---------------------------------------------------------------------------
--- The right page: the open day's plates, as a level's (debounced: they're
--- heavy)
+-- The right page: the open day, a page at a time, told in pictures. The
+-- day's paragraphs (Jn.Write) go in stretches, each from when its first
+-- paragraph begins to when the next stretch's does, those on one map
+-- together while their cards stay few (PAGE.cards); each stretch's plates
+-- (BD.Stretch: its moments, the tasks done, the foes, the falls...) drawn
+-- through the copied pipeline (UI/Journey/Caption.lua), their headings by
+-- hand ours (the time of day, the place: p.heading). A plate with much in
+-- its margin has a page of its own, in one of four shapes in turn (ALONE),
+-- its caption one short sentence of the writer's (p.say); quieter ones
+-- share a page, two or three, on Social Diary's own pages for them
+-- (Look.lua's LAYOUT, by their weights: LayoutFor), their captions its
+-- own; a rich one followed by a quiet print takes it in (FL, F+L).
+-- A page's foot: its number, the time of day it begins, its land.
 ---------------------------------------------------------------------------
+-- The words `x` in and `unit` a line; the page's foot `foot` up from its
+-- end (the legend at its right); a plate `plate` tall under its caption,
+-- its cards in a row of three under it; a stretch's cards at most `cards`
+-- (guessed from its events) before the next paragraph is a page of its own.
+local PAGE = { x = 12, unit = 17, foot = 30, top = 40, plate = 262, row = 318, cards = 5 }
+-- A plate with `rich` cards or more has a page of its own; quieter ones
+-- share one while their cards come to no more than `shared[n]` for n
+-- plates.
+local SHARE = { rich = 3, shared = { [2] = 4, [3] = 3 } }
+local WORDS_W = RIGHT_W - 2 * PAGE.x
+local BOTTOM = RIGHT_H - PAGE.foot
+local FOUR, LOST = { "tl", "tr", "bl", "br" }, { "tl", "tr", "bl" }
+local Plate = ns.UI.JourneyPlate
+
+-- The plate's slot: its caption over it and its cards in a row under it
+-- (`top`, tried first), else the caption under it and the cards beside
+-- that (where the words will not stay to a line), as Look.lua's LAYOUT[1]
+local function Slot()
+    local row = {}
+    for i = 1, 3 do row[i] = { x = 10 + (i - 1) * 150, y = PAGE.row, w = 142, limit = BOTTOM } end
+    return { x = 10, y = 0, w = 444, h = 354, t = -1.2, pad = 10, pc = 28, corners = LOST, lift = "br",
+        cap = { x = 16, y = 372, w = 260, limit = BOTTOM }, notes = { x = 300, y = 368, w = 150, limit = BOTTOM },
+        top = { x = 10, y = PAGE.top, w = 444, h = PAGE.plate, t = -1.2, pad = 10, pc = 28, corners = LOST,
+            lift = "br", cap = { x = 16, y = -2, w = 434 }, row = row } }
+end
+
+-- A page of one plate, in turn: its caption over it and its cards in a
+-- row under it (Slot); the plate tall at the left, its caption and cards
+-- down the right; the same the other way round, flush right; the caption
+-- and cards across the top, the plate under them. `narrow`: its heading
+-- the place alone, the time of day in its words.
+local ALONE = {
+    { key = "top", Slot },
+    { key = "left", narrow = true, function()
+        return { x = 8, y = -2, w = 270, h = 440, t = -1.3, pad = 8, pc = 24, corners = FOUR,
+            cap = { x = 292, y = 16, w = 166, limit = BOTTOM } }
+    end },
+    { key = "right", narrow = true, function()
+        return { x = 190, y = -2, w = 268, h = 440, t = 1.4, pad = 8, pc = 24, corners = LOST, lift = "br",
+            cap = { x = 12, y = 24, w = 164, limit = BOTTOM, align = "RIGHT" } }
+    end },
+    { key = "bottom", function()
+        return { x = 10, y = 186, w = 444, h = 300, t = 1.1, pad = 10, pc = 28, corners = LOST, lift = "br",
+            cap = { x = 16, y = 4, w = 270, limit = 176 }, notes = { x = 300, y = 0, w = 156, limit = 176 } }
+    end },
+}
+
+-- The art box every plate must hold in: the two-plate page's smaller
+-- (Look.lua's LAYOUT[2]), so a plate holds on any page of one or two
+local function Cover(mapID) return Plate.Cover(mapID, 244, 200) end
+
+-- The cards a plate's margin would hold, guessed from its moments: a
+-- task, a find, each; its foes two at most; a fall, a close call, a
+-- duel, a hunt's luck one each; someone met each
+local ONE = { death = true, close = true, duel = true, luck = true, fortune = true }
+local function Weight(p)
+    local n, foes, once, people = 0, {}, {}, {}
+    for _, m in ipairs(p.moments or {}) do
+        if m.kind == "quest" or m.kind == "find" or m.kind == "skill" then n = n + 1
+        elseif m.kind == "foes" then for name in pairs(m.foes or {}) do foes[name] = true end
+        elseif ONE[m.kind] then once[m.kind] = true
+        elseif m.kind == "session" and m.guid then people[m.guid] = true end
+    end
+    local f = 0
+    for _ in pairs(foes) do f = f + 1 end
+    for _ in pairs(once) do n = n + 1 end
+    for _ in pairs(people) do n = n + 1 end
+    return n + math.min(2, f)
+end
+
+-- A plate's caption ours where the page gave it one (p.heading, p.say)
+local plateHeading, plateCaption = JText.PlateHeading, JText.PlateCaption
+function JText.PlateHeading(p, ...)
+    if p.heading then return p.heading, p.heading, nil end
+    return plateHeading(p, ...)
+end
+function JText.PlateCaption(p, ...)
+    if p.say then return p.say end
+    return plateCaption(p, ...)
+end
+
+-- The writer's sentences, in order (a name's ink closed where it opened)
+local CLOSE_QUOTE = "\226\128\157"
+local function Sentences(text, out)
+    for s in (text .. " "):gmatch("(.-[%.!?])%s+") do
+        if s:sub(1, 3) == CLOSE_QUOTE and #out > 0 then
+            out[#out] = out[#out] .. CLOSE_QUOTE
+            s = s:sub(4)
+        end
+        s = s:gsub("^%s+", "")
+        if s ~= "" then
+            local _, opened = s:gsub("|c", "")
+            local _, closed = s:gsub("|r", "")
+            if opened > closed then s = s .. "|r" end
+            out[#out + 1] = s
+        end
+    end
+    return out
+end
+
+-- What only says when: never the page's sentence
+local WHEN = { "^I rested a while", "^The new day found", "^Midnight came" }
+
+-- The page's one sentence: the first that holds to a line, else the
+-- shortest
+local function OneLine(texts)
+    local all = {}
+    for _, text in ipairs(texts) do Sentences(text, all) end
+    measure:SetFontObject(FONT.body)
+    local best, bestW
+    for _, s in ipairs(all) do
+        local when = false
+        for _, pat in ipairs(WHEN) do when = when or s:match(pat) ~= nil end
+        if not when then
+            measure:SetText(s)
+            local w = measure:GetUnboundedStringWidth() or 0
+            if w <= WORDS_W - 10 then return s end
+            if not bestW or w < bestW then best, bestW = s, w end
+        end
+    end
+    return best or all[1]
+end
+
+-- "Half past six in the evening, Balnir Farmstead": when a stretch began
+-- and where it went on most; and each alone
+local function Heading(day, from, to)
+    local count, place = {}, nil
+    for _, ev in ipairs(day.events) do
+        if ev.t >= from and ev.t < to then
+            local p = ev.sub or ev.zone
+            if p and ev.k ~= "zone" and ev.k ~= "flight" and ev.k ~= "hearth" then
+                count[p] = (count[p] or 0) + 1
+                if not place or count[p] > count[place] then place = p end
+            end
+        end
+    end
+    local when = Jn.Clock and Jn.RealmAt and from > 0 and Jn.Clock(Jn.RealmAt(from)) or nil
+    when = when and (when:sub(1, 1):upper() .. when:sub(2)) or nil
+    if when and place then return when .. ", " .. place, when, place end
+    return when or place or "Later", when, place
+end
+
+-- The cards a stretch of events would show, guessed: its tasks, its foes
+-- (two at most), a fall
+local function Cards(day, from, to)
+    local quests, foes, fell = 0, {}, false
+    for _, ev in ipairs(day.events) do
+        if ev.t >= from and ev.t < to then
+            if ev.k == "quest" then quests = quests + 1
+            elseif ev.k == "death" then fell = true
+            elseif ev.k == "hunt" then for name in pairs(ev.foes or {}) do foes[name] = true end
+            elseif ev.k == "kill" and ev.name then foes[ev.name] = true end
+        end
+    end
+    local n = 0
+    for _ in pairs(foes) do n = n + 1 end
+    return quests + math.min(2, n) + (fell and 1 or 0)
+end
+
+-- The open day's pages, worked out once while the day stays as it is
+-- (today's: and every ten minutes, its words saying it goes on)
+local plans = {}
+local function DayPages(key)
+    local day = Jn.Day(key)
+    if not day then return nil end
+    local stamp = #day.events .. ":" .. (day.trackN or 0)
+    if key == Jn.TodayKey() then stamp = stamp .. ":" .. math.floor(time() / 600) end
+    local plan = plans[key]
+    if plan and plan.stamp == stamp then return plan end
+    local de = BD.Use(key)
+    plan = { stamp = stamp, pages = {} }
+    plans[key] = plan
+    local paras, meta = Jn.Write(key, day)
+    paras, meta = paras or {}, meta or {}
+    -- (the day's road too, before its first event and after its last)
+    local first = de and de.from or day.events[1] and day.events[1].t or 0
+    local last = day.events[#day.events] and day.events[#day.events].t or first
+    local stop = math.max(last + 60, de and de.to or 0)
+    -- (when each paragraph begins, never before the one before it)
+    local idx, starts, at = {}, {}, first
+    for i in ipairs(paras) do
+        if i ~= meta.summary then
+            local t = meta.starts and meta.starts[i]
+            if type(t) == "number" and t > at then at = t end
+            idx[#idx + 1], starts[#idx + 1] = i, at
+        end
+    end
+    local function MapIn(from, to)
+        for _, ev in ipairs(day.events) do
+            if ev.t >= from and ev.t < to and ev.map then return ev.map end
+        end
+    end
+    local scenes, cur = {}, nil
+    for n, i in ipairs(idx) do
+        local to = starts[n + 1] or stop
+        local map = MapIn(starts[n], to)
+        if cur and (not map or not cur.map or map == cur.map) and Cards(day, cur.from, to) <= PAGE.cards then
+            cur.map = cur.map or map
+        else
+            cur = { from = starts[n], texts = {}, map = map }
+            scenes[#scenes + 1] = cur
+        end
+        cur.texts[#cur.texts + 1] = paras[i]
+    end
+    if #scenes == 0 then scenes[1] = { from = first, texts = { meta.summary and paras[meta.summary] or "" } } end
+    -- Every plate of the day in order, each with its stretch, its heading
+    -- and how much its margin holds
+    local units = {}
+    for k, sc in ipairs(scenes) do
+        sc.to = math.max(sc.from, scenes[k + 1] and scenes[k + 1].from or stop)
+        sc.moments, sc.plates, sc.hunts = BD.Stretch(sc.from, sc.to, Cover)
+        sc.say = OneLine(sc.texts)
+        sc.heading = Heading(day, sc.from, sc.to)
+        for n, p in ipairs(sc.plates) do
+            local full, when, place = Heading(day, n == 1 and sc.from or p.t, sc.to)
+            units[#units + 1] = { plate = p, scene = sc, first = n == 1, weight = Weight(p), full = full,
+                when = when, place = place }
+        end
+        if #sc.plates == 0 then plan.pages[#plan.pages + 1] = { scene = sc } end
+    end
+    -- Into pages: a rich plate alone, in the next of ALONE's shapes; the
+    -- quieter ones two or three to a page where Social Diary has a page
+    -- that holds them, else alone too
+    local i, turn = 1, 0
+    local LayoutFor = YourDiary.LayoutFor
+    while units[i] do
+        local u = units[i]
+        local group = { u }
+        if u.weight < SHARE.rich then
+            local total = u.weight
+            for k = i + 1, math.min(#units, i + 2) do
+                local v = units[k]
+                local limit = SHARE.shared[#group + 1]
+                if v.weight >= SHARE.rich or total + v.weight > limit then break end
+                local plates = {}
+                for g, w in ipairs(group) do plates[g] = w.plate end
+                plates[#plates + 1] = v.plate
+                if not LayoutFor(plates) then break end
+                group[#group + 1], total = v, total + v.weight
+            end
+        end
+        -- (a rich plate and a quiet one after it: Social Diary's FL, the
+        -- quiet one's print tucked into the rich one's row where all of its
+        -- margin goes in the row beside it, F+L; else the print under the
+        -- rich one's caption)
+        local v = units[i + 1]
+        if u.weight >= SHARE.rich and v and v.weight <= 1 and v.plate.light then
+            local _, key = LayoutFor({ u.plate, v.plate })
+            if key == "FL" then group[2] = v end
+        end
+        local pg = { units = group, scene = u.scene, plate = u.plate }
+        if #group == 2 and group[1].weight >= SHARE.rich then
+            u.plate.heading, u.plate.say = u.full, u.first and u.scene.say or nil
+            v.plate.heading, v.plate.say = nil, nil
+        elseif #group == 1 then
+            turn = turn % #ALONE + 1
+            local shape = ALONE[turn]
+            pg.shape = shape
+            local p = u.plate
+            if shape.narrow and u.place then
+                local say = u.first and u.scene.say or nil
+                p.heading = u.place
+                p.say = u.when and (u.when:sub(1, 1):upper() .. u.when:sub(2) .. (say and (". " .. say) or ".")) or say
+            else
+                p.heading, p.say = u.full, u.first and u.scene.say or nil
+            end
+        else
+            -- (Social Diary's own captions: "Tirisfal Glades, Monday",
+            -- "Forty minutes later", a few words of what it shows)
+            for _, w in ipairs(group) do w.plate.heading, w.plate.say = nil, nil end
+        end
+        plan.pages[#plan.pages + 1] = pg
+        i = i + #group
+    end
+    return plan
+end
+
+-- The page's foot: "2 / 5 · half past eight in the morning · Tirisfal
+-- Glades" in the middle, "« Previous" and "Next »" in its corners
+local function Foot(pg, n, of)
+    local foot = diary.foot
+    diary.back:SetShown(pg ~= nil and n > 1)
+    diary.on:SetShown(pg ~= nil and n < of)
+    if not pg then return foot:SetText("") end
+    local bits = { n .. " / " .. of }
+    local t = pg.plate and pg.plate.t or pg.scene.from
+    if t and t > 0 and Jn.Clock and Jn.RealmAt then bits[#bits + 1] = (Jn.Clock(Jn.RealmAt(t))) end
+    local mapID = pg.plate and pg.plate.mapID or pg.scene.map
+    local land = mapID and JText.MapName(mapID)
+    if land then bits[#bits + 1] = land end
+    foot:SetText(table.concat(bits, " \194\183 "))
+end
+
 local function DrawRight()
     local page = YourDiary.page
     if not page then return end
     for _, pool in ipairs(page.rightPools or {}) do pool:Begin() end
+    diary.wordPool:Begin()
     page.links, page.sheets, page.moments = {}, {}, {}
     page.now, page.fights, page.ctx = ns.Now(), {}, {}
     page.nothing:Hide()
+    local plan = diary.open and DayPages(diary.open)
+    local pages = plan and plan.pages or {}
+    diary.leaf = math.max(1, math.min(diary.leaf or 1, #pages))
+    diary.pages = #pages
+    local pg = pages[diary.leaf]
     local shown = 0
-    local de = diary.open and BD.Use(diary.open)
+    local de = pg and pg.plate and BD.Use(diary.open)
     if de then
-        local e = { kind = "level", key = diary.open, level = de.level, from = de.from, to = de.to, out = de.out,
-            whole = true, deaths = {}, finds = {}, hunts = de.hunts }
+        -- (its stretches' time, moments and hunts together)
+        local from, to, moments, hunts, plates, seen = math.huge, 0, {}, {}, {}, {}
+        for k, u in ipairs(pg.units) do
+            local sc = u.scene
+            plates[k] = u.plate
+            from, to = math.min(from, sc.from), math.max(to, sc.to)
+            if not seen[sc] then
+                seen[sc] = true
+                for _, m in ipairs(sc.moments) do moments[#moments + 1] = m end
+                for _, h in ipairs(sc.hunts) do hunts[#hunts + 1] = h end
+            end
+        end
+        table.sort(moments, function(a, b) return a.t < b.t end)
+        local layout, pattern
+        if #plates == 1 then
+            layout, pattern = { pg.shape[1]() }, "F"
+        else
+            layout, pattern = YourDiary.LayoutFor(plates)
+            if not layout then layout, pattern = YourDiary.LAYOUT[#plates], "" end
+        end
+        -- (the level reached, its pin: on the page it was reached in)
+        local out = de.out and de.out.at and de.out.at >= from and de.out.at < to and de.out or nil
+        local e = { kind = "level", key = diary.open, level = de.level, from = from, to = to, out = out,
+            whole = true, deaths = {}, finds = {}, hunts = hunts, moments = moments,
+            plates = plates, layout = layout, pattern = pattern }
         local ok, n = pcall(YourDiary.DrawPlates, e)
         if ok then shown = n or 0 else IF.Print("Journal: " .. tostring(n)) end
+    elseif pg then
+        -- (nothing of it on a map: its heading and words alone)
+        local y = 0
+        local items = { { text = pg.scene.heading, font = FONT.noteWritten, height = PAGE.unit + 6 } }
+        for _, line in ipairs(Lines(pg.scene.say or "", FONT.body, WORDS_W)) do items[#items + 1] = { text = line } end
+        for _, it in ipairs(items) do
+            local fs = diary.wordPool:Next()
+            fs:SetFontObject(it.font or FONT.body)
+            fs:ClearAllPoints()
+            fs:SetPoint("TOPLEFT", page.right, "TOPLEFT", PAGE.x, -y)
+            fs:SetText(it.text)
+            y = y + (it.height or PAGE.unit)
+        end
     end
     for i = shown + 1, #page.plates do page.plates[i]:Hide() end
     for _, pool in ipairs(page.rightPools or {}) do pool:Finish() end
-    if shown == 0 then
-        page.nothing:SetText(de and "Nothing of this day was kept on the map." or "Nothing written yet.")
+    diary.wordPool:Finish()
+    Foot(pg, diary.leaf, #pages)
+    if not pg then
+        page.nothing:SetText("Nothing written yet.")
         page.nothing:Show()
     end
 end
 BP.Redraw = DrawRight
+
 
 local drawAt = 0
 local timer = CreateFrame("Frame")
@@ -317,9 +742,11 @@ local function DrawSoon()
     timer:Show()
 end
 
--- A day opened: its words under its rubric, its plates on the right
+-- A day opened: its ledger under its rubric, its pages on the right (at
+-- the first, for another day)
 function BP.OpenDay(key, now)
     if not key then return end
+    if key ~= diary.open then diary.leaf = 1 end
     diary.open = key
     for i, k in ipairs(diary.keys or Jn.Days()) do
         if k == key then diary.sel = i end
@@ -337,14 +764,21 @@ function BP.DiaryMove(step)
     BP.OpenDay(keys[i])
 end
 
--- Left / right: the open day's words, a page at a time
+-- Left / right: the open day's pages
 function BP.DiaryTurn(step)
-    local list = diary.list
-    list:SetOffset((list.offset or 0) + step * math.max(1, (list.numRows or 20) - 4))
+    local plan = diary.open and DayPages(diary.open)
+    local n = plan and #plan.pages or 0
+    local leaf = math.max(1, math.min(n, (diary.leaf or 1) + step))
+    if n == 0 or leaf == diary.leaf then return end
+    diary.leaf = leaf
+    Style.PlaySound("pageTurn")
+    DrawRight()
 end
 
+-- The open day's page, and how many it has
 function BP.DiaryPages()
-    return diary.sel, #(diary.keys or {})
+    local plan = diary.open and DayPages(diary.open)
+    return diary.leaf or 1, plan and #plan.pages or 0
 end
 
 local function BuildDiary(container)
@@ -385,6 +819,26 @@ local function BuildDiary(container)
     page.nothing:SetPoint("TOPLEFT", 40, -60)
     page.nothing:SetWidth(RIGHT_W - 80)
     page.nothing:Hide()
+    diary.wordPool = Handout(function()
+        local text = Style.Text(page.right, FONT.body)
+        text:SetWidth(WORDS_W + 8)
+        text:SetWordWrap(false)
+        return text
+    end)
+    -- (the page's corners turn it: big enough to hit, a little more round
+    -- them than the words show)
+    diary.back = Style.Link(page.right, FONT.body, function() BP.DiaryTurn(-1) end)
+    diary.back:SetPoint("BOTTOMLEFT", page.right, "TOPLEFT", PAGE.x, -(RIGHT_H - 4))
+    diary.back:SetText("\194\171 Previous")
+    diary.on = Style.Link(page.right, FONT.body, function() BP.DiaryTurn(1) end)
+    diary.on:SetPoint("BOTTOMRIGHT", page.right, "TOPLEFT", RIGHT_W - PAGE.x, -(RIGHT_H - 4))
+    diary.on:SetText("Next \194\187")
+    for _, link in ipairs({ diary.back, diary.on }) do link:SetHitRectInsets(-14, -14, -10, -10) end
+    diary.foot = Style.Text(page.right, FONT.small)
+    diary.foot:SetPoint("BOTTOM", page.right, "TOPLEFT", RIGHT_W / 2, -(RIGHT_H - 6))
+    -- (the wheel turns the pages)
+    page.right:EnableMouseWheel(true)
+    page.right:SetScript("OnMouseWheel", function(_, delta) BP.DiaryTurn(delta > 0 and -1 or 1) end)
     diary.page = page
 end
 
@@ -397,11 +851,15 @@ local function RefreshDiary()
     if diary.open then BP.OpenDay(diary.open, true) else RebuildDiary() DrawRight() end
 end
 
--- Today, as it goes on: its words and plates again now and then while open
+-- Today, as it goes on: its pages again now and then while open (on the
+-- last one still, where it was being read)
 function BP.Changed()
     if not (ns.UI.JournalShowing and ns.UI.JournalShowing("journey")) then return end
     if diary.open ~= Jn.TodayKey() then return end
+    -- (as drawn last: the plan is made again as the day grows)
+    local atEnd = (diary.leaf or 1) >= (diary.pages or 0)
     RebuildDiary()
+    if atEnd then diary.leaf = math.huge end
     DrawSoon()
 end
 
@@ -495,7 +953,7 @@ end
 
 -- A day a companion was met: the Diary, open at it
 function BP.ToDay(key)
-    diary.open = key
+    diary.open, diary.leaf = key, 1
     J.TurnTo("journey")
     BP.OpenDay(key, true)
 end

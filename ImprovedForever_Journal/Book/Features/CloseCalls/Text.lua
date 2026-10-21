@@ -76,7 +76,7 @@ end
 
 function CloseCalls.FoeTip(call, now)
     local lines = { CloseCalls.Tag(call) }
-    lines[#lines + 1] = "Left you with " .. (call.pct or 0) .. "% health"
+    lines[#lines + 1] = "Left me with " .. (call.pct or 0) .. "% health"
     local more = (call.foes or 1) - 1
     if more > 0 then
         lines[#lines + 1] = more == 1 and "One more was in the fight"

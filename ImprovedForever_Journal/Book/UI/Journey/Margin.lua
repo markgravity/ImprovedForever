@@ -239,7 +239,7 @@ local function MarginNote(plate, e, it, named)
         local quote, cut, whole = Text.MarginQuote(g.moments)
         local function Tip()
             if not (cut or strip.quoteCut) then return nil end
-            return { { "Your note" }, { whole, 1, 1, 1, true } }
+            return { { "My note" }, { whole, 1, 1, 1, true } }
         end
         strip:SetNote({ name = Text.MarginWho(guid), what = Text.MarginWhat(g.moments, e.level), quote = quote,
             quoteLines = quoteMost, guid = guid, rival = Rival(guid), onClick = ToPerson, tip = quote and Tip or nil,

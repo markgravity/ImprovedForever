@@ -17,7 +17,7 @@ local FIND = { bag = "bag", shoulder = "shoulders", uncommon = "green", rare = "
 
 local function Words(kind)
     local word = FIND[kind] or "find"
-    return (kind == "shoulder" and "first " or "a first ") .. word, "your first " .. word
+    return (kind == "shoulder" and "first " or "a first ") .. word, "my first " .. word
 end
 Firsts.Words = Words
 
@@ -50,7 +50,7 @@ function Firsts.Heading(what, short)
     if #words > 1 then
         text = table.concat(words, ", ", 1, #words - 1) .. " and " .. words[#words]
     end
-    return "Your first " .. text .. "!"
+    return "My first " .. text .. "!"
 end
 
 -- The line under a first found card's item, for a gift whose giver has
@@ -84,9 +84,9 @@ function Firsts.Sentence(kind, rec)
     local text
     if rec.from == "trade" then
         local giver = Giver(rec)
-        text = giver and (Who(giver) .. " gave you " .. yours) or (Capital(yours) .. " was a gift")
+        text = giver and (Who(giver) .. " gave me " .. yours) or (Capital(yours) .. " was a gift")
     elseif rec.from == "quest" then
-        text = "A quest gave you " .. yours
+        text = "A quest gave me " .. yours
     elseif rec.from == "vendor" then
         text = "Bought " .. yours .. in_
     elseif rec.from == "mail" then
@@ -137,7 +137,7 @@ Firsts.PERSON = {
     tier = 1,
     say = function(m)
         local _, yours = Words(m.what)
-        return "gave you " .. Glue(yours)
+        return "gave me " .. Glue(yours)
     end,
 }
 
