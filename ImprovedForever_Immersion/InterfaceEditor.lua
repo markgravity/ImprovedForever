@@ -99,6 +99,12 @@ local ITEMS = {
             .. "still does every press: its slots are set as before (the Bindings tab, its own editor).",
     }, Toggle("pad", "Spell diamonds", function() IN.GamepadBar.Apply() end)),
     Item({
+        key = "recentLoot", group = "pad", label = "Recent loot (experiment)",
+        tip = "An experiment. Your last four loots as small tiles left of the bags' tile under the spell diamonds, the "
+            .. "newest nearest it, the same item again added to its tile. Each is ringed in its quality's "
+            .. "colour. An item taken from the loot window flies into them. Mouse over one for its tooltip.",
+    }, Toggle("recentLoot", "Recent loot (experiment)", function() IN.RecentLoot.Apply() end)),
+    Item({
         key = "padStyle", group = "pad", label = "Tile style",
         tip = "The shape of the gamepad bar's tiles (and of the party spells' and the cast line's): Diamonds, "
             .. "four to a group as one big diamond; Squares, the game's square slots in two rows and two "
@@ -116,8 +122,8 @@ local ITEMS = {
         end,
     }),
     Item({
-        key = "partyPad", group = "pad", label = "Party casting (L1, test)",
-        tip = "A test, for any role, in a party or raid: L1 is ours instead of the game's friendly targeting. "
+        key = "partyPad", group = "pad", label = "Party casting (L1, experiment)",
+        tip = "An experiment, for any role, in a party or raid: L1 is ours instead of the game's friendly targeting. "
             .. "Held: the D-pad "
             .. "picks one of four party spells (kept until you pick another), and Square, Circle, Triangle "
             .. "and X cast it on party members 1 to 4, your target left as it is (the button shows on each "
@@ -126,22 +132,22 @@ local ITEMS = {
             .. "cards, the picked one alone at rest (all four while L1 is held or the spell book is open): "
             .. "drag a spell, item or macro onto a tile, off it to empty it. Off, or alone, L1 is the game's. L1 is "
             .. "taken out of combat only, while the game has the controller.",
-    }, Toggle("partyPad", "Party casting (L1, test)", function() IN.PartyCards.Apply() end)),
+    }, Toggle("partyPad", "Party casting (L1, experiment)", function() IN.PartyCards.Apply() end)),
     Item({
-        key = "chatAbove", group = "chat", label = "Chat over your frame (test)",
+        key = "chatAbove", group = "chat", label = "Chat over your frame (experiment)",
         tip = "The chat moved over your player frame, written into your Edit Mode layout (a preset is copied "
             .. "as \"Improved Forever\") and made the active layout again, so the game moves it now. Done once "
             .. "per layout: moved again in Edit Mode, it stays where you put it. To undo it, pick your old "
             .. "layout in Edit Mode.",
-    }, Toggle("chatAbove", "Chat over your frame (test)", function() IN.HudLayout.Apply() end)),
+    }, Toggle("chatAbove", "Chat over your frame (experiment)", function() IN.HudLayout.Apply() end)),
     Item({
-        key = "hudAuras", group = "frames", label = "Buffs along the bottom (test)",
+        key = "hudAuras", group = "frames", label = "Buffs along the bottom (experiment)",
         tip = "The game's buffs and debuffs moved to the bottom, between the minion and the party cards "
             .. "(debuffs on the bottom row, buffs over them, growing right), as big as the Cooldown Manager's "
             .. "icons, each with its effect in short on it (+5 STA), written into your Edit Mode "
             .. "layout as the chat is. Done once per layout: moved again in Edit Mode, they stay where you put "
             .. "them.",
-    }, Toggle("hudAuras", "Buffs along the bottom (test)", function() IN.HudLayout.Apply() end)),
+    }, Toggle("hudAuras", "Buffs along the bottom (experiment)", function() IN.HudLayout.Apply() end)),
     Item({
         key = "buffTimeline", group = "frames", label = "Buff row",
         tip = "Your buffs and debuffs in a row along the bottom, from the minion card toward the party "
@@ -160,12 +166,12 @@ local ITEMS = {
             .. "timed from your cast, by the length it had out of one.",
     }, Toggle("cooldownTimeline", "Cooldown row", function() IN.BuffTimeline.Apply() end)),
     Item({
-        key = "hudCooldowns", group = "pad", label = "Cooldowns beside the diamonds (test)",
+        key = "hudCooldowns", group = "pad", label = "Cooldowns beside the diamonds (experiment)",
         tip = "The game's Cooldown Manager (turn it on in the game's options) moved to the bottom, left of the "
             .. "spell diamonds: your main cooldowns on the bottom row, the utility ones over them, growing "
             .. "left. Written into your Edit Mode layout as the chat is; its own options choose what it "
             .. "shows.",
-    }, Toggle("hudCooldowns", "Cooldowns beside the diamonds (test)", function() IN.HudLayout.Apply() end)),
+    }, Toggle("hudCooldowns", "Cooldowns beside the diamonds (experiment)", function() IN.HudLayout.Apply() end)),
     Item({
         key = "chatDim", group = "chat", label = "Immersive chat",
         tip = "While you aren't using the chat only its lines show, no box, tabs or edit box: each new line "

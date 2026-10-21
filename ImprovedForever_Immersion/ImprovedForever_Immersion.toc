@@ -19,6 +19,7 @@ PlayerCast.lua
 PlayerHealth.lua
 XPBar.lua
 GamepadBar.lua
+RecentLoot.lua
 HudLayout.lua
 AuraLabels.lua
 BuffTimeline.lua

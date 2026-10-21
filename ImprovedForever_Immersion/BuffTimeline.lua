@@ -38,6 +38,7 @@ local MINION_W = 61             -- (a minion's card, PartyCards.lua)
 local MIDDLE_GAP = 28           -- (kept clear by the party's row)
 local PAD_GAP = 12              -- (the party spells' diamond after the cards, PartyCards.lua)
 local DIAMOND_GAP = 40          -- (before the spell diamonds)
+local LOOT_GAP = 16             -- (before the recent loot, RecentLoot.lua)
 local SPACING = 10              -- (between two icons; a debuff's border a sixth out each side)
 local ROW_GAP = 18              -- (between rows: the effect over each)
 local SIZE_FALLBACK = 40        -- (the Cooldown Manager's icons can't be measured)
@@ -658,6 +659,9 @@ local cooldowns = Timeline("ImprovedForeverCooldownTimeline", {
         local GB = IN.GamepadBar
         local left = GB and GB.Rect and GB.Rect()
         local far = left and (left / UIParent:GetEffectiveScale() - DIAMOND_GAP) or (UIParent:GetWidth() - 420)
+        -- (and before the recent loot, RecentLoot.lua)
+        local loot = IN.RecentLoot and IN.RecentLoot.Left and IN.RecentLoot.Left()
+        if loot then far = math.min(far, loot - LOOT_GAP) end
         return near, math.max(near + 1, far)
     end,
     Read = function(now)

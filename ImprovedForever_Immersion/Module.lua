@@ -22,8 +22,8 @@ IF.Interface = IN
 IN.BOTTOM = 38
 -- The power line's height, on the bottom edge (PlayerHealth.lua)
 IN.MP_H = 5
--- The health bar's, over it (PlayerHealth.lua)
-IN.HP_H = 5
+-- The health bar's, over it (PlayerHealth.lua): the old experience line's
+IN.HP_H = 8
 
 -- The game's colours of a monster's level against yours, its own when it
 -- has them: green, yellow, orange, red (a card's alert, a cooldown's time
@@ -45,6 +45,15 @@ IN.LEVEL_COLORS = {
 IF.AddCommand("cards", function(args) IN.PartyCards.TogglePreview(args[1]) end,
     "[tank | healer | dps | off]: preview the minion and party cards (as that role sees them)")
 
+-- /if loottest [n | clear]: n items from your bags flown into the recent
+-- loot (RecentLoot.lua)
+IF.AddCommand("loottest", function(args)
+    IF.Print("Recent loot test: starting.")
+    local ok, err = pcall(function() IN.RecentLoot.Test(args[1]) end)
+    if not ok then IF.Print("Recent loot test failed: " .. tostring(err)) end
+end,
+    "[n | clear]: fly n items from your bags into the recent loot (or empty it)")
+
 -- /if padprobe: what the game's gamepad bar holds (GamepadBar.lua)
 IF.AddCommand("padprobe", function() IN.GamepadBar.Probe() end, ": what the gamepad bar's buttons hold")
 
@@ -60,11 +69,11 @@ local DEFAULTS = {
     target = true,      -- the target's health on top, its name over it
     cards = true,       -- your pet and party as cards along the bottom
     cardFocus = "auto", -- the party cards as your role needs them: auto (your role), tank, healer, off
-    chatAbove = true,   -- the chat over the player's frame (in the Edit Mode layout; a test)
-    hudAuras = true,    -- your buffs and debuffs along the bottom (in the Edit Mode layout; a test)
+    chatAbove = true,   -- the chat over the player's frame (in the Edit Mode layout; an experiment)
+    hudAuras = true,    -- your buffs and debuffs along the bottom (in the Edit Mode layout; an experiment)
     buffTimeline = true, -- your buffs and debuffs in a row along the bottom (the game's aura container), left of the party
     cooldownTimeline = true, -- your gamepad bar's and trinkets' cooldowns in a row along the bottom, right of the party
-    hudCooldowns = true, -- the Cooldown Manager left of the spell diamonds (in the Edit Mode layout; a test)
+    hudCooldowns = true, -- the Cooldown Manager left of the spell diamonds (in the Edit Mode layout; an experiment)
     chatDim = true,     -- the chat as only its lines while not in use
     castBar = true,     -- your casts as a long line over the party cards, filling out from the middle
     castRange = true,   -- with the cast line: its diamond alone while not casting, grey with your target out of range
@@ -73,8 +82,9 @@ local DEFAULTS = {
     npcDialog = true,   -- talking to an NPC (quests, gossip) as subtitles low in the middle, Spoken's voice with it
     xp = true,          -- the experience as a ring round the player frame
     pad = true,         -- the gamepad bar as Hogwarts Legacy's spell diamonds, bottom right
+    recentLoot = false, -- your last four loots as tiles beside the bags' one, flying in from the loot window (an experiment)
     padStyle = "square", -- its tiles: "diamond", "square" (rows and columns) or "circle" (GamepadBar.lua)
-    partyPad = false,   -- L1 ours: + the D-pad picks a party spell, + a face button casts it on party 1 to 4 (a test)
+    partyPad = false,   -- L1 ours: + the D-pad picks a party spell, + a face button casts it on party 1 to 4 (an experiment)
 }
 
 -- A watcher: fn() every `every` seconds. One that errors stops, said once

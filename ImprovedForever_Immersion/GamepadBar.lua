@@ -1194,7 +1194,7 @@ local function Supply(read, tip)
     return b
 end
 
-Supply(function()
+local bagTile = Supply(function()
     local free = BagSpace()
     return free and "Interface\\Icons\\INV_Misc_Bag_08", free
 end, function()
@@ -1277,6 +1277,9 @@ local function UpdateSupplies()
     PlaceSupplies()
 end
 GB.UpdateSupplies, GB.PlaceSupplies = UpdateSupplies, PlaceSupplies
+-- (the bags' tile and the supplies' sizes: the recent loot beside it,
+-- RecentLoot.lua)
+GB.BagTile, GB.SUPPLY, GB.SUPPLY_GAP = bagTile, SUPPLY, SUPPLY_GAP
 
 local supplyEvents = CreateFrame("Frame")
 for _, e in ipairs({ "BAG_UPDATE_DELAYED", "PLAYER_ENTERING_WORLD", "UNIT_INVENTORY_CHANGED" }) do

@@ -36,7 +36,11 @@ local ORANGE = "UI-HUD-ExperienceBar-Fill-Reputation-Faction-Orange-Camelot"
 local RED = "UI-HUD-ExperienceBar-Fill-Reputation-Faction-Red-Camelot"
 local TRAIL = { 1, 0.93, 0.82, 0.55 }
 local GLOW = { 0.6, 1, 0.6 }
-local POWER_GLOW = { 0.4, 0.6, 1 }      -- (the power's, when the game has no colour for it)
+local POWER_COLOR = { 0, 0, 1 }         -- (the power's, when the game has no colour for it: mana's)
+-- (the power's fill: the game's plain status bar, tinted in the power's
+-- colour; the unit frames' fills have dark rounded ends, which meet in the
+-- middle as a dark patch)
+local POWER_FILL = "Interface\\TargetingFrame\\UI-StatusBar"
 -- (the powers at rest when empty: out of a fight, the rest at full)
 local RESTS_EMPTY = { RAGE = true, RUNIC_POWER = true }
 -- (the colours over the green, by health left: orange from three quarters
@@ -185,7 +189,7 @@ for i = 1, 2 do
 
     local p = { left = left }
     p.bar = Bar(power, left, 2)
-    p.bar:SetStatusBarTexture(UF.PowerAtlas("player"))
+    p.bar:SetStatusBarTexture(POWER_FILL)
     p.glow = Glow(power, p.bar:GetStatusBarTexture(), left, POWER_H)
     powerHalves[i] = p
 end
@@ -261,20 +265,20 @@ local function PowerToken()
     return token
 end
 
--- (the power's halves: its kind's fill and glow, its value as it is, eased
--- on a change of it; its kind a secret: the last one kept)
+-- (the power's halves: its kind's colour on the fill and glow, its value as
+-- it is, eased on a change of it; its kind a secret: the last one kept)
 local function FillPower(ease)
-    local token = PowerToken()
-    local atlas = (token or not powerHalves[1].atlas) and UF.PowerAtlas("player") or powerHalves[1].atlas
-    local c = token and PowerBarColor and PowerBarColor[token]
-    local color = type(c) == "table" and c.r and { c.r, c.g, c.b } or POWER_GLOW
+    local token = PowerToken() or powerHalves[1].token or "MANA"
+    local c = PowerBarColor and PowerBarColor[token]
+    local color = type(c) == "table" and c.r and { c.r, c.g, c.b } or POWER_COLOR
     local value, max = UnitPower("player"), UnitPowerMax("player")
     for _, p in ipairs(powerHalves) do
         local bar = p.bar
-        if p.atlas ~= atlas then
-            p.atlas = atlas
-            bar:SetStatusBarTexture(atlas)
-            GlowColor(p.glow, p.left, color)
+        if p.token ~= token then
+            p.token = token
+            bar:SetStatusBarColor(color[1], color[2], color[3])
+            -- (the glow lighter than the fill: mana's pure blue would barely show)
+            GlowColor(p.glow, p.left, { 0.5 + color[1] / 2, 0.5 + color[2] / 2, 0.5 + color[3] / 2 })
         end
         if not Try(bar.SetMinMaxValues, bar, 0, max) then
             bar:SetMinMaxValues(0, 1)

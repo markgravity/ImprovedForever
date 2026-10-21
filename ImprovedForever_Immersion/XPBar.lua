@@ -2,7 +2,7 @@
 -- UnitFrames.lua), in place of the game's experience bar, drawn as the
 -- gamepad bar's cast ring (GamepadBar.lua): a line on the card's border
 -- with a wider, fainter one under it as its glow, clockwise from the
--- middle of its top, in the experience bar's own fills (Forever's
+-- level badge at its top left round to it again, in the experience bar's own fills (Forever's
 -- experience purple, the rested part beyond it in blue, fainter), easing
 -- to a new value. The mouse over the card shows the numbers in its
 -- tooltip.
@@ -30,6 +30,10 @@ local RESTED_ALPHA = 0.6
 -- (on the border, RING_IN in from the card's edge; the line's and glow's
 -- thickness, the gamepad bar's cast ring's)
 local RING_IN, RING_LINE, RING_GLOW = 3, 2.5, 4
+-- (the level badge's reach from the ring's top left corner: the ring
+-- starts past it along the top, ends short of it up the left side;
+-- UnitFrames.lua's Avatar: its 24 wide circle centred 6 in)
+local BADGE = 16
 local EASE = 6                          -- (how fast it eases to a new value)
 local WHITE = "Interface\\Buttons\\WHITE8x8"
 
@@ -73,18 +77,24 @@ local function ArcLines(arc, i)
     return arc.lines[i], arc.glows[i]
 end
 
--- The card's path, clockwise from the middle of its top, in points from
--- its centre, and each side's share of the way round (the sides aren't
--- equal: a share by length)
+-- The card's path, clockwise from the level badge round to it again
+-- (past it along the top, to under it on the left side), in points from
+-- its centre, and each side's share of the way (the sides aren't equal: a
+-- share by length)
 local function Path()
     local w, h = ring:GetSize()
     local hw, hh = math.max(w / 2 - RING_IN, 1), math.max(h / 2 - RING_IN, 1)
-    local path = { { 0, hh }, { hw, hh }, { hw, -hh }, { -hw, -hh }, { -hw, hh }, { 0, hh } }
-    local total = 4 * (hw + hh)
-    local at, cuts = 0, { 0 }
+    local badge = math.min(BADGE, hw, hh)
+    local path = { { -hw + badge, hh }, { hw, hh }, { hw, -hh }, { -hw, -hh }, { -hw, hh - badge } }
+    local lengths, total = {}, 0
     for i = 1, #path - 1 do
         local a, z = path[i], path[i + 1]
-        at = at + (math.abs(z[1] - a[1]) + math.abs(z[2] - a[2])) / total
+        lengths[i] = math.abs(z[1] - a[1]) + math.abs(z[2] - a[2])
+        total = total + lengths[i]
+    end
+    local at, cuts = 0, { 0 }
+    for i = 1, #path - 1 do
+        at = at + lengths[i] / total
         cuts[i + 1] = at
     end
     return path, cuts
