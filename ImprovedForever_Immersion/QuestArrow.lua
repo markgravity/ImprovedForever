@@ -11,9 +11,9 @@
 -- on its own zone's), coloured by how far off that way you're headed
 -- (green on it, yellow, orange, red turned away). Brighter while you're
 -- headed its way. In a fight only the gem, small and plain, so the
--- fight has your eyes, past the end of the target's health line while it
--- has the header's place
--- (the same, in its place, while the game names a zone you enter); gone when there's nothing to point at (no
+-- fight has your eyes (the same while the game names a zone you enter);
+-- the target, a zone's name or a level up take its place in turn
+-- (HeaderSlot.lua); gone when there's nothing to point at (no
 -- focused quest, another continent, an instance), on a flight, while an
 -- NPC talks (NpcDialog.lua), and once you're there.
 -- Only read: the quest log's waypoints and map POIs, the player's map
@@ -54,11 +54,8 @@ local TURN = 10                         -- (how fast it turns to a new angle)
 local FADE = 4                          -- (and fades in and out)
 local POLL = 0.1                        -- (the player's place read this often)
 -- (in a fight: the gem alone, this big, plain (its faces: no edges, glow,
--- shadow or bob), the header gone; with the target in the header's place
--- (TargetHeader.lua), this far past its health line's right end)
+-- shadow or bob), the header gone)
 local CALM_SIZE = 0.6
-local BESIDE_TARGET = 30
-local SLIDE = 6
 
 local function Secret(v)
     return type(issecretvalue) == "function" and issecretvalue(v)
@@ -162,23 +159,8 @@ local TOP, BOTTOM = 5, 6
 local world, screen = {}, {}
 for i = 1, 6 do world[i], screen[i] = {}, {} end
 
--- (its middle on the rule; in a fight, past the target's health line's
--- right end (TargetHeader.lua), `bind` 0 to 1 of the way there, its gem
--- `size` times as big: the gem's middle level with the line)
-local function Place(bind, size)
-    local x, y = UIParent:GetWidth() / 2, UIParent:GetHeight() - RULE_Y
-    local TH = IN.TargetHeader
-    if bind > 0 and TH then
-        local bx, by = TH.RightEnd(BESIDE_TARGET)
-        if bx then
-            by = by - RAISE * size
-            x, y = x + (bx - x) * bind, y + (by - y) * bind
-        end
-    end
-    frame:ClearAllPoints()
-    frame:SetPoint("CENTER", UIParent, "BOTTOMLEFT", x, y)
-end
-Place(0, 1)
+-- (its middle on the rule)
+frame:SetPoint("CENTER", UIParent, "TOP", 0, -RULE_Y)
 
 -- The diamond turned `angle` (clockwise from straight ahead), `bob` up
 -- (screen), `bright` 0 to 1 (headed its way), in `color`, `size` times as
@@ -403,7 +385,7 @@ end
 ---------------------------------------------------------------------------
 -- Shown, turned, faded
 ---------------------------------------------------------------------------
-local shown = { angle = nil, alpha = 0, goal = 0, on = 0, calm = 0, bind = 0, parts = 1 }
+local shown = { angle = nil, alpha = 0, goal = 0, on = 0, calm = 0, parts = 1 }
 local since = POLL
 local broken
 
@@ -494,17 +476,15 @@ frame:SetScript("OnUpdate", function(_, elapsed)
     -- (in a fight: plain and small, the header gone, eased)
     local fight = IF.InCombat() and 1 or 0
     -- (the header's place ours or not (HeaderSlot.lua): spinning down to
-    -- nothing as another comes, back after; beside the target in a fight
-    -- whatever has the place)
+    -- nothing as another comes, back after)
     local banner = IN.ZoneBanner
-    -- (plain too while the game's own zone name shows over it; beside the
-    -- target's health line only in a fight)
+    -- (plain too while the game's own zone name shows over it)
     local plain = (fight == 1 or (ZoneText() and not (banner and banner.On()))) and 1 or 0
     local calm = shown.calm + (plain - shown.calm) * k
     if math.abs(calm - plain) < 0.005 then calm = plain end
     shown.calm = calm
     local present = HS.Presence("quest")
-    local gem = math.max(present, shown.bind)
+    local gem = present
     local parts = (1 - calm) * present
     if parts ~= shown.parts then
         shown.parts = parts
@@ -520,12 +500,6 @@ frame:SetScript("OnUpdate", function(_, elapsed)
         Draw(shown.angle + (1 - gem) * math.pi, BOB * breath, shown.on * (0.8 + 0.2 * breath), WayColor(off),
             size, calm)
     end
-    -- (past the target's health line in a fight once the target has the
-    -- header's place (or is coming in), slid there)
-    local beside = fight == 1 and HS.Active() == "target" and 1 or 0
-    shown.bind = shown.bind + (beside - shown.bind) * math.min(1, elapsed * SLIDE)
-    if math.abs(shown.bind - beside) < 0.005 then shown.bind = beside end
-    Place(shown.bind, 1 + (CALM_SIZE - 1) * calm)
     frame:SetAlpha(shown.alpha)
     if shown.alpha < 0.01 and shown.goal == 0 then
         frame:SetAlpha(0)

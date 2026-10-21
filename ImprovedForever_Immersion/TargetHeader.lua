@@ -6,7 +6,8 @@
 -- beside it (the nameplate's elite / rare dragon) and in the diamond's
 -- rim; under them its name big, the quests it counts for (as its tooltip
 -- has them), else what more there is to say of it (a player's guild, race
--- and class; an NPC's title and kind), then its casts as a thin line.
+-- and class; an NPC's title and kind), then its casts as a thin line. In
+-- a fight only the fight's: the name smaller, the casts.
 -- It comes in when you target something and goes when you don't (a moment
 -- after, so a quick change doesn't strobe; one target to another changes in
 -- place): the line grows out from the middle, the diamond pops up, the
@@ -453,9 +454,24 @@ end
 HS.Add("target", 2, { wants = Wants, rule = function() return false end })
 
 local Ease, Pop = HS.Ease, HS.Pop
-local drawn
+local drawn, drawnCalm
+-- (in a fight the words kept to the fight's: the name smaller, the quests
+-- and the rest gone (the casts stay), eased)
+local CALM_NAME, CALM_SPEED = 0.6, 4
+local calm = 0
 
-local function Draw()
+local function NameScale(k)
+    if name.SetTextScale then
+        name:SetTextScale(k)
+    else
+        name:SetFont(HS.FONT, HS.NAME_SIZE * k, "")
+    end
+end
+
+local function Draw(elapsed)
+    local fight = IF.InCombat() and 1 or 0
+    calm = calm + (fight - calm) * math.min(1, (elapsed or 0) * CALM_SPEED)
+    if math.abs(calm - fight) < 0.01 then calm = fight end
     local p = HS.Presence("target")
     if p <= 0 then
         if look:IsShown() then look:Hide() end
@@ -466,8 +482,8 @@ local function Draw()
         look:Show()
         Refresh(UF.target)
     end
-    if p == drawn then return end
-    drawn = p
+    if p == drawn and calm == drawnCalm then return end
+    drawn, drawnCalm = p, calm
     LineWidth(Ease(p, 0, 0.6))
     local come = Ease(p, 0.15, 0.75)
     tile:SetScale(math.max(0.01, come < 1 and Pop(come) or 1))
@@ -475,24 +491,25 @@ local function Draw()
     local words = Ease(p, 0.4, 1)
     name:ClearAllPoints()
     name:SetPoint("TOP", look, "CENTER", 0, -NAME_GAP - SLIDE * (1 - words))
-    for _, s in ipairs({ name, quest, castBox }) do s:SetAlpha(words) end
+    NameScale(1 + (CALM_NAME - 1) * calm)
+    name:SetAlpha(words)
+    castBox:SetAlpha(words)
+    quest:SetAlpha(words * (1 - calm))
+    quest:SetShown(calm < 0.99)
+    -- (the casts up under the name once the quests are gone)
+    castBox:ClearAllPoints()
+    castBox:SetPoint("TOP", calm < 0.5 and quest or name, "BOTTOM", 0, -CAST_GAP)
 end
 
 -- (drawn each frame; one error said once, then no more)
 local broken
 local driver = CreateFrame("Frame")
-driver:SetScript("OnUpdate", function()
+driver:SetScript("OnUpdate", function(_, elapsed)
     if broken then return end
-    local ok, err = pcall(Draw)
+    local ok, err = pcall(Draw, elapsed)
     if not ok then
         broken = true
         look:Hide()
         IF.Print("Immersion: the target header stopped after an error: " .. tostring(err))
     end
 end)
-
--- Where the quest arrow's gem sits in a fight (QuestArrow.lua): past the
--- health line's right end, level with it, in UIParent's units
-function TH.RightEnd(gap)
-    return UIParent:GetWidth() / 2 + HS.RULE_W + (gap or 0), UIParent:GetHeight() - HS.RULE_Y
-end

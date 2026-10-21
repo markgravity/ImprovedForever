@@ -34,7 +34,7 @@ local ITEMS = {
             .. "portrait, its level under it (coloured by how hard it is, a skull when too high), an elite or "
             .. "rare's dragon beside it and a gold or silver rim. Under them its name big, the quests it "
             .. "counts for (else a player's guild, race and class, or an NPC's title and kind), then its "
-            .. "casts as a thin line. Click the diamond or the name to target it, right click for its menu. In "
+            .. "casts as a thin line. In a fight only its name, smaller, and its casts. Click the diamond or the name to target it, right click for its menu. In "
             .. "place of the game's target frame.",
     }, Toggle("target", "Target header", function() IN.UnitFrames.Apply() end)),
     Item({
@@ -100,8 +100,8 @@ local ITEMS = {
             .. "the screen, as the camp's summary header: a gold rule, under it the quest's name big in gold "
             .. "and the yards left small and white, and on the rule a 3D diamond lying on its side in "
             .. "perspective, hovering, turning as you do: green while you're headed its way, yellow, orange, "
-            .. "then red turned away from it, and brighter dead on. In a fight only the diamond, small and plain, past the end of the target's "
-            .. "health line (small in its place too while the game names a zone you enter). It gives its place "
+            .. "then red turned away from it, and brighter dead on. In a fight only the diamond, small and plain (also while the game "
+            .. "names a zone you enter). It gives its place "
             .. "to the target and to zone names, and comes back after. "
             .. "It points where "
             .. "the quest leads next (another zone's way in, its words small under the yards), else at the quest's "
