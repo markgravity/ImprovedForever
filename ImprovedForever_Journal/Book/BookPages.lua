@@ -489,8 +489,18 @@ local function OneLine(texts)
     return best or all[1]
 end
 
--- "Half past six in the evening, Balnir Farmstead": when a stretch began
+-- "6:30pm, Balnir Farmstead": when a stretch began
 -- and where it went on most; and each alone
+-- The realm's time at `t` as a clock says it: "2am", "7:30am", "3:15pm"
+-- (to the nearest five minutes)
+local function Clock(t)
+    if not (Jn.RealmAt and t and t > 0) then return nil end
+    local m = 5 * math.floor(Jn.RealmAt(t) / 5 + 0.5) % 1440
+    local h, min = math.floor(m / 60), m % 60
+    local h12 = (h + 11) % 12 + 1
+    return h12 .. (min > 0 and (":" .. string.format("%02d", min)) or "") .. (h < 12 and "am" or "pm")
+end
+
 local function Heading(day, from, to)
     local count, place = {}, nil
     for _, ev in ipairs(day.events) do
@@ -502,8 +512,7 @@ local function Heading(day, from, to)
             end
         end
     end
-    local when = Jn.Clock and Jn.RealmAt and from > 0 and Jn.Clock(Jn.RealmAt(from)) or nil
-    when = when and (when:sub(1, 1):upper() .. when:sub(2)) or nil
+    local when = Clock(from)
     if when and place then return when .. ", " .. place, when, place end
     return when or place or "Later", when, place
 end
@@ -628,7 +637,7 @@ local function DayPages(key)
             if shape.narrow and u.place then
                 local say = u.first and u.scene.say or nil
                 p.heading = u.place
-                p.say = u.when and (u.when:sub(1, 1):upper() .. u.when:sub(2) .. (say and (". " .. say) or ".")) or say
+                p.say = u.when and (u.when .. (say and (" \194\183 " .. say) or "")) or say
             else
                 p.heading, p.say = u.full, u.first and u.scene.say or nil
             end
@@ -643,7 +652,7 @@ local function DayPages(key)
     return plan
 end
 
--- The page's foot: "half past eight in the morning · Tirisfal Glades" in
+-- The page's foot: "8:30am · Tirisfal Glades" in
 -- the middle, the page arrows in its corners
 local function Foot(pg, n, of)
     local foot = diary.foot
@@ -652,7 +661,8 @@ local function Foot(pg, n, of)
     if not pg then return foot:SetText("") end
     local bits = {}
     local t = pg.plate and pg.plate.t or pg.scene.from
-    if t and t > 0 and Jn.Clock and Jn.RealmAt then bits[#bits + 1] = (Jn.Clock(Jn.RealmAt(t))) end
+    local clock = Clock(t)
+    if clock then bits[#bits + 1] = clock end
     local mapID = pg.plate and pg.plate.mapID or pg.scene.map
     local land = mapID and JText.MapName(mapID)
     if land then bits[#bits + 1] = land end
