@@ -1,7 +1,8 @@
 -- The Interface tab, a tab of settings (IF.SettingsPage, SettingsPage.lua):
 -- each change to the game's HUD on / off. UnitFrames.lua, XPBar.lua,
 -- GamepadBar.lua, ChatView.lua, ChatFade.lua, NpcDialog.lua, QuestArrow.lua,
--- ZoneBanner.lua, LevelBanner.lua and TargetHeader.lua do the work.
+-- ZoneBanner.lua, LevelBanner.lua, TargetHeader.lua and QuestProgress.lua do
+-- the work.
 local IF = ImprovedForever
 local IN = IF.Interface
 
@@ -115,6 +116,15 @@ local ITEMS = {
             .. "(+18 Health, +1 Strength...), what's new small in gold (talent points, the spells the game "
             .. "names). In a fight with a target it waits for the fight to end. /if leveltest shows it.",
     }, Toggle("levelBanner", "Level ups", function() IN.LevelBanner.Apply() end)),
+    Item({
+        key = "questProgress", group = "frames", label = "Quest progress",
+        tip = "Quest progress (\"Necrotic Crystal Fragment: 6/12\") taking the header's place for a few "
+            .. "seconds, as the target and zone names do (what was there comes back after): the line is the "
+            .. "objective's progress, filling to the new count; on it a diamond with the quest mark (a check "
+            .. "once done); under them the objective big, its count, its quest. In a fight with a living "
+            .. "target it waits. The game's other notices (errors, \"Out of range\"...) move under the "
+            .. "header, so nothing sits on it. /if progresstest shows it.",
+    }, Toggle("questProgress", "Quest progress", function() IN.QuestProgress.Apply() end)),
     Item({
         key = "zoneBanner", group = "frames", label = "Zone names",
         tip = "The zone's name as you enter one in the quest arrow's place and look, in place of the game's: "

@@ -1,6 +1,6 @@
 ## Interface: 16001, 16002, 16003, 16100, 16101, 16200
 ## Title: Improved Forever: Immersion
-## Notes: The game's HUD made immersive: level ups, the target, the way to your focused quest and zone names taking turns in one header under the top, your frame bottom left in a ring of your experience, your health and power as lines along the bottom edge, your pet and party as cards, the gamepad bar as Hogwarts Legacy's spell diamonds, NPCs talking as subtitles, the chat as just its lines until used, and a cinematic fishing view.
+## Notes: The game's HUD made immersive: level ups, quest progress, the target, the way to your focused quest and zone names taking turns in one header under the top, your frame bottom left in a ring of your experience, your health and power as lines along the bottom edge, your pet and party as cards, the gamepad bar as Hogwarts Legacy's spell diamonds, NPCs talking as subtitles, the chat as just its lines until used, and a cinematic fishing view.
 ## Author: markg
 ## Version: 0.1.0
 ## X-Curse-Project-ID: 1755571
@@ -29,6 +29,7 @@ NpcDialog.lua
 QuestArrow.lua
 ZoneBanner.lua
 LevelBanner.lua
+QuestProgress.lua
 PartyPad.lua
 ChatView.lua
 ChatFade.lua

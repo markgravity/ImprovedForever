@@ -8,8 +8,8 @@
 -- (InterfaceEditor.lua), the focused quest's way as a header near the top
 -- with a diamond arrow on its rule (QuestArrow.lua), the zone's name in
 -- its place as you enter one (ZoneBanner.lua), your level ups there too
--- (LevelBanner.lua), the target there (TargetHeader.lua), all taking
--- turns (HeaderSlot.lua). The chat isn't moved: its place is Edit Mode's,
+-- (LevelBanner.lua), quest progress (QuestProgress.lua), the target
+-- (TargetHeader.lua), all taking turns (HeaderSlot.lua). The chat isn't moved: its place is Edit Mode's,
 -- and Forever drops a layout saved from addon code (switching layouts
 -- from it taints); the player moves it there once.
 local IF = ImprovedForever
@@ -72,6 +72,8 @@ IF.AddCommand("zonetest", function() IN.ZoneBanner.Test() end, ": show the zone 
 -- /if leveltest [level]: the level up banner, made-up gains (LevelBanner.lua)
 IF.AddCommand("leveltest", function(args) IN.LevelBanner.Test(args[1]) end,
     "[level]: show the level up banner (your next level, made-up gains)")
+-- /if progresstest: a made-up objective counting up (QuestProgress.lua)
+IF.AddCommand("progresstest", function() IN.QuestProgress.Test() end, ": show quest progress counting up (made up)")
 -- /if chatprobe: what keeps the game's chat shown (ChatFade.lua)
 IF.AddCommand("chatprobe", function() IN.ChatFade.Probe() end, ": what keeps the game's chat shown")
 
@@ -92,6 +94,7 @@ local DEFAULTS = {
     mpLine = true,      -- your power (mana, rage, energy...) as a bar along the screen's bottom edge
     questArrow = true,  -- the focused quest's way: a header near the top (its name, the yards left), a diamond arrow on its rule
     levelBanner = true, -- your level ups: ours, in the header's place and look
+    questProgress = true, -- quest progress in the header's place a moment, the game's other notices under it (ours)
     zoneBanner = true,  -- the zone's name as you enter one: ours, in the quest arrow's place and look
     npcDialog = true,   -- talking to an NPC (quests, gossip) as subtitles low in the middle, Spoken's voice with it
     xp = true,          -- the experience as a ring round the player frame

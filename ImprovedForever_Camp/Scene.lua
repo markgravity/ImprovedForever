@@ -36,7 +36,7 @@ local FADED = { "ImprovedForeverGamepadBar", "ImprovedForeverRecentSlot", "Impro
     "ImprovedForeverChatView", "ImprovedForeverPlayerHealth", "IFObjectiveTrackerFrame",
     "ImprovedForeverNpcDialog", "ImprovedForeverMinimapLabels", "ImprovedForeverMinimapAlert",
     "ImprovedForeverQuestArrow", "ImprovedForeverZoneBanner", "ImprovedForeverHeaderRule",
-    "ImprovedForeverTargetHeader", "ImprovedForeverLevelBanner", "MinimapCluster", "Minimap",
+    "ImprovedForeverTargetHeader", "ImprovedForeverLevelBanner", "ImprovedForeverQuestProgress", "MinimapCluster", "Minimap",
     -- (the tooltip: the faded HUD still takes the mouse, a buff under it
     -- shows its tooltip; any other tooltip has no place in the scene either)
     "GameTooltip" }
