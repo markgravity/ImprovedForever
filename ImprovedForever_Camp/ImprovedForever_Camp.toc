@@ -1,0 +1,15 @@
+## Interface: 16001, 16002, 16003, 16100, 16101, 16200
+## Title: Improved Forever: Camp
+## Notes: Sitting by a campfire as a cutscene: the HUD gone, black bars, the camera cutting between shots round you, your day told back, the camp's benefits when they come, and what's said near you as subtitles.
+## Author: markg
+## Version: 0.1.0
+## X-Website: https://github.com/markgravity/ImprovedForever
+## X-License: MIT
+## IconTexture: Interface\AddOns\ImprovedForever\textures\ic_mod_camp
+## Group: ImprovedForever
+## Dependencies: ImprovedForever
+## OptionalDeps: ImprovedForever_Immersion, ImprovedForever_Journal, ImprovedForever_Minimap, ImprovedForever_QuestTracker
+
+Module.lua
+Scene.lua
+CampEditor.lua

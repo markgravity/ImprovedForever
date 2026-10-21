@@ -37,6 +37,7 @@ the core, **Improved Forever**:
 | `ImprovedForever_Wiki` | Everything about an item. |
 | `ImprovedForever_Journal` | A diary of your days, read as a book. |
 | `ImprovedForever_Fishing` | Fishing from the controller: fishing mode, a cast bar of its own, the session's stringer, the Fish Collection. |
+| `ImprovedForever_Camp` | Sitting by a campfire as a cutscene: the HUD gone, black bars, the camera cutting between shots round you, your day told back from the Journal, the camp's benefits when they come, what's said near you as subtitles. |
 | `ImprovedForever_Immersion` | The game's HUD made immersive: the target's health across the top, yours bottom left in the same look, your pet and party as cards on the experience line, the gamepad bar as Hogwarts Legacy's spell diamonds bottom right, the chat as just its lines until used. |
 | `ImprovedForever_QuestTracker` | The objective tracker, rebuilt as the game's own: sorted quests (zone, level, title, distance, completed), an objective complete sound, full controller support. Formerly Improved Quest Tracker. |
 

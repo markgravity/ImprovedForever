@@ -9,7 +9,7 @@
 ## IconTexture: Interface\AddOns\ImprovedForever\textures\ic_mod_immersion
 ## Group: ImprovedForever
 ## Dependencies: ImprovedForever, Spoken
-## OptionalDeps: Spoken_Quests, ImprovedForever_Journal
+## OptionalDeps: Spoken_Quests
 
 Module.lua
 UnitFrames.lua
@@ -26,5 +26,4 @@ NpcDialog.lua
 PartyPad.lua
 ChatView.lua
 ChatFade.lua
-Camp.lua
 InterfaceEditor.lua

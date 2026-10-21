@@ -19,6 +19,7 @@ LOGOS = os.path.join(ROOT, "dist", "logos")
 # file name -> (texture, logo)
 ICONS = {
     "Icon Auction": ("ic_mod_auction", "Auction"),
+    "Icon Camp": ("ic_mod_camp", "Camp"),
     "Icon Chat": ("ic_mod_chat", "Chat"),
     "Icon Controller": ("ic_mod_controller", "Controller"),
     "Icon Fishing": ("ic_mod_fishing", "Fishing"),

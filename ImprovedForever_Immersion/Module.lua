@@ -73,7 +73,6 @@ local DEFAULTS = {
     pad = true,         -- the gamepad bar as Hogwarts Legacy's spell diamonds, bottom right
     padStyle = "square", -- its tiles: "diamond", "square" (rows and columns) or "circle" (GamepadBar.lua)
     partyPad = false,   -- L1 ours: + the D-pad picks a party spell, + a face button casts it on party 1 to 4 (a test)
-    camp = true,        -- sitting by a campfire as a cinematic scene: HUD faded, camera in, time left until its benefits (Camp.lua)
 }
 
 -- A watcher: fn() every `every` seconds. One that errors stops, said once
@@ -103,9 +102,10 @@ function IN.Settings()
     for key, value in pairs(DEFAULTS) do
         if settings[key] == nil then settings[key] = value end
     end
-    -- (earlier ones moved the chat to the right or drew your auras: their
-    -- keys gone; the timelines' bar test's log too)
-    settings.chat, settings.auras = nil, nil
+    -- (earlier ones moved the chat to the right or drew your auras, and the
+    -- campfire scene was ours (the Camp module's now): their keys gone; the
+    -- timelines' bar test's log too)
+    settings.chat, settings.auras, settings.camp = nil, nil, nil
     db.timelineBar = nil
     return settings
 end

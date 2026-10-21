@@ -1,4 +1,4 @@
--- Campfire as a scene of its own. Sitting by a fire (the Welcoming Campfire
+-- The campfire as a scene of its own (the Camp module). Sitting by a fire (the Welcoming Campfire
 -- aura on you, still a moment), out of a fight: the HUD fades out (your
 -- avatar and pet, the minimap with it: IF.Focus.Fade, never their alpha),
 -- black bars slide in at the top and bottom, the picture fades up from
@@ -20,9 +20,7 @@
 -- a logout puts them back). The Welcoming Campfire coming and going while
 -- you sit (it does, each minute) changes nothing.
 local IF = ImprovedForever
-local IN = IF.Interface
-local C = {}
-IN.Camp = C
+local C = IF.Camp
 
 local WELCOMING = "Welcoming Campfire"
 local BENEFITS = "Camp Benefits"
@@ -719,7 +717,10 @@ end
 binds:RegisterEvent("PLAYER_REGEN_ENABLED")
 binds:SetScript("OnEvent", function() Bind(bindWanted) end)
 
+-- (the chat setting off: no subtitles, Enter the game's)
 local function ChatOn(on)
+    on = on and C.Settings().chat
+    chat:SetShown(on)
     if on then
         chat:SetWidth(UIParent:GetWidth() * 0.6)
         chat:SetHeight(math.max(30, barH - 50))
@@ -808,7 +809,7 @@ local function Model(f, hide)
     if hide then
         a.model:Hide()
     elseif f.unit then
-        local UF = IN.UnitFrames
+        local UF = IF.Interface and IF.Interface.UnitFrames
         if UF and UF.AvatarUnit then UF.AvatarUnit(a, f.unit, true) end
     end
 end
@@ -822,7 +823,8 @@ local function Regions()
     if not rawget(_G, "IFObjectiveTrackerFrame") and _G.ObjectiveTrackerFrame then
         out[#out + 1] = ObjectiveTrackerFrame
     end
-    for _, l in ipairs(IN.PartyCards and IN.PartyCards.labels or {}) do out[#out + 1] = l end
+    local PC = IF.Interface and IF.Interface.PartyCards
+    for _, l in ipairs(PC and PC.labels or {}) do out[#out + 1] = l end
     return out
 end
 
@@ -1060,7 +1062,7 @@ local function Enter()
     rewards, benefitsAt = C.Rewards()
     -- (a test's benefits are new however they start)
     if test then benefitsAt = nil end
-    wordList, wordIndex, wordAt = Recap() or Words(rewards), 1, 0
+    wordList, wordIndex, wordAt = (C.Settings().recap and Recap()) or Words(rewards), 1, 0
     SetLine(wordList[1])
     given, cardA, sumA = false, 0, 0
     Refresh()
@@ -1142,9 +1144,9 @@ local function Moving()
 end
 
 local still = 0
-IN.Watcher("camp scene", 0.25, function()
+C.Watcher("camp scene", 0.25, function()
     if not IF.db then return end
-    local on = IN.Settings().camp
+    local on = C.Settings().scene
     if C.Active() then
         -- (up: a step or a jump; a fight; the setting off; away from the
         -- fire a while, no Welcoming Campfire either. Not the Welcoming
@@ -1176,13 +1178,15 @@ events:RegisterUnitEvent("UNIT_SPELLCAST_CHANNEL_START", "player")
 -- (a fight: at once; a cast gets you up)
 events:SetScript("OnEvent", function(_, event) Leave(event == "PLAYER_REGEN_DISABLED") end)
 
-IF.AddCommand("camptest", function(args)
+function C.Test(seconds)
     if C.Active() then return Leave() end
     if phase then return end
     if IF.InCombat() then return IF.Print("Not in a fight.") end
-    test = { endAt = GetTime() + (tonumber(args[1]) or 20) }
+    test = { endAt = GetTime() + (seconds or 20) }
     Enter()
-end, "[seconds]: try the campfire scene without a fire (again, or a step: out)")
+end
+IF.AddCommand("camptest", function(args) C.Test(tonumber(args[1])) end,
+    "[seconds]: try the campfire scene without a fire (again, or a step: out)")
 
 -- /if campsummary [mine]: the scene straight at its benefits: every camp
 -- object's; mine: yours, from the camp that gave them
@@ -1195,6 +1199,7 @@ local function Summary(args)
     test = { endAt = GetTime(), rewards = rewards }
     Enter()
 end
+C.Summary = function(mine) Summary({ mine and "mine" or nil }) end
 IF.AddCommand("campsummary", Summary, "[mine]: the campfire scene's benefits summary (every camp object's; mine: yours. Again, or a step: out)")
 IF.AddCommand("campsum", Summary)
 
