@@ -146,10 +146,15 @@ local IRREGULAR = { Wolf = "Wolves", Thief = "Thieves", Man = "Men", Woman = "Wo
     Dwarf = "Dwarves", Mouse = "Mice", Wife = "Wives", Child = "Children", Foot = "Feet", Tooth = "Teeth" }
 function Many(name, n)
     if n == 1 then return name end
+    -- (a recipe's or a spell's name, "Enchant Bracer - Minor Stamina": as it is)
+    if name:find(" %- ") or name:find(":") then return name end
     local head, tail = name:match("^(.-)( of .+)$")
     head, tail = head or name, tail or ""
     local start, last = head:match("^(.-)(%S+)$")
     if not last or SAME[last] or last:lower():match("fish$") or last:lower():match("sheep$") then return name end
+    -- (plural already, "Remains", "Goods", "Scales"; or a deed, "Webbed
+    -- Forsaken freed", "Deathguards motivated")
+    if last:match("[^s]s$") or last:match("[^e]ed$") or last == "Forsaken" or last == "Undead" then return name end
     if IRREGULAR[last] then return start .. IRREGULAR[last] .. tail end
     if last:match("[^aeiouAEIOU]y$") then return start .. last:sub(1, -2) .. "ies" .. tail end
     if last:match("[sxz]$") or last:match("[cs]h$") then return start .. last .. "es" .. tail end
@@ -168,12 +173,45 @@ local function Part(rm)
     return "night"
 end
 
+-- The hour as it's said: "six in the morning", "a little after nine at
+-- night", "half past four in the afternoon", "nearly midnight"
+local HOUR_WORDS = { "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "twelve" }
+local function Clock(rm, short)
+    local m = math.floor(rm % 60)
+    local h = math.floor(rm / 60) % 24
+    local lead = ""
+    if m >= 50 then h, lead = (h + 1) % 24, "nearly "
+    elseif m >= 40 then h, lead = (h + 1) % 24, "a little before "
+    elseif m >= 20 then lead = "half past "
+    elseif m >= 8 then lead = "a little after " end
+    if h == 0 then return lead .. "midnight", lead ~= "" end
+    if h == 12 then return lead .. "noon", lead ~= "" end
+    local word = HOUR_WORDS[(h + 11) % 12 + 1]
+    if short then return lead .. word, lead ~= "" end
+    local part = h < 5 and "at night" or h < 12 and "in the morning" or h < 17 and "in the afternoon"
+        or h < 21 and "in the evening" or "at night"
+    return lead .. word .. " " .. part, lead ~= ""
+end
+J.Clock = Clock
+
+-- "at about six in the morning", "at a little after nine at night":
+-- with `about` (a way to say roughly) only where the hour is even
+local function AtClock(rm, about)
+    local said, hedged = Clock(rm)
+    return (hedged and "at " or (about or "at about ")) .. said
+end
+
 -- A paragraph's start: the time of day if it has turned since the last
--- one, else a while later
+-- one (now and then the hour itself), else a while later
 local function When(key, salt, rm, before)
     local part, h = Part(rm), Hour(rm)
     if before and Part(before) == part then
         return Vary(key, "later", { "A while later, ", "After a short rest, ", "Later, ", "Some time after, ", "When I was ready, " })
+    end
+    if Pick(key, salt, { true, false }) then
+        local said, hedged = Clock(rm)
+        return (hedged and Vary(key, "clockH", { "At ", "By " }) or Vary(key, "clock", { "At about ", "Around ", "By " }))
+            .. said .. ", "
     end
     if part == "morning" then return Vary(key, "morning", { "Later that morning, ", "Before noon, " }) end
     if part == "afternoon" then
@@ -200,10 +238,18 @@ local function Woke(key, rm)
     return "Sleep wouldn't come, so I set out in the dead of night"
 end
 
+-- A day that began on the road: its first stretch going on from the night
+-- before, over midnight (no waking to tell)
+local function Continued(key, first)
+    if not first or (first.rfrom or 99) > 10 then return false end
+    local t = J.KeyTime(key)
+    local before = t and J.Day(date("%Y-%m-%d", t - 86400))
+    local last = before and before.sessions and before.sessions[#before.sessions]
+    return last and (last.rto or 0) >= 1425 or false
+end
+
 local function Again(rm)
-    local part = Part(rm)
-    return "I rested a while, and took up the road again "
-        .. (part == "night" and "late at night" or ("in the " .. part)) .. "."
+    return "I rested a while, and took up the road again " .. AtClock(rm) .. "."
 end
 
 local LayDownPlain
@@ -213,12 +259,12 @@ local function LayDown(key, rm, short)
 end
 function LayDownPlain(key, rm, short)
     if short then return "I didn't stay out long; a few minutes, and I put the pen down." end
-    local h = Hour(rm)
-    if h < 5 then return "It was past midnight when I finally lay down." end
-    if h >= 21 then return Pick(key, 26, { "Late in the evening I lay down to rest.", "I lay down late, tired." }) end
-    if h >= 17 then return "I made camp as evening fell." end
-    if h >= 12 then return "I put the pen down in the afternoon." end
-    return "I put the pen down before noon."
+    local h, at = Hour(rm), Clock(rm)
+    if h < 5 then return "It was " .. at .. " when I finally lay down." end
+    if h >= 21 then return Pick(key, 26, { "I lay down to rest " .. AtClock(rm) .. ".", "I lay down late, tired, " .. AtClock(rm) .. "." }) end
+    if h >= 17 then return "I made camp " .. AtClock(rm, "around ") .. ", as evening fell." end
+    if h >= 12 then return "I put the pen down " .. AtClock(rm) .. "." end
+    return "I put the pen down " .. AtClock(rm, "around ") .. "."
 end
 
 ---------------------------------------------------------------------------
@@ -384,28 +430,40 @@ local DEEDS = { slain = "put down", killed = "put down", destroyed = "destroy", 
     freed = "free", rescued = "rescue", extinguished = "put out", cleansed = "cleanse", collected = "collect",
     gathered = "gather", investigated = "investigate", explored = "explore", found = "find", used = "use",
     placed = "place", planted = "plant", defeated = "defeat", captured = "capture", tamed = "tame", healed = "heal",
-    poisoned = "poison", disrupted = "disrupt", sabotaged = "sabotage", activated = "activate", examined = "examine" }
+    poisoned = "poison", disrupted = "disrupt", sabotaged = "sabotage", activated = "activate", examined = "examine",
+    buried = "bury", motivated = "motivate", delivered = "deliver", returned = "return", recovered = "recover",
+    retrieved = "retrieve", warned = "warn", released = "release", awakened = "awaken", calmed = "calm" }
 
 local NUMBER_WORDS = { "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven", "a dozen" }
 
 -- What a task asks, as someone would say it: "bring back ten Battleworn
 -- Axes", "find the Lost Tools", "put down eight Murloc Scouts"
+-- An objective's deed and what it's done to: "Tarantula Egg destroyed" ->
+-- "destroy", "Tarantula Egg"; nil: it names no deed
+local function Deed(what)
+    local deed = DEEDS[(what:match("(%a+)$") or ""):lower()]
+    if deed then return deed, (what:gsub("%s+%a+$", "")) end
+end
+
 local function Goal(goal)
     local parts = {}
     for i = 1, math.min(2, #(goal or {})) do
         local what, how, need = goal[i][1], goal[i][2], goal[i][3] or 1
         if what then
             local many = need > 1 and ((NUMBER_WORDS[need] or need) .. " " .. Many(what, need))
-            if how == "item" then
+            local deed, thing = Deed(what)
+            if how == "item" and not deed then
                 parts[#parts + 1] = many and ("bring back " .. many) or ("find the " .. Without(what))
-            elseif how == "monster" or DEEDS[what:match("(%a+)$") or ""] then
+            elseif how == "monster" or deed then
                 -- ("Tarantula Egg destroyed" -> destroy six Tarantula Eggs)
-                local deed = DEEDS[what:match("(%a+)$") or ""]
-                local thing = deed and what:gsub("%s+%a+$", "") or what
+                thing = thing or what
                 local count = need > 1 and ((NUMBER_WORDS[need] or need) .. " " .. Many(thing, need)) or BK.A_plain(thing)
                 parts[#parts + 1] = (deed or "put down") .. " " .. count
             else
-                parts[#parts + 1] = (what:sub(1, 1):lower() .. what:sub(2)):gsub("[%.%s]+$", "")
+                -- (its first word small, but a name's: "Samuel's Remains")
+                local first = what:match("^(%S+)")
+                local small = first:match("^%u%l+$") and not first:find("'") and what:sub(1, 1):lower() .. what:sub(2) or what
+                parts[#parts + 1] = (small:gsub("[%.%s]+$", ""))
             end
         end
     end
@@ -419,8 +477,14 @@ local function Short(name)
     return short ~= "" and short or name
 end
 
+-- A task's giver that isn't someone: a wanted poster, a notice board
+local function Board(name)
+    return name and (name:match("[!%?]$") or name:find("Wanted") or name:find("Poster") or name:find("Notice")
+        or name:find("Board")) and true or false
+end
+
 local function QuestOf(e)
-    if not e.giver then return Quest(e.name) end
+    if not e.giver or Board(e.giver) then return Quest(e.name) end
     return Name(Short(e.giver)) .. "'s " .. Quest(e.name)
 end
 
@@ -481,6 +545,13 @@ local MILESTONES = {
 -- People: who they are, how long I've known them, what they did
 ---------------------------------------------------------------------------
 local function Person(name) return J.People and J.People.Get(name) end
+
+-- Whether a name is mine (days kept before chat names lost their surname:
+-- "Rice Fairwind" is me too)
+local function IsMe(name)
+    local me = UnitName("player")
+    return name and me and (name == me or name:match("^(%S+)") == me:match("^(%S+)")) or false
+end
 local Cry                       -- (below: the voice's cry on a great moment)
 local WithMe                    -- (below: "Jelly and I")
 
@@ -718,7 +789,7 @@ local function Sentence(key, list, i, ctx)
             -- (one giver, several tasks: together)
             local same = #run > 1
             for _, r in ipairs(run) do same = same and r.giver ~= nil and r.giver == run[1].giver end
-            if same then
+            if same and not Board(run[1].giver) then
                 for n, r in ipairs(run) do names[n] = Quest(r.name) end
                 ctx.npc, ctx.met[run[1].giver] = run[1].giver, true
                 return Name(run[1].giver) .. " had more than one task for me: " .. Names(Shorten(names, 3)) .. "."
@@ -749,7 +820,10 @@ local function Sentence(key, list, i, ctx)
             for n, r in ipairs(run) do
                 local goal, q = Goal(r.goal), Quest(r.name)
                 local said
-                if r.giver and r.giver ~= ctx.npc and ctx.met[r.giver] then
+                if Board(r.giver) then
+                    said = (r.giver:find("Wanted") and "A wanted poster caught my eye: " or "A notice caught my eye: ")
+                        .. q .. (goal and (", to " .. goal) or "") .. "."
+                elseif r.giver and r.giver ~= ctx.npc and ctx.met[r.giver] then
                     -- (one met before today, somewhere else: back to them)
                     said = "I went back to " .. Name(r.giver) .. ", who "
                         .. (goal and ("asked me to " .. goal .. ", for " .. q) or ("had another task for me: " .. q)) .. "."
@@ -924,7 +998,7 @@ local function Sentence(key, list, i, ctx)
             local where = (place and place ~= ctx.place) and (" around " .. Name(place)) or ""
             ctx.place = place or ctx.place
             said = Vary(key, "fight", { "I cut down ", "I fought ", "I hunted down ", "I put down " }) .. FoesWords(foes, names) .. where
-                .. (g.how == "item" and (" to gather " .. Many(g.what, 2)) or "") .. " for " .. q .. "."
+                .. (g.how == "item" and (" to gather " .. Many(Without(g.what), g.need or 2)) or "") .. " for " .. q .. "."
         end
         if e.deaths then
             local n = #e.deaths.deaths
@@ -947,13 +1021,17 @@ local function Sentence(key, list, i, ctx)
         if e.what and e.how == "item" then
             return "With the " .. Many(Without(e.what), e.need or 1) .. " in hand, " .. q .. " was done" .. done
         end
+        if e.what and Deed(e.what) then return "With enough " .. e.what .. ", " .. q .. " was done" .. done end
         if e.what and e.how == "monster" then return "With enough " .. Many(e.what, 2) .. " dealt with, " .. q .. " was done" .. done end
         return "That settled " .. q .. done
     end
     if k == "objective" then
         if e.what and e.how == "item" then
-            return "I had the " .. Many(Without(e.what), e.need or 1) .. " " .. Quest(e.name) .. " called for."
+            return ((e.need or 1) == 1 and "I had the "
+                or Vary(key, "had", { "I had all the ", "I had every one of the ", "That was all the " }))
+                .. Many(Without(e.what), e.need or 1) .. " that " .. Quest(e.name) .. " called for."
         end
+        if e.what and Deed(e.what) then return "Enough " .. e.what .. " for " .. Quest(e.name) .. "." end
         if e.what and e.how == "monster" then return "I had dealt with enough " .. Many(e.what, 2) .. " for " .. Quest(e.name) .. "." end
         return "Part of " .. Quest(e.name) .. " was done."
     end
@@ -1131,6 +1209,7 @@ local function Sentence(key, list, i, ctx)
             or Vary(key, "alone", { "We went our separate ways.", "After that, I went on alone." })
     end
     if k == "talk" then
+        if IsMe(e.with) then return nil end
         -- Talk: how it went, a line from each side
         local who = Introduce(key, ctx, e.with, true)
         local theirs, mine
@@ -1543,9 +1622,16 @@ function J.Write(key, day)
     Fill(day)
     wipe(turns)
     local sessions = Sessions(day)
-    if #sessions == 0 then return { "Little happened worth writing down." } end
+    if #sessions == 0 then return { "Little happened worth writing down." }, { starts = {} } end
     local ctx = { fare = {}, first = true, stray = 0, met = {}, named = {} }
     local paragraphs = {}
+    -- (when each paragraph begins: what happened from then on is its own)
+    local starts, pstart = {}, nil
+    local function Push(text)
+        paragraphs[#paragraphs + 1] = text
+        starts[#paragraphs] = pstart or 0
+        pstart = nil
+    end
     local wake = sessions[1].rfrom
     local before                 -- the last paragraph's end (realm minutes)
     for _, ep in ipairs(Episodes(day, sessions)) do
@@ -1565,19 +1651,27 @@ function J.Write(key, day)
                 elseif ep.zone then
                     where = Pick(key, 42, { ", in ", ", still in " }) .. Name(ep.zone)
                 end
-                out[1] = Woke(key, wake) .. (sessions[1].rested and ", well rested" or "") .. where
+                out[1] = (Continued(key, sessions[1])
+                    and Pick(key, 43, { "Midnight came and went with me still on the road", "The new day found me still out" })
+                    or (Woke(key, wake) .. (sessions[1].rested and ", well rested" or ""))) .. where
                     .. (voice.wakeAside and (", " .. voice.wakeAside) or "") .. "."
+                -- (the hour, in passing: the waking words have said its time of day)
+                if not Continued(key, sessions[1]) then
+                    local said, hedged = Clock(wake, true)
+                    out[1] = out[1]:gsub("%.$", "") .. Pick(key, 45, { "; it was " .. (hedged and "" or "about ") .. said .. ".",
+                        " (" .. said .. (hedged and "" or " o'clock") .. ", by the inn's bell)." , "; " .. said .. (hedged and "" or " or so") .. ", by my reckoning." })
+                end
             elseif ctx.wake then
                 -- (the waking, with nothing told yet: this paragraph opens with it)
                 out[1], ctx.wake = ctx.wake, nil
-                if place ~= ctx.place and told[1].k ~= "zone" and told[1].k ~= "flight" then
+                if place and place ~= ctx.place and told[1].k ~= "zone" and told[1].k ~= "flight" then
                     lead = (place == ep.zone and "in " or "at ") .. Name(place) .. ", "
                 end
             else
                 if ep.rest then out[1] = Again(Rm(ep.events[1])) end
                 lead = (not ep.rest and When(key, 46 + #paragraphs, Rm(ep.events[1]), before) or "")
                 -- (where, unless its first words say so: a new land, a flight)
-                if place ~= ctx.place and told[1].k ~= "zone" and told[1].k ~= "flight" then
+                if place and place ~= ctx.place and told[1].k ~= "zone" and told[1].k ~= "flight" then
                     lead = lead .. (place == ep.zone and "in " or "at ") .. Name(place) .. ", "
                 end
                 if lead == "" then lead = nil end
@@ -1591,7 +1685,7 @@ function J.Write(key, day)
                 local here = ev.x and ev or ev.by and ev.by.x and ev.by
                 if said >= LONG and not ctx.errand and CONNECTS[ev.k]
                     and (here and Moved(ctx, here) ~= "here" or said >= LONG + 2) then
-                    paragraphs[#paragraphs + 1] = table.concat(out, " ")
+                    Push(table.concat(out, " "))
                     out, said, lead = {}, 0, Pick(key, 90 + i, { "From there, ", "Then " })
                 end
                 local npc = ctx.npc
@@ -1612,6 +1706,7 @@ function J.Write(key, day)
                 if at then ctx.pos = at end
                 if ctx.npc == npc and LEAVES[ev.k] then ctx.npc = nil end
                 if sentence then
+                    pstart = pstart or ev.t or (ev.hunts and ev.hunts[1].t) or (ev.by and ev.by.t)
                     -- (what joins it to the one before: the day's first thing, a
                     -- task put aside for another, then, after that)
                     local join
@@ -1638,16 +1733,17 @@ function J.Write(key, day)
                 -- (only the waking: it opens the next paragraph instead)
                 ctx.wake = out[1]
             else
-                paragraphs[#paragraphs + 1] = table.concat(out, " ")
+                Push(table.concat(out, " "))
             end
             before = Rm(ep.events[#ep.events])
         end
     end
-    if #paragraphs == 0 and ctx.wake then paragraphs[1], ctx.wake = ctx.wake, nil end
+    if #paragraphs == 0 and ctx.wake then Push(ctx.wake) ctx.wake = nil end
     if #paragraphs == 0 then
         local zone = J.Zones(day)[1]
-        paragraphs[1] = Woke(key, wake) .. (zone and (", in " .. Name(zone)) or "") .. "."
+        Push(Woke(key, wake) .. (zone and (", in " .. Name(zone)) or "") .. ".")
     end
+    starts[1] = 0
     -- The day's summary, and its end (today's, while it goes on: not yet)
     local last = sessions[#sessions]
     local going = key == J.TodayKey() and time() - (last.to or 0) < STILL
@@ -1655,8 +1751,23 @@ function J.Write(key, day)
     if not going then
         closing[#closing + 1] = LayDown(key, last.rto or RealmAt(last.to), #sessions == 1 and (day.stats.played or 0) < 600)
     end
-    if #closing > 0 then paragraphs[#paragraphs + 1] = table.concat(closing, " ") end
-    return paragraphs
+    local summary
+    if #closing > 0 then
+        paragraphs[#paragraphs + 1] = table.concat(closing, " ")
+        summary = #paragraphs
+    end
+    -- (where I woke: the day's first place on a map, unless it went on
+    -- from the night before)
+    local woke
+    if not Continued(key, sessions[1]) then
+        for _, e in ipairs(day.events) do
+            if e.map and e.x and e.y then
+                woke = { map = e.map, x = e.x, y = e.y, place = sessions[1].sub or e.sub or e.zone, inn = sessions[1].inn }
+                break
+            end
+        end
+    end
+    return paragraphs, { starts = starts, summary = summary, woke = woke }
 end
 
 -- A companion's page: when we met, what we've done together, the last word

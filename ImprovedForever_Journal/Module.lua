@@ -1,7 +1,7 @@
 -- Improved Forever: Journal. What the character does, kept a day at a time
--- (Journal.lua), written as a diary (JournalWriter.lua) and read in the
--- core's book, as the Wiki is (JournalBook.lua); set up in its tab
--- (JournalEditor.lua).
+-- (Journal.lua), written as a diary (JournalWriter.lua) and read in its
+-- window, laid out as Spoken's Compendium (JournalBook.lua's pages in
+-- JournalWindow.lua); set up in its tab (JournalEditor.lua).
 local IF = ImprovedForever
 
 IF.AddModule({ key = "journal", label = "Journal", icon = IF.TEX .. "ic_mod_journal", addon = ... })

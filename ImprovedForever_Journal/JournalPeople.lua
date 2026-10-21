@@ -49,7 +49,8 @@ local function People()
 end
 
 local function Me()
-    return UnitName("player")
+    local me = UnitName("player")
+    return me and (me:match("^(%S+)%s") or me)
 end
 
 -- A name from the chat ("Rice-Banshee" on my realm: "Rice")
@@ -78,7 +79,10 @@ local function Clean(name)
     -- in it: not something to keep or show)
     if name:find("|", 1, true) or name:find("[%z\1-\31]") then return nil end
     if Ambiguate then name = Ambiguate(name, "none") end
-    return name
+    -- (Forever's chat names carry a surname, "Rice Fairwind", which the
+    -- party and target don't: kept by the character's name alone, so one
+    -- person isn't two and my own lines aren't someone else's)
+    return name:match("^(%S+)%s") or name
 end
 
 -- How well I know someone: more for what we did together than for talk

@@ -1,6 +1,6 @@
 -- Journal: what the character does, kept a day at a time (this file), then
 -- written as a diary (JournalWriter.lua) and read in the core's book
--- (JournalBook.lua). Kept per character, IF.charDB.journal:
+-- (JournalWindow.lua). Kept per character, IF.charDB.journal:
 --   { v = 1, days = { ["YYYY-MM-DD"] = day } }
 --   day = { events = { { t, rm, k, ... } }, sessions = { { from, to, rfrom, rto } },
 --     stats = { levelFrom, levelTo, xp, kills, deaths, quests, played,

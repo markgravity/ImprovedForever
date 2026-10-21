@@ -1,13 +1,8 @@
--- The Journal read: the core's book (ImprovedForever's Book.lua), as the
--- Wiki's. Its first page is the journal so far and a line a day (the
--- newest first, under their month); Cross opens a day: what I wrote of it
--- (JournalWriter.lua), then an entry a subject (quests, places, foes,
--- spoils, crafting), each opening its list. In a list Cross opens a quest's,
--- a creature's or an item's Wiki page in the same book (with the
--- Wiki), or a place on the map; Circle goes back.
--- Opened with /if journal, its key binding, or a wheel / the touchpad (the
--- core's windows of ours: ImprovedForeverJournalToggle).
--- Never in combat.
+-- The Journal's pages, made from what was kept (Journal.lua): a day's
+-- lists (quests, places, foes, spoils, crafting; each entry a quest's,
+-- a creature's or an item's Wiki page, or a place on the map), its
+-- subjects, the companions met. Read in the Journal's window
+-- (JournalWindow.lua).
 local IF = ImprovedForever
 
 local J = IF.Journal
@@ -38,35 +33,9 @@ local MONEY_SRC = {
 
 local Plural, Join = BK.Plural, BK.Join
 
-local book                     -- (below)
 local JB = {}
 IF.JournalBook = JB
-
----------------------------------------------------------------------------
--- The map: a place, where I fell (the book steps aside while it's up)
----------------------------------------------------------------------------
-local away, hooked = false, false
-
-local function ShowMap(map, x, y)
-    if IF.InCombat() or not map then return end
-    if not WorldMapFrame and C_AddOns and C_AddOns.LoadAddOn then pcall(C_AddOns.LoadAddOn, "Blizzard_WorldMap") end
-    if not (OpenWorldMap and WorldMapFrame) then return end
-    if x and y and UiMapPoint and C_Map.CanSetUserWaypointOnMap and C_Map.CanSetUserWaypointOnMap(map) then
-        C_Map.SetUserWaypoint(UiMapPoint.CreateFromCoordinates(map, x, y))
-        if C_SuperTrack and C_SuperTrack.SetSuperTrackedUserWaypoint then C_SuperTrack.SetSuperTrackedUserWaypoint(true) end
-    end
-    if not hooked then
-        hooked = true
-        WorldMapFrame:HookScript("OnHide", function()
-            if not away then return end
-            away = false
-            book:Resume()
-        end)
-    end
-    away = true
-    book:Suspend()
-    OpenWorldMap(map)
-end
+JB.ICON, JB.DAY_ICON, JB.LISTS, JB.LIST_ICONS, JB.ICONS = ICON, DAY_ICON, LISTS, LIST_ICONS, ICONS
 
 -- (a zone's map: where the day's visit to it was)
 local function ZoneMap(day, name)
@@ -74,6 +43,8 @@ local function ZoneMap(day, name)
         if e.k == "zone" and e.name == name and e.map then return e.map end
     end
 end
+
+JB.ZoneMap = ZoneMap
 
 ---------------------------------------------------------------------------
 -- A day's lists, made from what was kept
@@ -244,71 +215,7 @@ local function Subjects(day, L)
     return lines
 end
 
----------------------------------------------------------------------------
--- Pages: the journal's first, a day's
----------------------------------------------------------------------------
--- Cross on a day's entry: its Wiki page (in this book), a place on the map
-local function Open(line, bk)
-    local LB = IF.Wiki
-    if line.kind == "zone" or line.kind == "death" then return ShowMap(line.map, line.x, line.y) end
-    if not (LB and LB.Page) then return end
-    if line.kind == "quest" then return bk:Push(LB.Page("quest", line.id)) end
-    if line.kind == "npc" then return bk:Push(LB.Page("npc", line.id)) end
-    if line.item then return bk:Push(LB.Page("item", line.item)) end
-end
-
-local function Verb(line)
-    if (line.kind == "zone" or line.kind == "death") and line.map then return "Show on Map" end
-    if IF.Wiki and IF.Wiki.Page and (line.kind == "quest" or line.kind == "npc" or line.item) then
-        return "Open"
-    end
-end
-
-local Day = {}
-Day.__index = Day
-
-local EMPTY = { events = {}, stats = { levelFrom = 1, levelTo = 1, xp = 0, kills = 0, deaths = 0, quests = 0, played = 0,
-    money = { earned = 0, spent = 0 }, foes = {}, foeIDs = {}, zones = {} } }
-
-local function DayPage(key)
-    return setmetatable({ key = key }, Day)
-end
-
-function Day:day() return J.Day(self.key) or EMPTY end
-
-function Day:heading()
-    local day = self:day()
-    local s, zones = day.stats, J.Zones(day)
-    return {
-        icon = DAY_ICON, title = J.DayTitle(self.key),
-        kind = Join({ s.played > 0 and (J.Played(s.played) .. " on the road"), J.Grew(day) }),
-        owned = BK.Names({ unpack(zones, 1, math.min(3, #zones)) }) .. (#zones > 3 and (" and " .. (#zones - 3) .. " more") or ""),
-        chapter = LISTS[self.tab] or "Diary",
-    }
-end
-
-function Day:notes()
-    local day = self:day()
-    return J.Write(self.key, day), J.Signature(), Subjects(day, Lists(day))
-end
-
-function Day:list(key) return Lists(self:day())[key] or {} end
-function Day:activate(line, bk) Open(line, bk) end
-function Day:verb(line) return Verb(line) end
-
-local Contents = {}
-Contents.__index = Contents
-
-function Contents:heading()
-    local keys = J.Days()
-    return {
-        icon = ICON .. "INV_Misc_Book_11", title = UnitName("player") or "",
-        kind = Join({ UnitRace("player"), UnitClass("player") }, " "),
-        owned = #keys == 0 and "Nothing written yet"
-            or (Plural(#keys, "day", "days") .. " written since " .. J.DayTitle(keys[#keys], true)),
-        chapter = self.tab == "people" and "Companions" or "Journal",
-    }
-end
+JB.Lists, JB.Subjects = Lists, Subjects
 
 -- Companions: everyone I've had dealings with (talk overheard alone isn't
 -- enough), the best known first
@@ -352,119 +259,4 @@ local function Companions()
     return list
 end
 
-local Person = {}
-Person.__index = Person
-
-local function PersonPage(name)
-    return setmetatable({ name = name }, Person)
-end
-
-function Person:heading()
-    local p = J.People and J.People.Get(self.name) or {}
-    return {
-        icon = Avatar(p), round = true, title = self.name,
-        kind = Join({ p.race, p.class }, " "),
-        owned = Join({ p.guild and ("‹" .. p.guild .. "›"), p.dayCount and Plural(p.dayCount, "day", "days") .. " met" }),
-        chapter = "Companion",
-    }
-end
-
-function Person:notes()
-    local p = J.People and J.People.Get(self.name) or {}
-    -- (the days we met: their pages)
-    local keys, lines = {}, {}
-    for key in pairs(p.days or {}) do keys[#keys + 1] = key end
-    table.sort(keys, function(a, b) return a > b end)
-    if #keys > 0 then lines[1] = { header = "Days We Met", info = #keys } end
-    for _, key in ipairs(keys) do
-        if J.Day(key) then
-            lines[#lines + 1] = { kind = "day", key = key, icon = DAY_ICON, name = J.DayTitle(key), line = J.DayLine(J.Day(key)) }
-        end
-    end
-    return J.PersonStory(self.name), nil, lines
-end
-
-function Person:activate(line, bk)
-    if line.key then bk:Push(DayPage(line.key)) end
-end
-
-function Person:verb(line) return line.key and "Read" or nil end
-
-function Contents:list(key)
-    if key ~= "people" then return {} end
-    local lines = {}
-    for _, c in ipairs(Companions()) do
-        local p = c.p
-        lines[#lines + 1] = { kind = "person", person = c.name, round = true, icon = Avatar(p), name = c.name,
-            line = Join({ Join({ p.race, p.class }, " "), p.last and ("last seen " .. date("%d %b", p.last)) }) }
-    end
-    return lines
-end
-
-function Contents:notes()
-    local keys, lines, header = J.Days(), {}, nil
-    -- (the people of the road, first)
-    local companions = #Companions()
-    if companions > 0 then
-        lines[1] = { go = "people", icon = COMPANION, name = "Companions",
-            line = Plural(companions, "person", "people") .. " met on the road" }
-    end
-    for _, key in ipairs(keys) do
-        local month = J.MonthTitle(key)
-        if not header or header.header ~= month then
-            header = { header = month, info = 0 }
-            lines[#lines + 1] = header
-        end
-        header.info = header.info + 1
-        lines[#lines + 1] = { kind = "day", key = key, icon = DAY_ICON,
-            name = J.DayTitle(key) .. (key == J.TodayKey() and "  (today)" or ""), line = J.DayLine(J.Day(key)) }
-    end
-    return { J.Summary(keys) }, nil, lines
-end
-
-function Contents:activate(line, bk)
-    if line.key then return bk:Push(DayPage(line.key)) end
-    if line.person then return bk:Push(PersonPage(line.person)) end
-end
-
-function Contents:verb(line) return (line.key or line.person) and "Read" or nil end
-
----------------------------------------------------------------------------
--- The book
----------------------------------------------------------------------------
-book = BK.New({ name = "ImprovedForeverJournal", title = "Journal", portrait = ICON .. "INV_Misc_Book_11",
-    notes = "Diary", empty = "Nothing was written here." })
-JB.book = book
-
--- key: a day's ("YYYY-MM-DD"; nil: the journal's first page)
-function JB.Open(key)
-    if IF.InCombat() then return IF.Print("Not in combat.") end
-    book:Open(setmetatable({}, Contents))
-    if key then book:Push(DayPage(key)) end
-end
-
-function JB.Toggle()
-    if book:IsShown() then return book:Close() end
-    JB.Open()
-end
-
--- (what happened today: drawn again while it's read, once a moment)
-local pending = false
-local function Redraw()
-    if not book:IsShown() or pending then return end
-    pending = true
-    C_Timer.After(0.3, function()
-        pending = false
-        book:Render()
-    end)
-end
-J.OnChange(Redraw)
-
-local events = CreateFrame("Frame")
-events:RegisterEvent("GET_ITEM_INFO_RECEIVED")
-events:SetScript("OnEvent", Redraw)
-
--- The press that opens it: a key binding, a wheel's or the touchpad's
--- (the core's windows of ours, Actions.lua)
-IF.Actions.PressButton("ImprovedForeverJournalToggle", function() JB.Toggle() end)
-_G["BINDING_NAME_CLICK ImprovedForeverJournalToggle:LeftButton"] = "Toggle Journal"
+JB.Avatar, JB.Companions, JB.COMPANION = Avatar, Companions, COMPANION

@@ -55,6 +55,8 @@ def main():
             files.append("Bindings.xml")
         if folder == CORE:
             files += sorted(p.relative_to(ROOT / folder).as_posix() for p in (ROOT / folder / "textures").glob("*.tga"))
+        # (a module's own fonts, with their licence)
+        files += sorted(p.relative_to(ROOT / folder).as_posix() for p in (ROOT / folder / "Fonts").glob("*") if p.is_file())
         missing = [f for f in files if not (ROOT / folder / f).is_file()]
         if missing:
             sys.exit(f"{folder}: missing files: " + ", ".join(missing))
