@@ -44,8 +44,8 @@ local ITEMS = {
         key = "enabled", group = "journal", label = "Journal",
         tip = "Keeps a diary of each day you play, for this character: where you went, the quests you finished,"
             .. " your fights and falls, what you found, earned and made. Read it as a book: /if journal, its key"
-            .. " binding, or a wheel (the windows of Improved Forever). Cross (or a click) on a day opens it,"
-            .. " then its lists; with the Wiki, a quest, a creature or an item opens its page.",
+            .. " binding, or a wheel (the windows of Improved Forever): a day a page, its map plates and the"
+            .. " people met; L1 / R1 (the ribbons) between the Diary and your Companions.",
     }, OnOff(function() return S().enabled end, function(on) S().enabled = on end, "Journal")),
     Item({
         key = "open", group = "journal", label = "Read it",
@@ -74,6 +74,21 @@ local ITEMS = {
             menu.Toast("Voice: " .. (action == "auto" and "your race" or J.VOICES[action].name))
         end,
     }),
+    Item({
+        key = "reunions", group = "journal", label = "Reunions",
+        tip = "A card of the journal's, at the top of the screen, when someone you met on an earlier day joins"
+            .. " your group or is your target: who they are, when and where you last met. Never in combat.",
+    }, OnOff(function() return S().reunions end, function(on) S().reunions = on end, "Reunions")),
+    Item({
+        key = "moments", group = "journal", label = "Moments",
+        tip = "A quiet card of the journal's when you grow stronger, fall, or find your first green, blue or"
+            .. " epic item. Never in combat, no sound.",
+    }, OnOff(function() return S().moments end, function(on) S().moments = on end, "Moments")),
+    Item({
+        key = "road", group = "kept", label = "Your road",
+        tip = "Where you walked, a point every few steps, for the map plates in the book to draw your road and"
+            .. " where you stopped. Only your own position, never in an instance.",
+    }, OnOff(function() return S().road end, function(on) S().road = on end, "Your road")),
     Item({
         key = "levels", group = "kept", label = "Levels and quests",
         tip = "Each level reached, the quests taken on and finished (their experience and coin).",

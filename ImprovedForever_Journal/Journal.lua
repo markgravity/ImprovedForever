@@ -1,6 +1,6 @@
 -- Journal: what the character does, kept a day at a time (this file), then
--- written as a diary (JournalWriter.lua) and read in the core's book
--- (JournalWindow.lua). Kept per character, IF.charDB.journal:
+-- written as a diary (JournalWriter.lua) and read in a book
+-- (Book/: Social Diary's look, our days). Kept per character, IF.charDB.journal:
 --   { v = 1, days = { ["YYYY-MM-DD"] = day } }
 --   day = { events = { { t, rm, k, ... } }, sessions = { { from, to, rfrom, rto } },
 --     stats = { levelFrom, levelTo, xp, kills, deaths, quests, played,
@@ -76,10 +76,11 @@ local MEAL_SPELLS = { 433, 430 }          -- Food, Drink
 
 ---------------------------------------------------------------------------
 -- Settings: IF.db.journal = { enabled, levels, places, fights, loot,
--- minQuality, keepDays }
+-- minQuality, keepDays, road (the track), reunions, moments (the book's
+-- cards in play: Book/BookToasts.lua) }
 ---------------------------------------------------------------------------
 local DEFAULTS = { enabled = true, levels = true, places = true, fights = true, loot = true,
-    minQuality = 2, keepDays = 365 }
+    minQuality = 2, keepDays = 365, road = true, reunions = true, moments = true }
 
 function J.Settings()
     local s = IF.db.journal or {}
@@ -731,17 +732,18 @@ local function Looted(msg)
     if not id then return end
     -- (taken from a letter: the mail's, not loot)
     if pushed and open.mail then return end
+    local quality = Quality(id) or tonumber(msg:match("|cnIQ(%d)"))
     -- (an item given with a task handed in: its reward, told with it)
     if pushed then
         local waiting = Recent(rewardFor, 3)
         if waiting then
-            waiting.event.reward, rewardFor = id, nil
+            waiting.event.reward, waiting.event.rewardQ, rewardFor = id, quality, nil
+            J.Found(quality, waiting.event)
             return Changed()
         end
         lastPushed = { id = id, at = GetTime() }
     end
     local count = tonumber(msg:match("|rx(%d+)")) or 1
-    local quality = Quality(id) or tonumber(msg:match("|cnIQ(%d)"))
     if kind == "loot" and (quality or 0) < (J.Settings().minQuality or 2) then return end
     -- (the same item again today: counted on its line)
     local same = Last(kind, function(e) return e.item == id end)
@@ -749,7 +751,8 @@ local function Looted(msg)
         same.count = (same.count or 1) + count
         return Changed()
     end
-    local e = Add(kind, { item = id, count = count })
+    local e = Add(kind, { item = id, count = count, q = quality })
+    J.Found(quality, e)
     -- (given, not looted: a task's reward perhaps, told with it if so)
     if pushed and lastPushed and lastPushed.id == id then lastPushed.event = e end
 end
@@ -1154,6 +1157,126 @@ local function Spoke()
 end
 
 ---------------------------------------------------------------------------
+-- Firsts: the first item of each quality (green, blue, epic) the journal
+-- kept, set once: IF.charDB.journal.firsts[quality] = { key, t, item,
+-- map, x, y }. From the days kept before there was one, once each item's
+-- quality is known (firstsDone: every one was); the book's moment cards
+-- and plates read it (Book/)
+---------------------------------------------------------------------------
+local FIRST_QUALITY = { [2] = true, [3] = true, [4] = true }
+
+local function ItemOf(e)
+    if e.k == "loot" or e.k == "create" then return e.item, e.q end
+    if e.k == "quest" and e.reward then return e.reward, e.rewardQ end
+end
+
+function J.Firsts()
+    local db = Store()
+    db.firsts = db.firsts or {}
+    if not db.firstsDone then
+        local keys, done = J.Days(), true
+        for n = #keys, 1, -1 do
+            local key = keys[n]
+            for _, e in ipairs(db.days[key].events) do
+                local id, q = ItemOf(e)
+                if id and not q then
+                    q = Quality(id)
+                    if not q then done = false end
+                end
+                if q and FIRST_QUALITY[q] and not db.firsts[q] then
+                    db.firsts[q] = { key = key, t = e.t, item = id, map = e.map, x = e.x, y = e.y }
+                end
+            end
+        end
+        db.firstsDone = done or nil
+    end
+    return db.firsts
+end
+
+-- An item kept just now: the first of its quality? (true: it is, and it's
+-- set). Never while the days before aren't all known.
+local foundListeners = {}
+function J.OnFirst(fn) foundListeners[#foundListeners + 1] = fn end
+
+function J.Found(quality, e)
+    if not (quality and FIRST_QUALITY[quality] and e) then return false end
+    local firsts = J.Firsts()
+    if firsts[quality] or not Store().firstsDone then return false end
+    local id = ItemOf(e)
+    firsts[quality] = { key = J.TodayKey(), t = e.t, item = id, map = e.map, x = e.x, y = e.y }
+    for _, fn in ipairs(foundListeners) do pcall(fn, quality, e) end
+    return true
+end
+
+---------------------------------------------------------------------------
+-- The road: where I was, a point each time I'd moved on a little (or a
+-- while had passed), for the book's map plates to draw it as a road and
+-- its stops. Kept as text, a point in seven characters: day.track
+-- "<map>@" then for each point its seconds since day.trackFrom (three
+-- digits) and x, y (two each), the digits Social Diary packs its roads in
+-- (Book/: Journey.Points reads them back). Never on a flight, nor inside.
+---------------------------------------------------------------------------
+local TRACK_STEP = 0.004       -- moved this far on the map: a point
+local TRACK_IDLE = 120         -- ...or still for this long
+local TRACK_MAX = 4000         -- points a day at most
+local DIGITS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+J.TRACK_DIGITS = DIGITS
+
+local function Digits(n, count)
+    local out = {}
+    for i = count, 1, -1 do
+        local d = n % 64
+        out[i] = DIGITS:sub(d + 1, d + 1)
+        n = math.floor(n / 64)
+    end
+    return table.concat(out)
+end
+
+local tracked                  -- the last point kept: { map, x, y, t }
+local function Track(map, x, y)
+    local day = J.Day()
+    local now = time()
+    if tracked and tracked.day == day and tracked.map == map then
+        local d = math.sqrt((x - tracked.x) ^ 2 + (y - tracked.y) ^ 2)
+        if d < TRACK_STEP and now - tracked.t < TRACK_IDLE then return end
+    end
+    day.trackN = day.trackN or 0
+    if day.trackN >= TRACK_MAX then return end
+    day.trackFrom = day.trackFrom or now
+    local out = {}
+    if not (tracked and tracked.day == day and tracked.map == map) then out[1] = map .. "@" end
+    local function Coord(v) return Digits(math.floor(math.max(0, math.min(1, v)) * 1000 + 0.5), 2) end
+    out[#out + 1] = Digits(math.max(0, math.min(262143, now - day.trackFrom)), 3) .. Coord(x) .. Coord(y)
+    day.track = (day.track or "") .. table.concat(out)
+    day.trackN = day.trackN + 1
+    tracked = { day = day, map = map, x = x, y = y, t = now }
+end
+
+-- A day's road, read back: { { t, map, x, y } ... } in order
+function J.Track(day)
+    local list, s = {}, day and day.track
+    if not s or s == "" then return list end
+    local value = {}
+    for i = 1, #DIGITS do value[DIGITS:byte(i)] = i - 1 end
+    local from, map, i = day.trackFrom or 0, nil, 1
+    while i <= #s do
+        local m = s:match("^(%d+)@", i)
+        if m then
+            map = tonumber(m)
+            i = i + #m + 1
+        else
+            local n = {}
+            for k = 0, 6 do n[k + 1] = value[s:byte(i + k) or 0] end
+            if not n[7] then break end
+            local t = from + (n[1] * 64 + n[2]) * 64 + n[3]
+            list[#list + 1] = { t = t, map = map, x = (n[4] * 64 + n[5]) / 1000, y = (n[6] * 64 + n[7]) / 1000 }
+            i = i + 7
+        end
+    end
+    return list
+end
+
+---------------------------------------------------------------------------
 -- Played time: a step at a time, in the day and the zone (and how I got
 -- about: on foot, mounted, swimming)
 ---------------------------------------------------------------------------
@@ -1177,6 +1300,7 @@ local function Tick()
             if d < 0.2 then s.walked = (s.walked or 0) + d end
         end
         lastPos = { map = map, x = x, y = y }
+        if J.Settings().road and not (IsInInstance and IsInInstance()) then Track(map, x, y) end
     else
         lastPos = nil
     end

@@ -145,6 +145,7 @@ Minimap = Frame("Minimap")
 GameTooltip = Frame("GameTooltip")
 ItemRefTooltip = Frame("ItemRefTooltip")
 function CreateFrame(_, name, parent) return Frame(name, parent) end
+function CreateFont(name) return Frame(name) end
 function GetTime() return 1000 end
 function time() return os.time() end
 date = os.date

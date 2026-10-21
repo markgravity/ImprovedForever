@@ -8,7 +8,7 @@
 ## IconTexture: Interface\AddOns\ImprovedForever\textures\ic_mod_journal
 ## Group: ImprovedForever
 ## Dependencies: ImprovedForever
-## OptionalDeps: QuestieDB, ImprovedForever_Wiki, Spoken_Places
+## OptionalDeps: QuestieDB, ImprovedForever_Wiki
 
 Module.lua
 Journal.lua
@@ -16,5 +16,68 @@ JournalPeople.lua
 JournalVoice.lua
 JournalWriter.lua
 JournalBook.lua
-JournalWindow.lua
 JournalEditor.lua
+Book/Shim.lua
+Book/Core/Registry.lua
+Book/Core/Bridges/Questie.lua
+Book/UI/Kit/Chrome.lua
+Book/UI/Kit/List.lua
+Book/UI/Words/Format.lua
+Book/UI/Style/Tokens.lua
+Book/UI/Style/Art.lua
+Book/UI/Style/Sound.lua
+Book/UI/Style/Draw.lua
+Book/UI/Style/Book.lua
+Book/UI/Style/Cover.lua
+Book/UI/Style/Widgets.lua
+Book/UI/Style/Person.lua
+Book/UI/Kit/Pool.lua
+Book/UI/Paper/Surface.lua
+Book/UI/Paper/Strip.lua
+Book/UI/Paper/Sheet.lua
+Book/UI/Map/Art.lua
+Book/UI/Ink/Pen.lua
+Book/UI/Ink/Trail.lua
+Book/UI/Journey/Plate.lua
+Book/UI/Journey/Text/Grammar.lua
+Book/UI/Journey/Text/Time.lua
+Book/UI/Journey/Text/Notes.lua
+Book/UI/Journey/Text/Prose.lua
+Book/UI/Journey/Text/Tips.lua
+Book/UI/Journey/Text/Caption.lua
+Book/UI/Journey/Text/Margin.lua
+Book/UI/Journal/Book.lua
+Book/UI/Journal/Pages.lua
+Book/UI/Journey/Look.lua
+Book/UI/Journey/Layouts.lua
+Book/UI/Journey/Leaders.lua
+Book/UI/Journey/People.lua
+Book/Hooks.lua
+Book/UI/Journey/Margin.lua
+Book/UI/Journey/Caption.lua
+Book/Features/Deaths/Text.lua
+Book/Features/Deaths/Card.lua
+Book/Features/CloseCalls/Kind.lua
+Book/Features/CloseCalls/Text.lua
+Book/Features/CloseCalls/Mark.lua
+Book/Features/CloseCalls/Card.lua
+Book/Features/Firsts/Text.lua
+Book/Features/Firsts/Mark.lua
+Book/Features/Firsts/Card.lua
+Book/Features/Hunts/Kind.lua
+Book/Features/Hunts/Text.lua
+Book/Features/Hunts/Mark.lua
+Book/Features/Hunts/HuntCard.lua
+Book/Features/Hunts/LuckyCard.lua
+Book/Features/Duels/Text.lua
+Book/Features/Duels/Mark.lua
+Book/Features/Duels/Slip.lua
+Book/Features/ProfessionCaps/Kind.lua
+Book/Features/ProfessionCaps/Text.lua
+Book/Features/ProfessionCaps/Mark.lua
+Book/UI/Windows/Reunion/Toast.lua
+Book/UI/Windows/Reunion/Words.lua
+Book/BookData.lua
+Book/BookPages.lua
+Book/BookPad.lua
+Book/BookToasts.lua
