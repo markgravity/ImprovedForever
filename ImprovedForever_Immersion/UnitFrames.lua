@@ -643,8 +643,9 @@ local MODEL_EVENTS = { UNIT_MODEL_CHANGED = true, UNIT_PORTRAIT_UPDATE = true, G
 ---------------------------------------------------------------------------
 -- The player's bottom left, a card as the minion and party ones
 -- (PartyCards.lua), bigger: its avatar (as tall as the gamepad bar's big
--- diamond), along its foot a dark band with its name (a combat mark before
--- it) over its health, its power under it
+-- diamond; no strip along its top: the experience ring is there,
+-- XPBar.lua), along its foot a dark band with its name (a combat mark
+-- before it) over its health, its power under it
 ---------------------------------------------------------------------------
 -- (the avatar as tall as the gamepad bar's face buttons diamond,
 -- GamepadBar.lua: two spreads and a tile's width of a 44 tile, about 154;
@@ -654,8 +655,6 @@ local AVATAR_W = math.floor(AVATAR_H * 0.78 + 0.5)
 -- (the band's parts, a party card's (14, 11, 14, inset 4) a bit bigger)
 local CARD_HEALTH_H, CARD_POWER_H, CARD_NAME_H, CARD_INSET = 18, 14, 18, 4
 local PLAYER_X, PLAYER_Y = 20, IN.BOTTOM
--- (its class's icon at its top right, as the party cards' role icons)
-local CLASS_ICON = 16
 local GOLD = { 1, 0.82, 0 }
 local GREY = { 0.45, 0.45, 0.45 }
 local player = UnitButton("ImprovedForeverPlayerFrame", "player", AVATAR_W, AVATAR_H)
@@ -666,6 +665,8 @@ do
     local p = player
     p.avatar = Avatar(p, AVATAR_W, AVATAR_H)
     p.avatar:SetPoint("BOTTOM")
+    p.avatar.strip:Hide()
+    p.avatar.model:SetPoint("TOPLEFT", AVATAR_INSET, -AVATAR_INSET)
     local over = p.avatar.over
     local shade = over:CreateTexture(nil, "BACKGROUND")
     shade:SetPoint("BOTTOMLEFT", CARD_INSET, CARD_INSET)
@@ -687,11 +688,6 @@ do
     p.combat = Atlas(over, "OVERLAY", "UI-HUD-UnitFrame-Player-CombatIcon")
     p.combat:SetSize(CARD_NAME_H, CARD_NAME_H)
     p.combat:SetPoint("BOTTOMLEFT", p.health.box, "TOPLEFT", 2, 1)
-    -- (its class's icon at its top right, over the border as its level,
-    -- as the party cards' role icons (PartyCards.lua))
-    p.class = p.avatar.badge:CreateTexture(nil, "OVERLAY", nil, 3)
-    p.class:SetSize(CLASS_ICON, CLASS_ICON)
-    p.class:SetPoint("CENTER", p.avatar, "TOPRIGHT", -7, -7)
 end
 
 function player:Refresh(event)
@@ -702,14 +698,6 @@ function player:Refresh(event)
     AvatarLook(self.avatar, unit, dead and GREY or color, dead)
     Try(self.name.SetText, self.name, UnitName(unit))
     NameColor(self)
-    -- (its class's icon)
-    local _, class = UnitClass(unit)
-    if type(class) == "string" and IF.HasAtlas and IF.HasAtlas("groupfinder-icon-class-" .. class:lower()) then
-        self.class:SetAtlas("groupfinder-icon-class-" .. class:lower())
-        self.class:Show()
-    else
-        self.class:Hide()
-    end
     -- (the name after the combat mark while in a fight)
     local fighting = Flag(UnitAffectingCombat, unit)
     self.combat:SetShown(fighting)
@@ -796,6 +784,7 @@ UF.EditMode = EditMode
 -- (the pieces the party cards are made of too, PartyCards.lua)
 UF.Try, UF.Flag, UF.Text, UF.Atlas, UF.Bar = Try, Flag, Text, Atlas, Bar
 UF.FillHealth, UF.FillPower, UF.UnitButton, UF.NameColor = FillHealth, FillPower, UnitButton, NameColor
+UF.PowerAtlas = PowerAtlas
 UF.Listen, UF.Join, UF.UNIT, UF.POWER_EVENTS = Listen, Join, UNIT, POWER_EVENTS
 UF.Avatar, UF.AvatarUnit, UF.AvatarLook, UF.ClassColor = Avatar, AvatarUnit, AvatarLook, ClassColor
 UF.Border = Border

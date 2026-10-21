@@ -36,7 +36,7 @@ local ITEMS = {
     }, Toggle("target", "Target health on top", function() IN.UnitFrames.Apply() end)),
     Item({
         key = "cards", group = "frames", label = "Minion and party cards",
-        tip = "Your pet (Minions) and your party (Party) as cards standing on the experience line, either side "
+        tip = "Your pet (Minions) and your party (Party) as cards standing along the bottom, either side "
             .. "of the middle, in place of the game's pet and party frames: each its model in the tooltip's "
             .. "bronze frame, a strip in its class colour, its level, name, health and power; faint when out "
             .. "of range. Click one to target it, right click for its menu. Hidden in a raid (the game's raid "
@@ -76,15 +76,21 @@ local ITEMS = {
     }, Toggle("castRange", "Range diamond", function() IN.PlayerCast.Apply() end)),
     Item({
         key = "hpLine", group = "frames", label = "Health line",
-        tip = "Your health as a bar over the experience line, drawn as it is: green, amber past half, red "
+        tip = "Your health as a bar over the power line, drawn as it is: green, amber past half, red "
             .. "when low, the health just lost trailing. Shown in a fight and while you're hurt.",
     }, Toggle("hpLine", "Health line", function() IN.PlayerHealth.Apply() end)),
     Item({
-        key = "xp", group = "frames", label = "Experience line",
-        tip = "Your experience as a thin line along the screen's bottom edge, the rested part beyond it, in "
-            .. "place of the game's experience bar (its reputation bar at the top level stays). The mouse over "
-            .. "it shows the numbers.",
-    }, Toggle("xp", "Experience line", function() IN.XPBar.Apply() end)),
+        key = "mpLine", group = "frames", label = "Power line",
+        tip = "Your mana, rage or energy as a bar along the screen's bottom edge, under the health line, in "
+            .. "its own colour. Shown with the health line: in a fight, and while your mana or energy isn't "
+            .. "full or you have rage.",
+    }, Toggle("mpLine", "Power line", function() IN.PlayerHealth.Apply() end)),
+    Item({
+        key = "xp", group = "frames", label = "Experience ring",
+        tip = "Your experience as a ring round your frame bottom left, the rested part beyond it, in place "
+            .. "of the game's experience bar (its reputation bar at the top level stays). With your frame on. "
+            .. "The mouse over your frame shows the numbers.",
+    }, Toggle("xp", "Experience ring", function() IN.XPBar.Apply() end)),
     Item({
         key = "pad", group = "pad", label = "Spell diamonds",
         tip = "The gamepad action bar laid out as Hogwarts Legacy's spells: bottom right, the face buttons' "
@@ -139,7 +145,7 @@ local ITEMS = {
     Item({
         key = "buffTimeline", group = "frames", label = "Buff row",
         tip = "Your buffs and debuffs in a row along the bottom, from the minion card toward the party "
-            .. "cards: round icons, each with its time left and a thin line down to the experience line, the "
+            .. "cards: round icons, each with its time left and a thin line down to the power line, the "
             .. "soonest gone nearest the middle, debuffs nearest of all (tinted by their kind). The game fills "
             .. "the row itself, so it stays right in a fight. Mouse over one for its tooltip. In place of the "
             .. "game's buffs (hidden while it's on; Edit Mode shows them).",

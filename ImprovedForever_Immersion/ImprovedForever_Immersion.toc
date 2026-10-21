@@ -1,6 +1,6 @@
 ## Interface: 16001, 16002, 16003, 16100, 16101, 16200
 ## Title: Improved Forever: Immersion
-## Notes: The game's HUD made immersive: the target's health and casts on top, your frame bottom left, your pet and party as cards on the experience line, the gamepad bar as Hogwarts Legacy's spell diamonds, NPCs talking as subtitles, the chat as just its lines until used, and a cinematic fishing view.
+## Notes: The game's HUD made immersive: the target's health and casts on top, your frame bottom left in a ring of your experience, your health and power as lines along the bottom edge, your pet and party as cards, the gamepad bar as Hogwarts Legacy's spell diamonds, NPCs talking as subtitles, the chat as just its lines until used, and a cinematic fishing view.
 ## Author: markg
 ## Version: 0.1.0
 ## X-Curse-Project-ID: 1755571

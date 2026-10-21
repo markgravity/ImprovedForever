@@ -1,13 +1,19 @@
--- The experience as a line along the screen's bottom edge, its whole width,
--- in place of the game's experience bar, drawn as DialogueUI's: a dark
--- track in a thin grey frame, cut in 20 by notches, the game's own fills
--- (Forever's experience purple, the rested part beyond it in blue), a glow
--- at the fill's end, the fill easing to a new value. The mouse over it (a
--- taller strip than the line) shows the numbers.
+-- The experience as a ring round the player frame bottom left (its card,
+-- UnitFrames.lua), in place of the game's experience bar, drawn as the
+-- gamepad bar's cast ring (GamepadBar.lua): a line on the card's border
+-- with a wider, fainter one under it as its glow, clockwise from the
+-- middle of its top, in the experience bar's own fills (Forever's
+-- experience purple, the rested part beyond it in blue, fainter), easing
+-- to a new value. The mouse over the card shows the numbers in its
+-- tooltip.
 -- The game's bar (the status tracking bar's main container) is drawn at 0
 -- while it shows experience (IF.Focus.Fade, never its own alpha), and a
 -- frame of ours takes the mouse over it; at the top level it shows
--- reputation, left as it is, and the line goes.
+-- reputation, left as it is, and the ring goes (with the player frame
+-- off too: the game's bar then shows it).
+-- The ring is ours, on the card but never anchored to the secure button
+-- itself: it's redrawn in a fight (a kill's experience) by its lines'
+-- points alone.
 local IF = ImprovedForever
 local IN = IF.Interface
 local UF = IN.UnitFrames
@@ -15,93 +21,101 @@ local UF = IN.UnitFrames
 local XP = {}
 IN.XPBar = XP
 
-local LINE_H, HOVER_H = IN.XP_H, 14
-local COMPARTMENTS = 20
-local FRAME = { 0.25, 0.25, 0.25 }      -- (its frame's and notches' grey)
 local FILL = "UI-HUD-ExperienceBar-Fill-Experience-Camelot"
 local RESTED = "UI-HUD-ExperienceBar-Fill-Rested-Camelot"
+-- (their colours, should a line not take the atlas)
+local FILL_COLOR, RESTED_COLOR = { 0.7, 0.25, 0.85 }, { 0.1, 0.45, 0.95 }
+local GLOW_COLOR = { 1, 0.5, 1 }        -- (its glow's, the experience bar's)
+local RESTED_ALPHA = 0.6
+-- (on the border, RING_IN in from the card's edge; the line's and glow's
+-- thickness, the gamepad bar's cast ring's)
+local RING_IN, RING_LINE, RING_GLOW = 3, 2.5, 4
+local EASE = 6                          -- (how fast it eases to a new value)
+local WHITE = "Interface\\Buttons\\WHITE8x8"
 
-local line = CreateFrame("Frame", "ImprovedForeverXPLine", UIParent)
-line:SetFrameStrata("BACKGROUND")
-line:SetPoint("BOTTOMLEFT")
-line:SetPoint("BOTTOMRIGHT")
-line:SetHeight(LINE_H)
-line:Hide()
+local avatar = UF.player.avatar
+local ring = CreateFrame("Frame", "ImprovedForeverXPRing", avatar)
+ring:SetAllPoints()
+-- (over the card's border, under its level and class icon)
+ring:SetFrameLevel(avatar.badge:GetFrameLevel() - 1)
+ring:Hide()
 
-local bg = line:CreateTexture(nil, "BACKGROUND")
-bg:SetAllPoints()
-bg:SetColorTexture(0, 0, 0, 0.7)
-
-local function Bar(atlas, level)
-    local bar = CreateFrame("StatusBar", nil, line)
-    bar:SetAllPoints()
-    bar:SetFrameLevel(line:GetFrameLevel() + level)
-    bar:SetStatusBarTexture(atlas)
-    bar:SetMinMaxValues(0, 1)
-    bar:SetValue(0)
-    return bar
+-- (a line's fill: the bar's atlas, else its colour)
+local function Paint(l, atlas, color)
+    if IF.HasAtlas and IF.HasAtlas(atlas) and pcall(l.SetAtlas, l, atlas) then return end
+    l:SetTexture(WHITE)
+    l:SetVertexColor(color[1], color[2], color[3], 1)
 end
 
-local rested = Bar(RESTED, 1)
-rested:SetAlpha(0.6)
-local xp = Bar(FILL, 2)
-
--- (over the fills: the glow at the fill's end, the notches, the frame)
-local over = CreateFrame("Frame", nil, line)
-over:SetAllPoints()
-over:SetFrameLevel(line:GetFrameLevel() + 4)
-local glow = over:CreateTexture(nil, "ARTWORK")
-glow:SetSize(48, LINE_H - 2)
-glow:SetPoint("RIGHT", xp:GetStatusBarTexture(), "RIGHT")
-glow:SetColorTexture(1, 1, 1, 1)
-glow:SetBlendMode("ADD")
-if glow.SetGradient and CreateColor then
-    glow:SetGradient("HORIZONTAL", CreateColor(1, 0.5, 1, 0), CreateColor(1, 0.5, 1, 0.5))
+-- (an arc's lines (and glows), made as needed, one per side of the card)
+local function Arc(atlas, color, alpha, glow)
+    return { atlas = atlas, color = color, alpha = alpha, glow = glow, lines = {}, glows = {} }
 end
+local fill = Arc(FILL, FILL_COLOR, 1, true)
+local rested = Arc(RESTED, RESTED_COLOR, RESTED_ALPHA, false)
 
-for _, e in ipairs({ { "TOPLEFT", "TOPRIGHT", nil, 1 }, { "BOTTOMLEFT", "BOTTOMRIGHT", nil, 1 },
-    { "TOPLEFT", "BOTTOMLEFT", 1, nil }, { "TOPRIGHT", "BOTTOMRIGHT", 1, nil } }) do
-    local t = over:CreateTexture(nil, "OVERLAY")
-    t:SetColorTexture(FRAME[1], FRAME[2], FRAME[3], 1)
-    t:SetPoint(e[1])
-    t:SetPoint(e[2])
-    if e[3] then t:SetWidth(e[3]) end
-    if e[4] then t:SetHeight(e[4]) end
-end
-
--- (the notches: two screen pixels wide, re-placed as the width changes)
-local notches = {}
-local function Notches()
-    local width = line:GetWidth()
-    if not width or width <= 0 then return end
-    local pixel = 768 / (select(2, GetPhysicalScreenSize()) or 768) / line:GetEffectiveScale()
-    for i = 1, COMPARTMENTS - 1 do
-        local t = notches[i]
-        if not t then
-            t = over:CreateTexture(nil, "OVERLAY", nil, 1)
-            t:SetColorTexture(FRAME[1], FRAME[2], FRAME[3], 1)
-            notches[i] = t
+local function ArcLines(arc, i)
+    if not arc.lines[i] then
+        if arc.glow then
+            local g = ring:CreateLine(nil, "OVERLAY", nil, 1)
+            g:SetThickness(RING_GLOW)
+            g:SetTexture(WHITE)
+            g:SetBlendMode("ADD")
+            g:SetVertexColor(GLOW_COLOR[1], GLOW_COLOR[2], GLOW_COLOR[3], 0.35)
+            arc.glows[i] = g
         end
-        t:SetSize(2 * pixel, LINE_H - 2)
-        t:ClearAllPoints()
-        t:SetPoint("CENTER", line, "LEFT", i * width / COMPARTMENTS, 0)
+        local l = ring:CreateLine(nil, "OVERLAY", nil, arc.glow and 3 or 2)
+        l:SetThickness(RING_LINE)
+        Paint(l, arc.atlas, arc.color)
+        l:SetAlpha(arc.alpha)
+        arc.lines[i] = l
+    end
+    return arc.lines[i], arc.glows[i]
+end
+
+-- The card's path, clockwise from the middle of its top, in points from
+-- its centre, and each side's share of the way round (the sides aren't
+-- equal: a share by length)
+local function Path()
+    local w, h = ring:GetSize()
+    local hw, hh = math.max(w / 2 - RING_IN, 1), math.max(h / 2 - RING_IN, 1)
+    local path = { { 0, hh }, { hw, hh }, { hw, -hh }, { -hw, -hh }, { -hw, hh }, { 0, hh } }
+    local total = 4 * (hw + hh)
+    local at, cuts = 0, { 0 }
+    for i = 1, #path - 1 do
+        local a, z = path[i], path[i + 1]
+        at = at + (math.abs(z[1] - a[1]) + math.abs(z[2] - a[2])) / total
+        cuts[i + 1] = at
+    end
+    return path, cuts
+end
+
+-- The arc drawn from `from` to `to` (0 to 1 of the way round)
+local function DrawArc(arc, from, to)
+    local path, cuts = Path()
+    for i = 1, #path - 1 do
+        local line, glow = ArcLines(arc, i)
+        local s0, s1 = cuts[i], cuts[i + 1]
+        local a, b = math.max(from, s0), math.min(to, s1)
+        if b - a <= 0 or s1 <= s0 then
+            line:Hide()
+            if glow then glow:Hide() end
+        else
+            local p, q = path[i], path[i + 1]
+            local function At(s)
+                local k = (s - s0) / (s1 - s0)
+                return p[1] + (q[1] - p[1]) * k, p[2] + (q[2] - p[2]) * k
+            end
+            local x1, y1 = At(a)
+            local x2, y2 = At(b)
+            for _, l in ipairs({ line, glow }) do
+                l:SetStartPoint("CENTER", ring, x1, y1)
+                l:SetEndPoint("CENTER", ring, x2, y2)
+                l:Show()
+            end
+        end
     end
 end
-line:SetScript("OnSizeChanged", Notches)
-line:HookScript("OnShow", Notches)
-
--- (a new value eased to, as the game's bars can; at once without it)
-local EASE = Enum.StatusBarInterpolation and Enum.StatusBarInterpolation.ExponentialEaseOut
-local function Ease(bar, value)
-    if not (EASE and pcall(bar.SetValue, bar, value, EASE)) then bar:SetValue(value) end
-end
-
--- (the mouse: a strip taller than the line, its numbers in a tooltip)
-local hover = CreateFrame("Frame", nil, line)
-hover:SetPoint("BOTTOMLEFT")
-hover:SetPoint("BOTTOMRIGHT")
-hover:SetHeight(HOVER_H)
-hover:EnableMouse(true)
 
 ---------------------------------------------------------------------------
 -- The numbers
@@ -134,22 +148,52 @@ local function Values()
     return cur, max, rest or 0
 end
 
-local function Refresh()
-    local cur, max, rest = Values()
-    if not cur then return end
-    xp:SetMinMaxValues(0, max)
-    Ease(xp, cur)
-    glow:SetShown(cur > 0)
-    rested:SetMinMaxValues(0, max)
-    local ok = pcall(function() Ease(rested, math.min(cur + rest, max)) end)
-    if not ok then rested:SetValue(0) end
+-- (what's drawn, eased to the goal: its share and the rested part's end)
+local shown = { f = 0, r = 0 }
+local goal = { f = 0, r = 0 }
+
+local function Draw()
+    DrawArc(fill, 0, shown.f)
+    DrawArc(rested, shown.f, shown.r)
 end
 
-hover:SetScript("OnEnter", function(self)
+local function Step(_, elapsed)
+    local k = math.min(1, elapsed * EASE)
+    local done = true
+    for _, key in ipairs({ "f", "r" }) do
+        local d = goal[key] - shown[key]
+        if math.abs(d) < 0.001 then
+            shown[key] = goal[key]
+        else
+            shown[key] = shown[key] + d * k
+            done = false
+        end
+    end
+    Draw()
+    if done then ring:SetScript("OnUpdate", nil) end
+end
+
+-- (a new value eased to; less than shown (a new level) from none)
+local function Refresh()
+    local cur, max, rest = Values()
+    if not cur or max <= 0 then return end
+    local f = math.min(math.max(cur / max, 0), 1)
+    local r = math.min(math.max((cur + rest) / max, f), 1)
+    if f < shown.f then shown.f, shown.r = 0, 0 end
+    goal.f, goal.r = f, r
+    ring:SetScript("OnUpdate", Step)
+end
+
+ring:SetScript("OnSizeChanged", Draw)
+ring:HookScript("OnShow", Draw)
+
+-- (the card's tooltip: its numbers after the unit's)
+UF.player:HookScript("OnEnter", function()
+    if not ring:IsShown() then return end
     local cur, max, rest = Values()
     if not cur then return end
-    GameTooltip:SetOwner(self, "ANCHOR_CURSOR")
     pcall(function()
+        GameTooltip:AddLine(" ")
         GameTooltip:AddLine(XP_LABEL or "Experience", 1, 0.82, 0)
         GameTooltip:AddLine(string.format("%s / %s (%d%%)", BreakUpLargeNumbers and BreakUpLargeNumbers(cur) or cur,
             BreakUpLargeNumbers and BreakUpLargeNumbers(max) or max, max > 0 and math.floor(cur / max * 100) or 0),
@@ -161,7 +205,6 @@ hover:SetScript("OnEnter", function(self)
     end)
     GameTooltip:Show()
 end)
-hover:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
 local events = CreateFrame("Frame")
 for _, e in ipairs({ "PLAYER_XP_UPDATE", "UPDATE_EXHAUSTION", "PLAYER_LEVEL_UP", "PLAYER_ENTERING_WORLD",
@@ -171,23 +214,24 @@ end
 events:SetScript("OnEvent", Refresh)
 
 ---------------------------------------------------------------------------
--- Shown while the setting is on and experience is what the game's bar
--- shows; the game's bar then drawn at 0 (Edit Mode: the game's shown, to
--- be moved)
+-- Shown while the setting and the player frame are on and experience is
+-- what the game's bar shows; the game's bar then drawn at 0 (Edit Mode:
+-- the game's shown, to be moved)
 ---------------------------------------------------------------------------
 local function Watch()
     if not IF.db then return end
     local native = MainStatusTrackingBarContainer
-    local on = IN.Settings().xp and Gaining()
+    local s = IN.Settings()
+    local on = s.xp and s.player and Gaining() or false
     local hide = on and not UF.EditMode()
     IF.Focus.Fade(native, hide)
     UF.Cover(native, hide)
-    if on ~= line:IsShown() then
-        line:SetShown(on)
+    if on ~= ring:IsShown() then
+        ring:SetShown(on)
         if on then Refresh() end
     end
 end
 
-IN.Watcher("experience line", 0.25, Watch)
+IN.Watcher("experience ring", 0.25, Watch)
 
 XP.Apply = Watch

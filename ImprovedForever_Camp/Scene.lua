@@ -32,7 +32,7 @@ local FONT = "Fonts\\MORPHEUS.TTF"
 local FADED = { "ImprovedForeverGamepadBar", "ImprovedForeverRecentSlot", "ImprovedForeverPlayerFrame",
     "ImprovedForeverMinionCard1", "ImprovedForeverPartyCard1", "ImprovedForeverPartyCard2",
     "ImprovedForeverPartyCard3", "ImprovedForeverPartyCard4", "ImprovedForeverPartyCasts",
-    "ImprovedForeverBuffList", "ImprovedForeverCooldownTimeline", "ImprovedForeverXPLine",
+    "ImprovedForeverBuffList", "ImprovedForeverCooldownTimeline",
     "ImprovedForeverChatView", "ImprovedForeverPlayerHealth", "IFObjectiveTrackerFrame",
     "ImprovedForeverNpcDialog", "ImprovedForeverMinimapLabels", "ImprovedForeverMinimapAlert",
     "MinimapCluster", "Minimap",

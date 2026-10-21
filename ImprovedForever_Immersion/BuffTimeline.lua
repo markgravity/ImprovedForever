@@ -16,7 +16,7 @@
 --   comes ready, then gone. In a fight the game keeps their times secret:
 --   each is timed from your cast, by the length it had out of one.
 -- The cooldowns' end by the middle is marked with a short black line cut
--- into the experience line. The middle is kept for the party cards (a full
+-- into the power line. The middle is kept for the party cards (a full
 -- party's row, its spells' diamond, MIDDLE_GAP).
 -- The game's buffs, debuffs and Cooldown Manager are drawn at 0
 -- (IF.Focus.Fade), the mouse they'd still get taken over where they are
@@ -32,7 +32,7 @@ local function Secret(v)
     return type(issecretvalue) == "function" and issecretvalue(v)
 end
 
-local LINE_H = IN.XP_H          -- (the experience line, XPBar.lua)
+local LINE_H = IN.MP_H          -- (the power line, PlayerHealth.lua)
 local START_GAP = 20            -- (after the minion card)
 local MINION_W = 61             -- (a minion's card, PartyCards.lua)
 local MIDDLE_GAP = 28           -- (kept clear by the party's row)
@@ -50,7 +50,7 @@ local READY_FLASH = 1           -- (a cooldown come ready: shown this long, flas
 -- NumberFontNormal at the bottom right)
 local BORDER_OUT = 40 / 30
 -- (each lane's end, by the middle, where its icons run out: a short black
--- line cut into the experience line)
+-- line cut into the power line)
 local END_W = 2
 
 -- A time left, short: 2h, 5m, 45
@@ -131,7 +131,7 @@ local function Timeline(name, source)
     holder:Hide()
     T.holder = holder
 
-    -- (its end by the middle: a black mark over the experience line, in a
+    -- (its end by the middle: a black mark over the power line, in a
     -- frame above it)
     local endFrame = CreateFrame("Frame", nil, holder)
     endFrame:SetFrameStrata("MEDIUM")
@@ -180,6 +180,9 @@ local function Timeline(name, source)
         local size = Size()
         endFrame:ClearAllPoints()
         endFrame:SetPoint("BOTTOM", UIParent, "BOTTOMLEFT", near, 0)
+        -- (shown with the line it's cut into: it peeks, PlayerHealth.lua)
+        local lines = IN.PlayerHealth and IN.PlayerHealth.holder
+        endFrame:SetAlpha(lines and lines:IsVisible() and lines:GetAlpha() or 0)
         local sign = far >= near and 1 or -1
         local per = math.max(1, math.floor((math.abs(far - near) + SPACING) / (size + SPACING)))
         for i, entry in ipairs(entries) do entry.slot = i end

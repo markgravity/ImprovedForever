@@ -1,17 +1,22 @@
--- Your health as a bar along the screen's bottom edge, over the experience
--- line (XPBar.lua) and drawn as it is: a dark track in a thin grey frame,
--- cut in 10 by notches, the game's own fills (the reputation bar's green,
--- turning orange past half and red when low, red pulsing under URGENT), a
--- glow at the fill's ends, a pale trail showing the health just lost, then
--- easing in after it. Full from end to end, two halves out from the middle:
--- health lost draws them in from both ends to the middle. Its bottom border is the experience line's top one;
--- on the screen's edge when that line isn't shown.
--- It peeks: shown in a fight and while you're hurt, faded out a moment
--- after you're whole again out of a fight (never while dead or a ghost).
--- Your health is secret in a fight: it goes to the bar as its max and value
--- as it is (the bars work the fill out, never compared here), the colours'
--- strength from the game's percent through curves, as the party cards'
--- (PartyCards.lua).
+-- Your health and power as two bars along the screen's bottom edge, the
+-- power (mana, rage, energy...) on the edge and the health over it, sharing
+-- its top border, each drawn as it is: a dark track in a thin grey frame,
+-- cut in 10 by notches, full from end to end, two halves out from the
+-- middle (lost draws them in from both ends to the middle), a glow at the
+-- fill's ends.
+-- * the health: the game's own fills (the reputation bar's green, turning
+--   orange past half and red when low, red pulsing under URGENT), a pale
+--   trail showing the health just lost, then easing in after it;
+-- * the power: the unit frames' fill of its kind (UnitFrames.lua), easing
+--   to a new value, its glow in the game's colour of it.
+-- They peek together: shown in a fight, while you're hurt or your power
+-- isn't at rest (mana, energy short of full; rage, runic power above
+-- none), faded out a moment after both are again out of a fight (never
+-- while dead or a ghost). Either one off: the other alone on the edge.
+-- Your health and power are secret in a fight: they go to the bars as
+-- their max and value as they are (the bars work the fill out, never
+-- compared here), the health colours' strength from the game's percent
+-- through curves, as the party cards' (PartyCards.lua).
 local IF = ImprovedForever
 local IN = IF.Interface
 local UF = IN.UnitFrames
@@ -20,8 +25,9 @@ local PlayerHealth = {}
 IN.PlayerHealth = PlayerHealth
 
 local LINE_H = IN.HP_H or 5
+local POWER_H = IN.MP_H or 5
 local COMPARTMENTS = 10
-local FRAME = { 0.25, 0.25, 0.25 }      -- (its frame's and notches' grey, the experience line's)
+local FRAME = { 0.25, 0.25, 0.25 }      -- (its frame's and notches' grey, the experience ring's track)
 local FADE = 0.3
 local HOLD = 0.8                 -- (whole again: shown this long before fading)
 local TRAIL_DELAY = 0.4          -- (the trail waits this long, then eases in)
@@ -30,6 +36,9 @@ local ORANGE = "UI-HUD-ExperienceBar-Fill-Reputation-Faction-Orange-Camelot"
 local RED = "UI-HUD-ExperienceBar-Fill-Reputation-Faction-Red-Camelot"
 local TRAIL = { 1, 0.93, 0.82, 0.55 }
 local GLOW = { 0.6, 1, 0.6 }
+local POWER_GLOW = { 0.4, 0.6, 1 }      -- (the power's, when the game has no colour for it)
+-- (the powers at rest when empty: out of a fight, the rest at full)
+local RESTS_EMPTY = { RAGE = true, RUNIC_POWER = true }
 -- (the colours over the green, by health left: orange from three quarters
 -- to full at half, red from 40% to full at a quarter, the pulse under
 -- URGENT)
@@ -37,6 +46,8 @@ local URGENT = 0.35
 local ORANGE_POINTS = { { 0, 1 }, { 0.5, 1 }, { 0.75, 0 }, { 1, 0 } }
 local RED_POINTS = { { 0, 1 }, { 0.25, 1 }, { 0.4, 0 }, { 1, 0 } }
 local URGENT_POINTS = { { 0, 1 }, { URGENT, 1 }, { URGENT + 0.001, 0 }, { 1, 0 } }
+-- (the power's glows out while it's empty: both would sit at the middle)
+local POWER_GLOW_POINTS = { { 0, 0 }, { 0.03, 1 }, { 1, 1 } }
 
 local Try, Flag = UF.Try, UF.Flag
 local SI = Enum.StatusBarInterpolation
@@ -44,18 +55,64 @@ local function Secret(v)
     return type(issecretvalue) == "function" and issecretvalue(v)
 end
 
-local line = CreateFrame("Frame", "ImprovedForeverPlayerHealth", UIParent)
-line:SetFrameStrata("BACKGROUND")
-line:SetHeight(LINE_H)
-line:SetAlpha(0)
-line:Hide()
+-- (both lines in one frame: it peeks, they're placed in it)
+local holder = CreateFrame("Frame", "ImprovedForeverPlayerHealth", UIParent)
+holder:SetFrameStrata("BACKGROUND")
+holder:SetPoint("BOTTOMLEFT")
+holder:SetPoint("BOTTOMRIGHT")
+holder:SetHeight(LINE_H)
+holder:SetAlpha(0)
+holder:Hide()
+PlayerHealth.holder = holder
 
-local bg = line:CreateTexture(nil, "BACKGROUND")
-bg:SetAllPoints()
-bg:SetColorTexture(0, 0, 0, 0.7)
+-- A track: a dark line in a thin grey frame cut by notches; t.over over
+-- its fills (the glows, the notches, the frame)
+local function Track(height)
+    local t = CreateFrame("Frame", nil, holder)
+    t:SetHeight(height)
+    local bg = t:CreateTexture(nil, "BACKGROUND")
+    bg:SetAllPoints()
+    bg:SetColorTexture(0, 0, 0, 0.7)
+    t.over = CreateFrame("Frame", nil, t)
+    t.over:SetAllPoints()
+    t.over:SetFrameLevel(t:GetFrameLevel() + 4)
+    for _, e in ipairs({ { "TOPLEFT", "TOPRIGHT", nil, 1 }, { "BOTTOMLEFT", "BOTTOMRIGHT", nil, 1 },
+        { "TOPLEFT", "BOTTOMLEFT", 1, nil }, { "TOPRIGHT", "BOTTOMRIGHT", 1, nil } }) do
+        local edge = t.over:CreateTexture(nil, "OVERLAY")
+        edge:SetColorTexture(FRAME[1], FRAME[2], FRAME[3], 1)
+        edge:SetPoint(e[1])
+        edge:SetPoint(e[2])
+        if e[3] then edge:SetWidth(e[3]) end
+        if e[4] then edge:SetHeight(e[4]) end
+    end
+    -- (the notches: two screen pixels wide, re-placed as the width changes)
+    local notches = {}
+    local function Notches()
+        local width = t:GetWidth()
+        if not width or width <= 0 then return end
+        local pixel = 768 / (select(2, GetPhysicalScreenSize()) or 768) / t:GetEffectiveScale()
+        for i = 1, COMPARTMENTS - 1 do
+            local n = notches[i]
+            if not n then
+                n = t.over:CreateTexture(nil, "OVERLAY", nil, 1)
+                n:SetColorTexture(FRAME[1], FRAME[2], FRAME[3], 1)
+                notches[i] = n
+            end
+            n:SetSize(2 * pixel, height - 2)
+            n:ClearAllPoints()
+            n:SetPoint("CENTER", t, "LEFT", i * width / COMPARTMENTS, 0)
+        end
+    end
+    t:SetScript("OnSizeChanged", Notches)
+    t:HookScript("OnShow", Notches)
+    return t
+end
+
+local line = Track(LINE_H)
+local power = Track(POWER_H)
 
 -- (the low pulse's own frame, over the fills: its glows' strength the
--- secret curve's, the frame's alpha the pulse, never the line's: the line
+-- secret curve's, the frame's alpha the pulse, never the holder's: it
 -- fades by its own)
 local pulse = CreateFrame("Frame", nil, line)
 pulse:SetAllPoints()
@@ -68,16 +125,11 @@ fade:SetToAlpha(0.1)
 fade:SetDuration(0.5)
 fade:SetSmoothing("IN_OUT")
 
--- (over the fills: the glows at the fill's ends, the notches, the frame)
-local over = CreateFrame("Frame", nil, line)
-over:SetAllPoints()
-over:SetFrameLevel(line:GetFrameLevel() + 4)
-
-local function Bar(left, level)
-    local bar = CreateFrame("StatusBar", nil, line)
+local function Bar(track, left, level)
+    local bar = CreateFrame("StatusBar", nil, track)
     bar:SetPoint(left and "TOPLEFT" or "TOPRIGHT")
-    bar:SetPoint(left and "BOTTOMRIGHT" or "BOTTOMLEFT", line, "BOTTOM")
-    bar:SetFrameLevel(line:GetFrameLevel() + level)
+    bar:SetPoint(left and "BOTTOMRIGHT" or "BOTTOMLEFT", track, "BOTTOM")
+    bar:SetFrameLevel(track:GetFrameLevel() + level)
     bar:SetReverseFill(left)
     bar:SetMinMaxValues(0, 1)
     bar:SetValue(1)
@@ -92,28 +144,36 @@ local function Over(bar, atlas, sub)
     return t
 end
 
--- (two halves, full out from the middle; each a trail under its fill)
-local halves = {}
-for i = 1, 2 do
-    local left = i == 1
-    local h = {}
-    h.trail = Bar(left, 1)
-    h.trail:SetStatusBarTexture("Interface\\Buttons\\WHITE8x8")
-    h.trail:SetStatusBarColor(TRAIL[1], TRAIL[2], TRAIL[3], TRAIL[4])
-    h.bar = Bar(left, 2)
-    h.bar:SetStatusBarTexture(FILL)
-    local fill = h.bar:GetStatusBarTexture()
-    h.orange, h.red = Over(h.bar, ORANGE, 1), Over(h.bar, RED, 2)
-    -- (the glow at its outer end)
-    local glow = over:CreateTexture(nil, "ARTWORK")
-    glow:SetSize(48, LINE_H - 2)
+-- (the glow at a fill's outer end, in color)
+local function Glow(track, fill, left, height)
+    local glow = track.over:CreateTexture(nil, "ARTWORK")
+    glow:SetSize(48, height - 2)
     glow:SetPoint(left and "LEFT" or "RIGHT", fill, left and "LEFT" or "RIGHT")
     glow:SetColorTexture(1, 1, 1, 1)
     glow:SetBlendMode("ADD")
-    if glow.SetGradient and CreateColor then
-        local clear, lit = CreateColor(GLOW[1], GLOW[2], GLOW[3], 0), CreateColor(GLOW[1], GLOW[2], GLOW[3], 0.45)
-        glow:SetGradient("HORIZONTAL", left and lit or clear, left and clear or lit)
-    end
+    return glow
+end
+
+local function GlowColor(glow, left, color)
+    if not (glow.SetGradient and CreateColor) then return end
+    local clear, lit = CreateColor(color[1], color[2], color[3], 0), CreateColor(color[1], color[2], color[3], 0.45)
+    glow:SetGradient("HORIZONTAL", left and lit or clear, left and clear or lit)
+end
+
+-- (two halves each, full out from the middle; the health's each a trail
+-- under its fill)
+local halves, powerHalves = {}, {}
+for i = 1, 2 do
+    local left = i == 1
+    local h = {}
+    h.trail = Bar(line, left, 1)
+    h.trail:SetStatusBarTexture("Interface\\Buttons\\WHITE8x8")
+    h.trail:SetStatusBarColor(TRAIL[1], TRAIL[2], TRAIL[3], TRAIL[4])
+    h.bar = Bar(line, left, 2)
+    h.bar:SetStatusBarTexture(FILL)
+    local fill = h.bar:GetStatusBarTexture()
+    h.orange, h.red = Over(h.bar, ORANGE, 1), Over(h.bar, RED, 2)
+    GlowColor(Glow(line, fill, left, LINE_H), left, GLOW)
     -- (the pulse's red over it)
     local alarm = pulse:CreateTexture(nil, "OVERLAY")
     alarm:SetAllPoints(fill)
@@ -122,55 +182,13 @@ for i = 1, 2 do
     alarm:SetAlpha(0)
     h.alarm = alarm
     halves[i] = h
-end
 
-for _, e in ipairs({ { "TOPLEFT", "TOPRIGHT", nil, 1 }, { "BOTTOMLEFT", "BOTTOMRIGHT", nil, 1 },
-    { "TOPLEFT", "BOTTOMLEFT", 1, nil }, { "TOPRIGHT", "BOTTOMRIGHT", 1, nil } }) do
-    local t = over:CreateTexture(nil, "OVERLAY")
-    t:SetColorTexture(FRAME[1], FRAME[2], FRAME[3], 1)
-    t:SetPoint(e[1])
-    t:SetPoint(e[2])
-    if e[3] then t:SetWidth(e[3]) end
-    if e[4] then t:SetHeight(e[4]) end
+    local p = { left = left }
+    p.bar = Bar(power, left, 2)
+    p.bar:SetStatusBarTexture(UF.PowerAtlas("player"))
+    p.glow = Glow(power, p.bar:GetStatusBarTexture(), left, POWER_H)
+    powerHalves[i] = p
 end
-
--- (the notches: two screen pixels wide, re-placed as the width changes)
-local notches = {}
-local function Notches()
-    local width = line:GetWidth()
-    if not width or width <= 0 then return end
-    local pixel = 768 / (select(2, GetPhysicalScreenSize()) or 768) / line:GetEffectiveScale()
-    for i = 1, COMPARTMENTS - 1 do
-        local t = notches[i]
-        if not t then
-            t = over:CreateTexture(nil, "OVERLAY", nil, 1)
-            t:SetColorTexture(FRAME[1], FRAME[2], FRAME[3], 1)
-            notches[i] = t
-        end
-        t:SetSize(2 * pixel, LINE_H - 2)
-        t:ClearAllPoints()
-        t:SetPoint("CENTER", line, "LEFT", i * width / COMPARTMENTS, 0)
-    end
-end
-line:SetScript("OnSizeChanged", Notches)
-line:HookScript("OnShow", Notches)
-
--- (over the experience line, sharing its top border; else on the edge)
-local function Place()
-    local xp = ImprovedForeverXPLine
-    local on = xp and xp:IsShown() and xp or nil
-    if line.on == on and line.placed then return end
-    line.on, line.placed = on, true
-    line:ClearAllPoints()
-    if on then
-        line:SetPoint("BOTTOMLEFT", on, "TOPLEFT", 0, -1)
-        line:SetPoint("BOTTOMRIGHT", on, "TOPRIGHT", 0, -1)
-    else
-        line:SetPoint("BOTTOMLEFT")
-        line:SetPoint("BOTTOMRIGHT")
-    end
-end
-Place()
 
 local curves = {}
 local function Curve(points)
@@ -236,16 +254,68 @@ local function Fill(ease)
     end
 end
 
+-- (your power's kind, or nil (a secret))
+local function PowerToken()
+    local ok, _, token = pcall(UnitPowerType, "player")
+    if not ok or Secret(token) then return nil end
+    return token
+end
+
+-- (the power's halves: its kind's fill and glow, its value as it is, eased
+-- on a change of it; its kind a secret: the last one kept)
+local function FillPower(ease)
+    local token = PowerToken()
+    local atlas = (token or not powerHalves[1].atlas) and UF.PowerAtlas("player") or powerHalves[1].atlas
+    local c = token and PowerBarColor and PowerBarColor[token]
+    local color = type(c) == "table" and c.r and { c.r, c.g, c.b } or POWER_GLOW
+    local value, max = UnitPower("player"), UnitPowerMax("player")
+    for _, p in ipairs(powerHalves) do
+        local bar = p.bar
+        if p.atlas ~= atlas then
+            p.atlas = atlas
+            bar:SetStatusBarTexture(atlas)
+            GlowColor(p.glow, p.left, color)
+        end
+        if not Try(bar.SetMinMaxValues, bar, 0, max) then
+            bar:SetMinMaxValues(0, 1)
+            bar:SetValue(0)
+        elseif not (ease and SI and Try(bar.SetValue, bar, value, SI.ExponentialEaseOut))
+            and not Try(bar.SetValue, bar, value) then
+            bar:SetValue(0)
+        end
+        local c = Curve(POWER_GLOW_POINTS)
+        if not (c and pcall(function() p.glow:SetAlpha(UnitPowerPercent("player", nil, false, c)) end)) then
+            p.glow:SetAlpha(1)
+        end
+    end
+end
+
 -- (wanted: alive, and in a fight or hurt (read whole out of one))
-local function Wanted()
-    if Flag(UnitIsDeadOrGhost, "player") then return false end
+local function HealthWanted()
     if IF.InCombat() then return true end
     local value, max = UnitHealth("player"), UnitHealthMax("player")
     if Secret(value) or Secret(max) or type(value) ~= "number" or type(max) ~= "number" then return true end
     return max > 0 and value < max
 end
 
-line:SetScript("OnUpdate", function(self, elapsed)
+-- (wanted: in a fight or not at rest (read whole out of one))
+local function PowerWanted()
+    if IF.InCombat() then return true end
+    local value, max = UnitPower("player"), UnitPowerMax("player")
+    if Secret(value) or Secret(max) or type(value) ~= "number" or type(max) ~= "number" then return true end
+    if max <= 0 then return false end
+    local token = PowerToken()
+    if not token then return true end
+    if RESTS_EMPTY[token] then return value > 0 end
+    return value < max
+end
+
+local function Wanted()
+    if Flag(UnitIsDeadOrGhost, "player") then return false end
+    return (PlayerHealth.health and HealthWanted()) or (PlayerHealth.power and PowerWanted()) or false
+end
+
+holder:SetScript("OnUpdate", function(self, elapsed)
     local now = GetTime()
     if trail.at and now >= trail.at then TrailTo(true) end
     local goal = (self.wanted or (self.holdUntil and now < self.holdUntil)) and 1 or 0
@@ -260,26 +330,30 @@ line:SetScript("OnUpdate", function(self, elapsed)
     end
 end)
 
-local function Update(ease)
+local function Update(ease, easePower)
     if not PlayerHealth.on then return end
-    Fill(ease)
-    local was = line.wanted
-    line.wanted = Wanted()
-    if line.wanted then
-        line.holdUntil = nil
-        line:Show()
-        if not beat:IsPlaying() then beat:Play() end
+    if PlayerHealth.health then Fill(ease) end
+    if PlayerHealth.power then FillPower(easePower) end
+    local was = holder.wanted
+    holder.wanted = Wanted()
+    if holder.wanted then
+        holder.holdUntil = nil
+        holder:Show()
+        if PlayerHealth.health and not beat:IsPlaying() then beat:Play() end
     elseif Flag(UnitIsDeadOrGhost, "player") then
-        line.holdUntil = nil
+        holder.holdUntil = nil
     elseif was then
-        -- (whole again: held a moment, the trail done, then faded)
-        line.holdUntil = GetTime() + HOLD
+        -- (whole and at rest again: held a moment, the trail done, then faded)
+        holder.holdUntil = GetTime() + HOLD
     end
 end
 
+local POWER_CHANGE = { UNIT_POWER_UPDATE = true, UNIT_POWER_FREQUENT = true }
 local events = CreateFrame("Frame")
 events:RegisterUnitEvent("UNIT_HEALTH", "player")
 events:RegisterUnitEvent("UNIT_MAXHEALTH", "player")
+-- (an event this client hasn't: left out, not an error)
+for _, e in ipairs(UF.POWER_EVENTS) do pcall(events.RegisterUnitEvent, events, e, "player") end
 events:RegisterEvent("PLAYER_REGEN_DISABLED")
 events:RegisterEvent("PLAYER_REGEN_ENABLED")
 events:RegisterEvent("PLAYER_ENTERING_WORLD")
@@ -287,27 +361,45 @@ events:RegisterEvent("PLAYER_DEAD")
 events:RegisterEvent("PLAYER_ALIVE")
 events:RegisterEvent("PLAYER_UNGHOST")
 events:SetScript("OnEvent", function(_, event)
-    -- (only a change of health eases: a new max, a load or coming back snap)
-    Update(event == "UNIT_HEALTH")
+    -- (only a change of health or power eases: a new max or kind, a load
+    -- or coming back snap)
+    Update(event == "UNIT_HEALTH", POWER_CHANGE[event] or false)
 end)
 
 ---------------------------------------------------------------------------
--- On while the setting is
+-- On while a setting is: the power on the edge, the health over it
+-- sharing its top border (alone: on the edge)
 ---------------------------------------------------------------------------
+local function Place(health, mp)
+    line:SetShown(health)
+    power:SetShown(mp)
+    line:ClearAllPoints()
+    line:SetPoint("BOTTOMLEFT", holder, "BOTTOMLEFT", 0, mp and POWER_H - 1 or 0)
+    line:SetPoint("BOTTOMRIGHT", holder, "BOTTOMRIGHT", 0, mp and POWER_H - 1 or 0)
+    power:ClearAllPoints()
+    power:SetPoint("BOTTOMLEFT")
+    power:SetPoint("BOTTOMRIGHT")
+    local h = (health and LINE_H or 0) + (mp and POWER_H or 0) - (health and mp and 1 or 0)
+    holder:SetHeight(math.max(h, 1))
+    if not health then beat:Stop() end
+end
+
 local function Watch()
     if not IF.db then return end
-    Place()
-    local on = IN.Settings().hpLine and not UF.EditMode()
-    if on ~= PlayerHealth.on then
-        PlayerHealth.on = on
-        if on then
-            Update(false)
-        else
-            line.wanted, line.holdUntil, trail.at = false, nil, nil
-            beat:Stop()
-            line:SetAlpha(0)
-            line:Hide()
-        end
+    local s = IN.Settings()
+    local edit = UF.EditMode()
+    local health, mp = s.hpLine and not edit or false, s.mpLine and not edit or false
+    if health == PlayerHealth.health and mp == PlayerHealth.power then return end
+    PlayerHealth.health, PlayerHealth.power = health, mp
+    PlayerHealth.on = health or mp
+    Place(health, mp)
+    if PlayerHealth.on then
+        Update(false, false)
+    else
+        holder.wanted, holder.holdUntil, trail.at = false, nil, nil
+        beat:Stop()
+        holder:SetAlpha(0)
+        holder:Hide()
     end
 end
 

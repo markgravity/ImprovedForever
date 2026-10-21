@@ -1,6 +1,7 @@
--- Minions and party as cards standing on the experience line along the
--- screen's bottom edge (XPBar.lua): your pet beside the player frame,
--- bottom left ("Minions"), your party's four centred ("Party"), each a card in
+-- Minions and party as cards standing over the health and power lines
+-- along the screen's bottom edge (PlayerHealth.lua): your pet beside the
+-- player frame, bottom left ("Minions"), your party's four centred
+-- ("Party"), each a card in
 -- the look of the rest of the bottom: the avatar the player's has too
 -- (UnitFrames.lua: the unit's model in the game's dialog border, a strip
 -- along its top in its class colour (a minion's gold, grey when dead or

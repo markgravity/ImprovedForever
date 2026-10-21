@@ -1,12 +1,12 @@
 -- The fishing skill as a line along the screen's bottom edge, its whole
--- width, while the fishing view is on: the Immersion module's experience
--- line (XPBar.lua) in the water's colour. A dark track in a thin grey
+-- width, while the fishing view is on: in the look of the Immersion
+-- module's lines along it (PlayerHealth.lua), in the water's colour. A dark track in a thin grey
 -- frame, cut in 20 by notches, the fill (the water's blue, lighter at its
 -- top as the game's fills are) to your skill of its most, a lure's bonus
 -- beyond it fainter, a glow at the fill's end, the fill easing to a new
 -- value, a flash as the skill goes up. Its numbers over its left end
 -- ("Fishing 75 / 150  +25"); the mouse over it, in a tooltip too.
--- The experience line and the game's bar are faded meanwhile (View.lua).
+-- The health and power lines and the game's bar are faded meanwhile (View.lua).
 local IF = ImprovedForever
 local F = IF.Fishing
 

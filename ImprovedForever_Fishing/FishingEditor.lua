@@ -76,7 +76,7 @@ local ITEMS = {
     Item({
         key = "skillLine", group = "view", label = "Skill line",
         tip = "With the fishing view: your fishing skill as a line along the screen's bottom edge, as the "
-            .. "experience line, in the water's blue (a lure's bonus beyond it in sea green), its numbers "
+            .. "health line, in the water's blue (a lure's bonus beyond it in sea green), its numbers "
             .. "over its left end; it flares as the skill goes up.",
     }, Toggle("skillLine", "Skill line", function() F.ApplySkillLine() end)),
 }

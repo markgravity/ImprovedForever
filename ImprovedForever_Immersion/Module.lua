@@ -1,7 +1,8 @@
 -- Improved Forever: Interface. The game's HUD rearranged: its player and
 -- target frames hidden, ours in their place (UnitFrames.lua), your pet
--- and party as cards on the experience line (PartyCards.lua), the
--- experience bar a line along the bottom edge (XPBar.lua), the gamepad
+-- and party as cards along the bottom (PartyCards.lua), your health and
+-- power as lines along the bottom edge (PlayerHealth.lua), the experience
+-- bar a ring round the player frame (XPBar.lua), the gamepad
 -- bar as two diamonds bottom right (GamepadBar.lua), the chat as only its
 -- lines while not in use (ChatView.lua, ChatFade.lua), set up in its tab
 -- (InterfaceEditor.lua). The chat isn't moved: its place is Edit Mode's,
@@ -17,10 +18,10 @@ IF.Interface = IN
 -- The bottom padding the HUD's groups share, so their feet line up: the
 -- player's avatar (UnitFrames.lua) and the gamepad bar's face buttons
 -- diamond (GamepadBar.lua: its bottom point), the set pips and glyphs
--- under it still clear of the experience line and the health bar over it
+-- under it still clear of the power line and the health bar over it
 IN.BOTTOM = 38
--- The experience line's height (XPBar.lua)
-IN.XP_H = 8
+-- The power line's height, on the bottom edge (PlayerHealth.lua)
+IN.MP_H = 5
 -- The health bar's, over it (PlayerHealth.lua)
 IN.HP_H = 5
 
@@ -57,7 +58,7 @@ IF.AddCommand("chatprobe", function() IN.ChatFade.Probe() end, ": what keeps the
 local DEFAULTS = {
     player = true,      -- the player frame bottom left (and the pet's beside it)
     target = true,      -- the target's health on top, its name over it
-    cards = true,       -- your pet and party as cards on the experience line
+    cards = true,       -- your pet and party as cards along the bottom
     cardFocus = "auto", -- the party cards as your role needs them: auto (your role), tank, healer, off
     chatAbove = true,   -- the chat over the player's frame (in the Edit Mode layout; a test)
     hudAuras = true,    -- your buffs and debuffs along the bottom (in the Edit Mode layout; a test)
@@ -67,9 +68,10 @@ local DEFAULTS = {
     chatDim = true,     -- the chat as only its lines while not in use
     castBar = true,     -- your casts as a long line over the party cards, filling out from the middle
     castRange = true,   -- with the cast line: its diamond alone while not casting, grey with your target out of range
-    hpLine = true,      -- your health as a bar over the experience line
+    hpLine = true,      -- your health as a bar over the power line
+    mpLine = true,      -- your power (mana, rage, energy...) as a bar along the screen's bottom edge
     npcDialog = true,   -- talking to an NPC (quests, gossip) as subtitles low in the middle, Spoken's voice with it
-    xp = true,          -- the experience as a line along the screen's bottom edge
+    xp = true,          -- the experience as a ring round the player frame
     pad = true,         -- the gamepad bar as Hogwarts Legacy's spell diamonds, bottom right
     padStyle = "square", -- its tiles: "diamond", "square" (rows and columns) or "circle" (GamepadBar.lua)
     partyPad = false,   -- L1 ours: + the D-pad picks a party spell, + a face button casts it on party 1 to 4 (a test)

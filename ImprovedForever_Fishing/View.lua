@@ -2,8 +2,8 @@
 -- fight, the HUD steps back and the camera comes in. Faded
 -- (IF.Focus.Fade): the Immersion module's gamepad bar, the Wheel module's
 -- R3 slot, your frame, your pet's and your party's cards, the buffs and
--- the cooldowns, the experience line, the chat, the objectives. Left: the
--- health line, the target's bar, the minimap, the session's panel and the
+-- the cooldowns, the health and power lines, the chat, the objectives.
+-- Left: the target's bar, the minimap, the session's panel and the
 -- fishing bar (Panel.lua, CastBar.lua). The camera zooms in to your
 -- fishing distance and sits over your shoulder, pitched down, so you stand
 -- low on the left of the screen and everything of ours is on the right
@@ -22,7 +22,7 @@ local F = IF.Fishing
 local FADED = { "ImprovedForeverGamepadBar", "ImprovedForeverRecentSlot", "ImprovedForeverPlayerFrame",
     "ImprovedForeverMinionCard1", "ImprovedForeverPartyCard1", "ImprovedForeverPartyCard2",
     "ImprovedForeverPartyCard3", "ImprovedForeverPartyCard4", "ImprovedForeverPartyCasts",
-    "ImprovedForeverBuffList", "ImprovedForeverCooldownTimeline", "ImprovedForeverXPLine",
+    "ImprovedForeverBuffList", "ImprovedForeverCooldownTimeline",
     "ImprovedForeverChatView", "ImprovedForeverPlayerHealth", "IFObjectiveTrackerFrame" }
 -- (without the Immersion module, the game's own: its unit frames, its
 -- gamepad bar, its XP bar, its buffs. With it, it fades these itself, its
