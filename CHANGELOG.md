@@ -1,5 +1,16 @@
 # Changelog
 
+## Immersion 0.3.0
+
+- The gamepad bar was reworked: it shows the mouse fishing actions and works with the mouse.
+- The HUD layout has a separate version for the mouse and one for the pad, so switching between them keeps each one's placement.
+- Your pet and your party cards have their own switches now.
+- The bottom HUD elements sit in one group in the settings.
+
+## Fishing 0.2.0
+
+- Fish with the mouse: tap to cast, double-tap to use a lure.
+
 ## Core 0.11.0
 
 - **Square shoots your wand**: with a wand equipped and an enemy targeted, Square shoots it instead of the
