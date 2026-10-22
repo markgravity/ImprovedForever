@@ -120,6 +120,8 @@ holder:SetFrameStrata("LOW")
 holder:SetSize(1, 1)
 holder:SetPoint("BOTTOMRIGHT", UIParent, "BOTTOMRIGHT", -MARGIN_X, IN.BOTTOM)
 holder:Hide()
+-- (the keyboard and mouse bar shown, not the pad's: KeyTiles below)
+local keyMode = false
 
 local function Extent(d)
     return d.spread + d.width / 2 + d.glyph / 2
@@ -333,6 +335,14 @@ local function Button(center, d, dir, key, parent)
     return b
 end
 
+-- A key tile's keybind text, inside its top (a diamond's top is a point:
+-- lower)
+local function PlaceHotkey(b)
+    local d = b.d
+    b.hotkey:ClearAllPoints()
+    b.hotkey:SetPoint("TOP", b, "CENTER", 0, style.pointed and d.width / 4 + 2 or d.side / 2 - 3)
+end
+
 -- A tile reshaped for the style: its place (unless placed by its owner:
 -- b.placed), slot art, mask, fills, cooldown, border, ring, count, glyph
 local function Reshape(b)
@@ -360,6 +370,8 @@ local function Reshape(b)
         b.key:ClearAllPoints()
         b.key:SetPoint("CENTER", b, "CENTER", px * (d.width / 2 + d.glyph * 0.2), py * (d.width / 2 + d.glyph * 0.2))
     end
+    if b.hotkey then PlaceHotkey(b) end
+    if b.onReshape then b.onReshape(b) end
 end
 
 local buttons = {}
@@ -394,6 +406,76 @@ local function ClassButton(center, d, sign, keys)
 end
 local classLeft = ClassButton(dpadCenter, DPAD, -1, { "PADLSHOULDER", "PADLTRIGGER" })
 local classRight = ClassButton(faceCenter, FACE, 1, { "PADRSHOULDER", "PADRTRIGGER" })
+
+---------------------------------------------------------------------------
+-- KeyTiles: with the keyboard and mouse bar (the Gamepad UI off), its 12
+-- buttons (the game's main bar, ActionButton1 to 12) as three groups of
+-- four, bottom right where the pad's diamonds are: same tiles, rings and
+-- cooldowns, the key's name where the pad's glyph is. Left to right, top
+-- to bottom in a grid (left, up, down, right in a cross).
+---------------------------------------------------------------------------
+local KEYD = Shape({ size = 36, glyph = 0 })
+local KEY_GAP = 14          -- (between two groups)
+local KEY_DIRS = { { -1, 0 }, { 0, 1 }, { 0, -1 }, { 1, 0 } }
+local keyCenters, keyButtons = {}, {}
+for g = 1, 3 do
+    local center = CreateFrame("Frame", nil, holder)
+    center:SetSize(1, 1)
+    keyCenters[g] = center
+    for j, dir in ipairs(KEY_DIRS) do
+        local b = Button(center, KEYD, dir, nil)
+        -- (a secure catcher of ours over it takes the mouse: Catcher)
+        b:EnableMouse(false)
+        b.key:Hide()
+        b.hotkey = b.key:GetParent():CreateFontString(nil, "OVERLAY", "NumberFontNormalSmall")
+        b.hotkey:SetShadowOffset(1, -1)
+        PlaceHotkey(b)
+        b:Hide()
+        keyButtons[(g - 1) * 4 + j] = b
+    end
+end
+
+-- The menu's tile, left of the groups: three bars on a tile (the game's
+-- micro menu and bags, drawn at 0 with the keyboard bar, are in the popup
+-- it opens: Menu below)
+local MENUD = Shape({ size = 30, glyph = 0 })
+local menuCenter = CreateFrame("Frame", nil, holder)
+menuCenter:SetSize(1, 1)
+local menuTile = Button(menuCenter, MENUD, { 0, 0 }, nil)
+menuTile.key:Hide()
+menuTile.bars = {}
+for i = 1, 3 do
+    local t = menuTile.key:GetParent():CreateTexture(nil, "OVERLAY", nil, 3)
+    t:SetColorTexture(0.92, 0.86, 0.7, 1)
+    menuTile.bars[i] = t
+end
+menuTile.onReshape = function(b)
+    local d = b.d
+    for i, t in ipairs(b.bars) do
+        t:ClearAllPoints()
+        t:SetSize(d.side * 0.42, 2)
+        t:SetPoint("CENTER", b, "CENTER", 0, (2 - i) * d.side * 0.16)
+    end
+end
+menuTile.onReshape(menuTile)
+menuTile:SetScript("OnDragStart", nil)
+menuTile:SetScript("OnReceiveDrag", nil)
+menuTile:Hide()
+
+-- (the right group's corner on the holder's, its bottom on the HUD's)
+local function KeyExtent()
+    return KEYD.spread + KEYD.width / 2
+end
+local function PlaceKeys()
+    local e = KeyExtent()
+    menuCenter:ClearAllPoints()
+    menuCenter:SetPoint("CENTER", keyCenters[1], "CENTER", -(e + KEY_GAP + MENUD.width / 2), MENUD.width / 2 - e)
+    for g, center in ipairs(keyCenters) do
+        center:ClearAllPoints()
+        center:SetPoint("CENTER", holder, "BOTTOMRIGHT", -(e + (3 - g) * (2 * e + KEY_GAP)), e)
+    end
+end
+PlaceKeys()
 
 -- A press's glyph as the game's crossbar draws it (its
 -- InputIconTextureFrameTemplate's art: the game's prompt for the
@@ -1065,7 +1147,248 @@ local function MirrorClass(b, native)
     if on then Mirror(b, native) end
 end
 
-local shown
+local shown, padShown
+
+-- A key tile's keybind: the game's own text on its button (what it has when
+-- unbound is the range dot: none)
+local function HotkeyText(native)
+    local hk = native.HotKey
+    if not (hk and hk:IsShown()) then return "" end
+    local ok, text = pcall(hk.GetText, hk)
+    if not ok or Secret(text) or type(text) ~= "string" or text == RANGE_INDICATOR then return "" end
+    return text
+end
+
+-- What the mouse does on a key tile: a secure button of ours over it
+-- clicks the game's button (so it works in a fight), and its tooltip and
+-- drags are the game's (pick up out of combat, drop onto it). Not a child
+-- of the holder or anchored to a tile (a secure frame's protection spreads
+-- to what it's anchored to): placed by the tile's rect, out of combat only.
+local catchers = {}
+
+local function Catcher(i)
+    local c = catchers[i]
+    if c then return c end
+    local native = _G["ActionButton" .. i]
+    if not native or InCombatLockdown() then return nil end
+    c = CreateFrame("Button", nil, nil, "SecureActionButtonTemplate")
+    c:SetParent(UIParent)
+    c:SetFrameStrata("LOW")
+    c:SetFrameLevel(60)
+    c:RegisterForClicks("AnyUp")
+    c:RegisterForDrag("LeftButton")
+    c:SetAttribute("type", "click")
+    c:SetAttribute("clickbutton", native)
+    c:SetScript("OnEnter", function(self)
+        local action = native.action
+        if not action then return end
+        GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+        if pcall(GameTooltip.SetAction, GameTooltip, action) then GameTooltip:Show() end
+    end)
+    c:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    c:SetScript("OnDragStart", function() DragOff({ native = native }) end)
+    c:SetScript("OnReceiveDrag", function() Drop({ native = native }) end)
+    c:Hide()
+    catchers[i] = c
+    return c
+end
+
+local function PlaceCatchers(on)
+    if InCombatLockdown() then return end
+    for i, b in ipairs(keyButtons) do
+        local shownTile = on and b:IsShown()
+        local c = shownTile and Catcher(i) or catchers[i]
+        if c then
+            local x, y = b:GetCenter()
+            if shownTile and x and y then
+                local d = b.d
+                local k = b:GetEffectiveScale() / UIParent:GetEffectiveScale()
+                local size = (style.pointed and d.width or d.side) * k
+                if c.x ~= x or c.y ~= y or c.size ~= size then
+                    c.x, c.y, c.size = x, y, size
+                    c:ClearAllPoints()
+                    c:SetPoint("CENTER", UIParent, "BOTTOMLEFT", x * k, y * k)
+                    c:SetSize(size, size)
+                end
+                if not c:IsShown() then c:Show() end
+            elseif c:IsShown() then
+                c:Hide()
+            end
+        end
+    end
+end
+
+local function MirrorKeys()
+    for i, b in ipairs(keyButtons) do
+        local native = _G["ActionButton" .. i]
+        local on = native ~= nil and native:IsVisible()
+        b:SetShown(on)
+        if on then
+            Mirror(b, native)
+            b.hotkey:SetText(HotkeyText(native))
+        end
+    end
+end
+
+---------------------------------------------------------------------------
+-- Menu: the diamond's popup, the game's micro menu buttons (character,
+-- spellbook...) and the bags as a list. Each row is a secure button of
+-- ours clicking the game's own (it opens its window the way its button
+-- does). Secure frames can't be shown, hidden or moved in a fight, so the
+-- popup is only opened and rebuilt out of combat, placed by the tile's
+-- rect (not anchored to it), and a close in a fight waits for its end.
+---------------------------------------------------------------------------
+local ROW_H, ROW_W, POP_PAD = 24, 200, 6
+local popup = CreateFrame("Frame", nil, UIParent)
+popup:SetFrameStrata("DIALOG")
+popup:SetFrameLevel(20)
+popup:EnableMouse(true)
+popup:Hide()
+local popupBg = popup:CreateTexture(nil, "BACKGROUND")
+popupBg:SetAllPoints()
+popupBg:SetColorTexture(0.04, 0.04, 0.06, 0.94)
+for _, e in ipairs({ { "TOPLEFT", "TOPRIGHT", 1 }, { "BOTTOMLEFT", "BOTTOMRIGHT", 1 } }) do
+    local line = popup:CreateTexture(nil, "BORDER")
+    line:SetColorTexture(0.75, 0.62, 0.3, 0.9)
+    line:SetHeight(1)
+    line:SetPoint(e[1])
+    line:SetPoint(e[2])
+end
+for _, e in ipairs({ { "TOPLEFT", "BOTTOMLEFT" }, { "TOPRIGHT", "BOTTOMRIGHT" } }) do
+    local line = popup:CreateTexture(nil, "BORDER")
+    line:SetColorTexture(0.75, 0.62, 0.3, 0.9)
+    line:SetWidth(1)
+    line:SetPoint(e[1])
+    line:SetPoint(e[2])
+end
+
+-- (a click anywhere else closes it)
+local closer = CreateFrame("Frame", nil, UIParent)
+closer:SetAllPoints(UIParent)
+closer:SetFrameStrata("DIALOG")
+closer:SetFrameLevel(1)
+closer:EnableMouse(true)
+closer:Hide()
+
+local pendingClose
+local function ClosePopup()
+    if InCombatLockdown() then
+        pendingClose = popup:IsShown() or nil
+        return
+    end
+    pendingClose = nil
+    popup:Hide()
+    closer:Hide()
+end
+closer:SetScript("OnMouseDown", ClosePopup)
+
+local menuRows = {}
+local function Row(i)
+    local r = menuRows[i]
+    if r then return r end
+    r = CreateFrame("Button", nil, nil, "SecureActionButtonTemplate")
+    r:SetParent(popup)
+    r:SetSize(ROW_W, ROW_H)
+    r:SetPoint("TOPLEFT", popup, "TOPLEFT", POP_PAD, -POP_PAD - (i - 1) * ROW_H)
+    r:RegisterForClicks("AnyUp")
+    r:SetAttribute("type", "click")
+    r.hl = r:CreateTexture(nil, "BACKGROUND")
+    r.hl:SetAllPoints()
+    r.hl:SetColorTexture(1, 0.82, 0.3, 0.14)
+    r.hl:Hide()
+    r.text = r:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+    r.text:SetPoint("LEFT", 8, 0)
+    r.bind = r:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    r.bind:SetPoint("RIGHT", -8, 0)
+    r:SetScript("OnEnter", function(self) self.hl:Show() end)
+    r:SetScript("OnLeave", function(self) self.hl:Hide() end)
+    r:HookScript("PostClick", ClosePopup)
+    menuRows[i] = r
+    return r
+end
+
+-- (the game's micro buttons in its order, then the bags)
+local function MenuItems()
+    local items = {}
+    local menu = _G.MicroMenu
+    if menu then
+        local kids = {}
+        for _, child in ipairs({ menu:GetChildren() }) do
+            if child.layoutIndex and child:IsShown() then kids[#kids + 1] = child end
+        end
+        table.sort(kids, function(a, b) return a.layoutIndex < b.layoutIndex end)
+        for _, child in ipairs(kids) do
+            local label = type(child.tooltipText) == "string" and child.tooltipText or child:GetName() or "?"
+            items[#items + 1] = { native = child, label = label, command = child.commandName }
+        end
+    end
+    local bags = _G.MainMenuBarBackpackButton or _G.BagsBarBackpackButton
+    if bags then
+        items[#items + 1] = { native = bags, label = _G.BAGSLOTTEXT or "Bags", command = "OPENALLBAGS" }
+    end
+    return items
+end
+
+local function OpenPopup()
+    if InCombatLockdown() then return end
+    local items = MenuItems()
+    if #items == 0 then return end
+    for i, item in ipairs(items) do
+        local r = Row(i)
+        r:SetAttribute("clickbutton", item.native)
+        r.text:SetText(item.label)
+        local key = item.command and GetBindingKey(item.command)
+        r.bind:SetText(key and GetBindingText(key, "KEY_", true) or "")
+        r:Show()
+    end
+    for i = #items + 1, #menuRows do menuRows[i]:Hide() end
+    popup:SetSize(ROW_W + 2 * POP_PAD, #items * ROW_H + 2 * POP_PAD)
+    -- (over the tile, kept on the screen)
+    local x, y = menuTile:GetCenter()
+    local k = menuTile:GetEffectiveScale() / UIParent:GetEffectiveScale()
+    if not (x and y) then return end
+    local half = (ROW_W + 2 * POP_PAD) / 2
+    local px = math.min(math.max(x * k, half + 4), UIParent:GetWidth() - half - 4)
+    popup:ClearAllPoints()
+    popup:SetPoint("BOTTOM", UIParent, "BOTTOMLEFT", px, y * k + MENUD.width / 2 * k + 10)
+    closer:Show()
+    popup:Show()
+end
+
+menuTile:SetScript("OnMouseUp", function(_, button)
+    if button ~= "LeftButton" then return end
+    if popup:IsShown() then ClosePopup() else OpenPopup() end
+end)
+local function MenuTileColor(on)
+    for _, t in ipairs(menuTile.bars) do
+        if on then t:SetColorTexture(1, 0.82, 0.3, 1) else t:SetColorTexture(0.92, 0.86, 0.7, 1) end
+    end
+end
+menuTile:SetScript("OnEnter", function()
+    MenuTileColor(true)
+    GameTooltip:SetOwner(menuTile, "ANCHOR_LEFT")
+    GameTooltip:SetText(MAINMENU_BUTTON or "Game Menu")
+    GameTooltip:Show()
+end)
+menuTile:SetScript("OnLeave", function()
+    MenuTileColor(false)
+    GameTooltip:Hide()
+end)
+
+local menuWatch = CreateFrame("Frame")
+menuWatch:RegisterEvent("PLAYER_REGEN_ENABLED")
+menuWatch:SetScript("OnEvent", function()
+    if pendingClose then ClosePopup() end
+end)
+
+-- The pad's parts shown, or hidden (the keyboard bar's up)
+local function SetPadParts(on)
+    for _, b in ipairs(buttons) do b:SetShown(on) end
+    classLeft:SetShown(on)
+    classRight:SetShown(on)
+    for _, p in ipairs(pips) do p:SetShown(on) end
+    page:SetShown(on)
+end
 
 ---------------------------------------------------------------------------
 -- Picking a party member (PartyPad.lua: L1 held, party targeting on): the
@@ -1098,16 +1421,42 @@ local function Watch()
     GB.SetStyle(IN.Settings().padStyle)
     local pu = PageUnit()
     local main = GamepadMainActionBarFrame
-    local on = pu ~= nil and IN.Settings().pad and main:IsVisible() and not UF.EditMode()
+    local wanted = IN.Settings().pad and not UF.EditMode()
+    local gamepadUI = pu ~= nil and main:IsVisible()
+    local on = wanted and gamepadUI
+    -- (the keyboard and mouse bar: the game's main bar, shown instead of
+    -- the pad's while the Gamepad UI is off)
+    local keyBar = _G.MainActionBar
+    local keys = wanted and not gamepadUI and keyBar ~= nil and keyBar:IsVisible()
     if pu then
         for _, part in ipairs(NativeParts(pu)) do IF.Focus.Fade(part, on) end
         for _, bar in ipairs(NativeBars(pu)) do UF.Cover(bar, on) end
     end
-    if on ~= shown then
-        shown = on
-        holder:SetShown(on)
+    IF.Focus.Fade(keyBar, keys)
+    UF.Cover(keyBar, keys)
+    -- (its micro menu and bags: the menu tile's popup holds them)
+    for _, name in ipairs({ "MicroMenuContainer", "BagsBar" }) do
+        local native = _G[name]
+        IF.Focus.Fade(native, keys)
+        UF.Cover(native, keys)
+    end
+    menuTile:SetShown(keys and true or false)
+    if not keys and popup:IsShown() then ClosePopup() end
+    -- (the popup's tile lit while it's open)
+    SetBorder(menuTile, popup:IsShown() and SLOT.selected or SLOT.normal)
+    if on ~= padShown then
+        padShown = on
+        SetPadParts(on)
         if on then UpdateGlyphs() end
     end
+    keyMode = keys and true or false
+    local active = on or keys
+    if active ~= shown then
+        shown = active
+        holder:SetShown(active)
+    end
+    if keys then MirrorKeys() end
+    PlaceCatchers(keys)
     if not on then return end
     local bar = pu.activeBar
     local picking = Picking()
@@ -1129,7 +1478,7 @@ for _, e in ipairs({ "GAME_PAD_ACTIVE_CHANGED", "GAME_PAD_CONNECTED" }) do
     pcall(glyphEvents.RegisterEvent, glyphEvents, e)
 end
 glyphEvents:SetScript("OnEvent", function()
-    if shown then UpdateGlyphs() end
+    if padShown then UpdateGlyphs() end
 end)
 
 ---------------------------------------------------------------------------
@@ -1231,18 +1580,25 @@ end
 local supplyRow = CreateFrame("Frame", nil, holder)
 supplyRow:SetSize(1, 1)
 local function PlaceSupplies()
-    supplyRow:ClearAllPoints()
-    local slot = rawget(_G, "ImprovedForeverRecentSlot")
-    if type(slot) == "table" and slot.IsShown and slot:IsShown() then
-        supplyRow:SetPoint("TOP", slot, "BOTTOM", 0, -SUPPLY_UNDER)
-    else
-        local anchor, x, y, d = GB.SideSpot()
-        if not anchor then return end
-        supplyRow:SetPoint("TOP", anchor, "CENTER", x, y - d.width / 2 - SUPPLY_UNDER)
-    end
     local shown = {}
     for _, sp in ipairs(supplies) do
         if sp.tile:IsShown() then shown[#shown + 1] = sp end
+    end
+    supplyRow:ClearAllPoints()
+    if keyMode then
+        -- (the keyboard bar's: left of its groups, bottoms level)
+        local e = KeyExtent()
+        local pitch = SUPPLY.width + SUPPLY_GAP
+        supplyRow:SetPoint("TOP", keyCenters[1], "CENTER", -(e + 2 * KEY_GAP + MENUD.width + #shown * pitch / 2), SUPPLY.width - e)
+    else
+        local slot = rawget(_G, "ImprovedForeverRecentSlot")
+        if type(slot) == "table" and slot.IsShown and slot:IsShown() then
+            supplyRow:SetPoint("TOP", slot, "BOTTOM", 0, -SUPPLY_UNDER)
+        else
+            local anchor, x, y, d = GB.SideSpot()
+            if not anchor then return end
+            supplyRow:SetPoint("TOP", anchor, "CENTER", x, y - d.width / 2 - SUPPLY_UNDER)
+        end
     end
     for k, sp in ipairs(shown) do
         sp.center:ClearAllPoints()
@@ -1348,14 +1704,19 @@ function GB.Rect()
         l, b = math.min(l or rl, rl), math.min(b or rb, rb)
         r, t = math.max(r or rl + rw, rl + rw), math.max(t or rb + rh, rb + rh)
     end
-    for _, button in ipairs(buttons) do
-        Add(button)
-        Add(button.key)
-    end
-    for _, button in ipairs({ classLeft, classRight }) do
-        Add(button)
-        Add(button.key)
-        Add(button.key2)
+    if keyMode then
+        for _, button in ipairs(keyButtons) do Add(button) end
+        Add(menuTile)
+    else
+        for _, button in ipairs(buttons) do
+            Add(button)
+            Add(button.key)
+        end
+        for _, button in ipairs({ classLeft, classRight }) do
+            Add(button)
+            Add(button.key)
+            Add(button.key2)
+        end
     end
     if not l then return nil end
     return l, b, r, t
@@ -1370,7 +1731,8 @@ end
 local SIDE_GAP = 14
 local sideDims = GB.Dims(DPAD.size, DPAD.glyph)
 function GB.SideSpot()
-    if not holder:IsShown() then return nil end
+    -- (none with the keyboard bar: that slot is the pad's)
+    if not holder:IsShown() or keyMode then return nil end
     -- (a grid: beside its bottom row, clear of that row's outer glyph)
     if style.grid then
         return dpadCenter, -(DPAD.spread + DPAD.side / 2 + GlyphOut(DPAD) + sideDims.width / 2), -DPAD.spread, sideDims
@@ -1400,6 +1762,7 @@ function GB.SetStyle(name)
     PlaceClass(classLeft)
     PlaceClass(classRight)
     PlacePips()
+    PlaceKeys()
     PlaceSupplies()
     for _, fn in ipairs(styleListeners) do pcall(fn, name) end
 end

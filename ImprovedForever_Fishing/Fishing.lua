@@ -23,44 +23,54 @@ local LURES = { 6533, 7307, 6532, 6811, 6530, 6529 }
 
 local owner = CreateFrame("Frame", "ImprovedForeverFishingBinds")
 
-local button = CreateFrame("Button", "ImprovedForeverFishingCast", UIParent,
-    "SecureActionButtonTemplate,SecureHandlerBaseTemplate")
-button:SetSize(1, 1)
-button:SetPoint("TOPLEFT", UIParent, "TOPLEFT", -20, 20)
-button:SetAttribute("type", "macro")
--- (both edges: the one it acts on is ic-down's, Override.lua)
-button:RegisterForClicks("AnyDown", "AnyUp")
-local window = CreateFrame("Frame", nil, UIParent)
-window:Hide()
-window:SetScript("OnUpdate", function(self, elapsed)
-    self.left = self.left - elapsed
-    if self.left <= 0 then self:Hide() end
-end)
-SecureHandlerSetFrameRef(button, "window", window)
--- The second click of a pair puts the lure on (none in the bags: nothing),
--- any other casts
-SecureHandlerWrapScript(button, "OnClick", button, [[
-    if not down ~= not self:GetAttribute("ic-down") then return false end
-    local window = self:GetFrameRef("window")
-    if window and window:IsShown() then
-        local double = self:GetAttribute("ic-double")
-        if not double then return false end
-        self:SetAttribute("macrotext", double)
-    else
-        self:SetAttribute("macrotext", self:GetAttribute("ic-single"))
-    end
-    if not self:GetAttribute("macrotext") then return false end
-]])
--- After each click: the window opens, or a pair just ended it
-button:HookScript("OnClick", function(self, _, down)
-    if not down ~= not self:GetAttribute("ic-down") then return end
-    if window:IsShown() then
-        window:Hide()
-    else
-        window.left = DOUBLE
-        window:Show()
-    end
-end)
+-- (a secure button running the cast, or on a second click within DOUBLE the
+-- lure's macro; the pad's acts on the key's edge the CVar says, the mouse's
+-- on release, and not at all after a hold: that was the camera turning)
+local function CastButton(name)
+    local button = CreateFrame("Button", name, UIParent, "SecureActionButtonTemplate,SecureHandlerBaseTemplate")
+    button:SetSize(1, 1)
+    button:SetPoint("TOPLEFT", UIParent, "TOPLEFT", -20, 20)
+    button:SetAttribute("type", "macro")
+    -- (both edges: the one it acts on is ic-down's, Override.lua)
+    button:RegisterForClicks("AnyDown", "AnyUp")
+    local window = CreateFrame("Frame", nil, UIParent)
+    window:Hide()
+    window:SetScript("OnUpdate", function(self, elapsed)
+        self.left = self.left - elapsed
+        if self.left <= 0 then self:Hide() end
+    end)
+    SecureHandlerSetFrameRef(button, "window", window)
+    -- The second click of a pair puts the lure on (none in the bags: nothing),
+    -- any other casts
+    SecureHandlerWrapScript(button, "OnClick", button, [[
+        if not down ~= not self:GetAttribute("ic-down") then return false end
+        if self:GetAttribute("ic-held") then return false end
+        local window = self:GetFrameRef("window")
+        if window and window:IsShown() then
+            local double = self:GetAttribute("ic-double")
+            if not double then return false end
+            self:SetAttribute("macrotext", double)
+        else
+            self:SetAttribute("macrotext", self:GetAttribute("ic-single"))
+        end
+        if not self:GetAttribute("macrotext") then return false end
+    ]])
+    -- After each click: the window opens, or a pair just ended it
+    button:HookScript("OnClick", function(self, _, down)
+        if not down ~= not self:GetAttribute("ic-down") then return end
+        if self:GetAttribute("ic-held") then return end
+        if window:IsShown() then
+            window:Hide()
+        else
+            window.left = DOUBLE
+            window:Show()
+        end
+    end)
+    return button
+end
+
+local button = CastButton("ImprovedForeverFishingCast")
+local mouseButton = CastButton("ImprovedForeverFishingCastMouse")
 
 -- A fishing pole in the main hand
 function F.PoleEquipped()
@@ -91,9 +101,14 @@ local function SetMacros()
     local onDown = get and get("ActionButtonUseKeyDown") ~= "0"
     button:SetAttribute("ic-down", onDown)
     button:SetAttribute("useOnKeyDown", onDown)
-    button:SetAttribute("ic-single", "/cast " .. FishingName())
     local lure = F.Lure()
-    button:SetAttribute("ic-double", lure and ("/stopcasting\n/use item:" .. lure .. "\n/use " .. MAIN_HAND) or nil)
+    local double = lure and ("/stopcasting\n/use item:" .. lure .. "\n/use " .. MAIN_HAND) or nil
+    for _, b in ipairs({ button, mouseButton }) do
+        b:SetAttribute("ic-single", "/cast " .. FishingName())
+        b:SetAttribute("ic-double", double)
+    end
+    mouseButton:SetAttribute("ic-down", false)
+    mouseButton:SetAttribute("useOnKeyDown", false)
 end
 
 -- R2 ours in fishing mode while the game has the gamepad's focus
@@ -112,6 +127,37 @@ local function Bind()
 end
 F.Apply = Bind
 
+-- The mouse: in the mode, over the world with nothing under the cursor (no
+-- tooltip: a bobber to loot, a creature to talk to stay the game's), the right
+-- button is ours: a tap casts, two lure on. Held it's the camera, turned by
+-- mouselook as the game's own would (the binding takes that over).
+local mouseOwner = CreateFrame("Frame", "ImprovedForeverFishingMouseBinds")
+local mouseBound, mouseDown, mouseAt = false, false, 0
+local TAP = 0.3
+local function MouseBind()
+    if InCombatLockdown() or not IF.db then return end
+    local want = mouseDown or (F.InMode and F.InMode() and F.NothingOpen and F.NothingOpen()
+        and F.OverWorld and F.OverWorld() and not GameTooltip:IsShown()
+        and not (F.CameraEditing and F.CameraEditing())) or false
+    if want == mouseBound then return end
+    mouseBound = want
+    if want then
+        SetMacros()
+        SetOverrideBindingClick(mouseOwner, true, "BUTTON2", mouseButton:GetName(), "LeftButton")
+    else
+        ClearOverrideBindings(mouseOwner)
+    end
+end
+mouseButton:HookScript("OnClick", function(self, _, down)
+    if down then
+        mouseDown, mouseAt = true, GetTime()
+        if not InCombatLockdown() then self:SetAttribute("ic-held", nil) end
+    else
+        mouseDown = false
+        if MouselookStop then MouselookStop() end
+    end
+end)
+
 owner:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
 owner:RegisterEvent("BAG_UPDATE_DELAYED")
 owner:RegisterEvent("PLAYER_REGEN_ENABLED")
@@ -124,6 +170,17 @@ end)
 -- (the gamepad's focus has no event: read a few times a second)
 local wait = 0
 owner:SetScript("OnUpdate", function(_, elapsed)
+    if mouseDown then
+        -- (held past a tap: the camera; let go outside the button's sight: over)
+        if not IsMouseButtonDown("RightButton") then
+            mouseDown = false
+            if MouselookStop then MouselookStop() end
+        elseif GetTime() - mouseAt > TAP and not mouseButton:GetAttribute("ic-held") and not InCombatLockdown() then
+            mouseButton:SetAttribute("ic-held", true)
+            if MouselookStart then MouselookStart() end
+        end
+    end
+    MouseBind()
     wait = wait - elapsed
     if wait > 0 then return end
     wait = 0.1

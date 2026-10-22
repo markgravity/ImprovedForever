@@ -162,6 +162,8 @@ local function OverWorld()
     return f == nil or f == WorldFrame
 end
 
+F.OverWorld = OverWorld
+
 local watch = CreateFrame("Frame")
 watch:SetScript("OnUpdate", function()
     if not IF.db then return end

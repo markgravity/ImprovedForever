@@ -138,7 +138,9 @@ local ITEMS = {
         tip = "The gamepad action bar laid out as Hogwarts Legacy's spells: bottom right, the face buttons' "
             .. "slots as a big diamond of diamond tiles, the D-pad's as a smaller one beside it. Holding L2 / R2 (or both) "
             .. "swaps them to that set in place; the pips under them show which set is up. The game's bar "
-            .. "still does every press: its slots are set as before (the Bindings tab, its own editor).",
+            .. "still does every press: its slots are set as before (the Bindings tab, its own editor). With the "
+            .. "Gamepad UI off, the keyboard and mouse bar's 12 buttons are shown the same way as three groups of four, "
+            .. "their keys written on them.",
     }, Toggle("pad", "Spell diamonds", function() IN.GamepadBar.Apply() end)),
     Item({
         key = "recentLoot", group = "pad", label = "Recent loot (experiment)",

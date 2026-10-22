@@ -427,11 +427,19 @@ local function PadSlots()
     local util = _G.GamepadActionBarBindingUtil
     local main = _G.GamepadMainActionBarFrame
     local unit = main and main.PageUnit
-    if not (util and unit and unit.GetCurrentPage) then return {} end
-    local page = unit:GetCurrentPage()
+    local keys = not (main and main:IsVisible()) and _G.MainActionBar and _G.MainActionBar:IsVisible()
+    if not keys and not (util and unit and unit.GetCurrentPage) then return {} end
+    local page = not keys and unit:GetCurrentPage()
     local list, seen = {}, {}
-    for slot = 1, SLOTS do
-        local ok, storage = pcall(util.GetGamepadStorageSlotIndexFromPageAndPageUnitSlotID, page, slot)
+    -- (the keyboard and mouse bar's: the game's main bar's buttons' actions)
+    for slot = 1, keys and 12 or SLOTS do
+        local ok, storage
+        if keys then
+            local native = _G["ActionButton" .. slot]
+            ok, storage = true, native and native.action
+        else
+            ok, storage = pcall(util.GetGamepadStorageSlotIndexFromPageAndPageUnitSlotID, page, slot)
+        end
         if ok and type(storage) == "number" then
             local got, kind, id = pcall(GetActionInfo, storage)
             if got and not Secret(kind) and not Secret(id) and kind and id then
