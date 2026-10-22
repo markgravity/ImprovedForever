@@ -33,7 +33,12 @@ Scripts here: `.claude/skills/control-game/` (call them by full path; `S` below)
   X, Y are screen points = screenshot pixels / 2. The Read tool says the display scale
   ("multiply by 1.51 to map to original"): points = displayed x 1.51 / 2 = displayed x 0.756.
   Move first, wait 300 ms, then click; the game ignores a click that arrives with the move.
-- Game menu: Esc, click "AddOns" to tick or untick an addon for the character, Okay (the UI
+- Esc menu: the first Esc closes whatever is open (an NPC window, the target), the next one
+  opens the Game Menu in the middle of the game window. Buttons, top to bottom: Options,
+  AddOns, Edit Mode, Support, Macros, Log Out, Exit Game, Return to Game. Screenshot it and
+  click from the picture (the window can sit anywhere on the screen); Esc again, or Return
+  to Game, closes it. Log Out and Exit Game end the user's session: never without asking.
+- AddOns: Esc, click "AddOns" to tick or untick an addon for the character, Okay (the UI
   reloads by itself). Do this rather than `/run C_AddOns.EnableAddOn` plus a logout: the user
   prefers the menu, and an addon turned on mid-session needs the reload it triggers.
 
