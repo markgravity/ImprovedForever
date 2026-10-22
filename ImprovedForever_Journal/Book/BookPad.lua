@@ -184,14 +184,17 @@ local function Attach(frame)
         end,
     })
 
-    panel:HookScript("OnShow", function()
+    local function Opened()
         switch.focus, focus = "ours", "ours"
         TakePad(true)
         BindEscape(true)
         IF.Focus.DimNative(panel, true)
         skipRelease = IsKeyDown and IsKeyDown("PAD2") or nil
         Render()
-    end)
+    end
+    panel:HookScript("OnShow", Opened)
+    -- (built on its first opening, after its OnShow: taken now)
+    if panel:IsShown() then Opened() end
     panel:HookScript("OnHide", function()
         TakePad(false)
         BindEscape(false)

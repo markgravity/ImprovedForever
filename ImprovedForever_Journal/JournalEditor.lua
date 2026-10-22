@@ -75,16 +75,6 @@ local ITEMS = {
         end,
     }),
     Item({
-        key = "reunions", group = "journal", label = "Reunions",
-        tip = "A card of the journal's, at the top of the screen, when someone you met on an earlier day joins"
-            .. " your group or is your target: who they are, when and where you last met. Never in combat.",
-    }, OnOff(function() return S().reunions end, function(on) S().reunions = on end, "Reunions")),
-    Item({
-        key = "moments", group = "journal", label = "Moments",
-        tip = "A quiet card of the journal's when you grow stronger, fall, or find your first green, blue or"
-            .. " epic item. Never in combat, no sound.",
-    }, OnOff(function() return S().moments end, function(on) S().moments = on end, "Moments")),
-    Item({
         key = "road", group = "kept", label = "Your road",
         tip = "Where you walked, a point every few steps, for the map plates in the book to draw your road and"
             .. " where you stopped. Only your own position, never in an instance.",

@@ -76,11 +76,10 @@ local MEAL_SPELLS = { 433, 430 }          -- Food, Drink
 
 ---------------------------------------------------------------------------
 -- Settings: IF.db.journal = { enabled, levels, places, fights, loot,
--- minQuality, keepDays, road (the track), reunions, moments (the book's
--- cards in play: Book/BookToasts.lua) }
+-- minQuality, keepDays, road (the track) }
 ---------------------------------------------------------------------------
 local DEFAULTS = { enabled = true, levels = true, places = true, fights = true, loot = true,
-    minQuality = 2, keepDays = 365, road = true, reunions = true, moments = true }
+    minQuality = 2, keepDays = 365, road = true }
 
 function J.Settings()
     local s = IF.db.journal or {}
