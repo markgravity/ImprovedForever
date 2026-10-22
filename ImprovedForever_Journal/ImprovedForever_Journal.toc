@@ -2,7 +2,8 @@
 ## Title: Improved Forever: Journal
 ## Notes: A diary of your days: levels, quests, places, fights, loot, gold and crafting, read back as a book.
 ## Author: markg
-## Version: 0.6.0
+## Version: 0.1.0
+## X-Curse-Project-ID: 1758964
 ## X-Website: https://github.com/markgravity/ImprovedForever
 ## X-License: MIT
 ## IconTexture: Interface\AddOns\ImprovedForever\textures\ic_mod_journal

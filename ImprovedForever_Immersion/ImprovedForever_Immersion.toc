@@ -2,13 +2,13 @@
 ## Title: Improved Forever: Immersion
 ## Notes: The game's HUD made immersive: level ups, quest progress, the target, the way to your focused quest and zone names taking turns in one header under the top, your frame bottom left in a ring of your experience, your health and power as lines along the bottom edge, your pet and party as cards, the gamepad bar as Hogwarts Legacy's spell diamonds, NPCs talking as subtitles, the chat as just its lines until used, and a cinematic fishing view.
 ## Author: markg
-## Version: 0.1.0
+## Version: 0.2.0
 ## X-Curse-Project-ID: 1755571
 ## X-Website: https://github.com/markgravity/ImprovedForever
 ## X-License: MIT
 ## IconTexture: Interface\AddOns\ImprovedForever\textures\ic_mod_immersion
 ## Group: ImprovedForever
-## Dependencies: ImprovedForever, Spoken
+## Dependencies: ImprovedForever, ImprovedForever_Journal, Spoken
 ## OptionalDeps: Spoken_Quests
 
 Module.lua

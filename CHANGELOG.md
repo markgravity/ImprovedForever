@@ -1,5 +1,49 @@
 # Changelog
 
+## Core 0.11.0
+
+- **Square shoots your wand**: with a wand equipped and an enemy targeted, Square shoots it instead of the
+  melee swing. Looting, NPCs and objects stay the game's own press; L2 / R2 + Square run the matching
+  crossbar button.
+- A **General** tab first in the settings, holding the wand toggle.
+- The side tabs fit the window's height: arrows with counts for the hidden ones, the wheel scrolls, the
+  picked tab stays in view.
+
+## Journal 0.1.0
+
+- New module: **a diary of each day you play**, per character. The lands you passed through, the quests
+  you finished, your fights and falls, what you looted, earned and made, written in the first person.
+- Read it as a leather book: the days in a list on the left, the day you pick page by page on the right,
+  with quest cards, place plates and cards for the foes you hunted. `/if journal`, a key binding, a button
+  or a wheel slot opens it.
+- Each hunt told as it went (how many it took to get the drop), and moments picked out as toasts and cards.
+- With the Wiki, a quest, creature or item in the book opens its page.
+
+## Immersion 0.2.0
+
+- Needs the **Journal** module now.
+- A power line under your health, and your experience as a ring round your player frame.
+- Level ups, quest progress, the target, the way to your focused quest and zone names take turns in one
+  header under the top of the screen.
+- Recent loot as tiles.
+- The campfire scene left for its own Camp module.
+
+## Fishing 0.1.1
+
+- The fishing view follows Immersion's new header and unit frames.
+
+## Wheel 0.9.1
+
+- The Camping wheel moved to the Camp module.
+
+## Map 0.7.1
+
+- Spoken's place story panel hides while the map is peeked.
+
+## QuestTracker 0.6.4
+
+- The quest cycle goes by distance and angle, so the next quest is the one in front of you.
+
 ## Core 0.10.1
 
 - New icon for the Immersion module (formerly Interface) in the AddOns list and the settings.
