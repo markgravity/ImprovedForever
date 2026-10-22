@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>__TITLE__</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700&amp;family=Cinzel+Decorative:wght@700&amp;family=Marcellus&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.sq-haze{background:radial-gradient(ellipse 60% 45% at 50% 18%, rgba(244,234,210,0.18), rgba(244,234,210,0) 70%), linear-gradient(180deg, rgba(20,14,6,0.55) 0%, rgba(20,14,6,0) 26%, rgba(20,14,6,0) 62%, rgba(20,14,6,0.78) 100%)}
+.sq-pt{background:linear-gradient(135deg,#f0c878,#8a5a1e);transform:rotate(45deg)}
+.sq-title{text-shadow:0 4px 0 rgba(30,18,6,0.55),0 0 28px rgba(0,0,0,0.75)}
+.corner{position:absolute}
+</style>
+</head>
+<body>
+<div style="width: 1080px; height: 1080px; position: relative; overflow: hidden; background: #1c1608; font-family: 'Marcellus', Georgia, serif; color: #f4ead2">
+  <img src="__BG__" alt="" style="position: absolute; inset: 0; width: 1080px; height: 1080px; object-fit: cover">
+  <div class="sq-haze" style="position: absolute; inset: 0"></div>
+
+  __OVERLAYS__
+
+  <div style="position: absolute; left: 44px; top: 44px; right: 44px; bottom: 44px; border: 5px solid #efe6d1"></div>
+  __CORNERS__
+
+  <div style="position: absolute; left: 0; right: 0; top: 64px; display: flex; flex-direction: column; align-items: center; text-align: center">
+    <img src="__LOGO__" alt="" style="width: 124px; height: 124px; filter: drop-shadow(0 4px 10px rgba(0,0,0,0.6))">
+    <div style="margin-top: 2px; font-family: 'Cinzel Decorative', 'Cinzel', serif; font-weight: 700; font-size: 50px; line-height: 1; letter-spacing: 0.02em; color: #ffffc0; text-shadow: 0 2px 0 #1a1208, 0 0 2px #1a1208, 0 0 14px rgba(0,0,0,0.7)">Improved Forever</div>
+    <div style="margin-top: 12px; display: flex; align-items: center; gap: 14px">
+      <span style="width: 90px; height: 2px; background: #efe6d1"></span>
+      <span class="sq-pt" style="width: 12px; height: 12px"></span>
+      <span style="width: 90px; height: 2px; background: #efe6d1"></span>
+    </div>
+  </div>
+
+  <div style="position: absolute; left: 0; right: 0; bottom: 96px; display: flex; flex-direction: column; align-items: center; text-align: center; color: #fffaec">
+    <div class="sq-title" style="font-family: 'Cinzel', serif; font-weight: 600; font-size: 40px; letter-spacing: 0.06em; line-height: 1.1">__KICKER__</div>
+    <div class="sq-title" style="font-family: 'Cinzel', serif; font-weight: 600; font-size: __TITLE_SIZE__px; line-height: 0.92; margin-top: 12px">__HEADLINE__</div>
+    <div style="margin-top: 18px; font-size: 26px; letter-spacing: 0.06em; text-shadow: 0 2px 8px #000">__DESC__</div>
+  </div>
+</div>
+</body>
+</html>

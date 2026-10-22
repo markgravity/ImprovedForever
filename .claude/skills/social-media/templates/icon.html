@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>__TITLE__</title>
+<style>
+body{margin:0}
+.corner{position:absolute}
+.ic-glow{background:radial-gradient(circle at 50% 50%, rgba(255,240,190,0.28) 0%, rgba(255,240,190,0.08) 38%, rgba(0,0,0,0) 60%), radial-gradient(circle at 50% 50%, rgba(0,0,0,0) 45%, rgba(10,6,2,0.6) 100%)}
+</style>
+</head>
+<body>
+<div style="width: 1080px; height: 1080px; position: relative; overflow: hidden; background: #1c1608">
+  <img src="__BG__" alt="" style="position: absolute; inset: 0; width: 1080px; height: 1080px; object-fit: cover">
+  <div class="ic-glow" style="position: absolute; inset: 0"></div>
+  <div style="position: absolute; left: 70px; top: 70px; right: 70px; bottom: 70px; border: 12px solid #efe6d1"></div>
+  __CORNERS__
+  <img src="__GLYPH__" alt="" style="position: absolute; left: __GLYPH_POS__px; top: __GLYPH_POS__px; width: __GLYPH_SIZE__px; height: __GLYPH_SIZE__px; filter: drop-shadow(0 14px 28px rgba(0,0,0,0.7))">
+</div>
+</body>
+</html>
