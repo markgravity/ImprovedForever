@@ -1,5 +1,9 @@
 # Changelog
 
+## Immersion 0.3.1
+
+- Your player and pet models no longer stay on screen when another addon hides the interface during an NPC conversation (DialogueUI).
+
 ## Immersion 0.3.0
 
 - The gamepad bar was reworked: it shows the mouse fishing actions and works with the mouse.
