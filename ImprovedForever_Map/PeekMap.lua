@@ -207,14 +207,26 @@ local function QuestName(id)
     return info and info.title or (C_QuestLog.GetQuestInfo and C_QuestLog.GetQuestInfo(id))
 end
 
+-- Distance (squared) from the player to a quest's objective; unknown is
+-- last in line
+local function QuestDistance(id)
+    local d = C_QuestLog.GetDistanceSqToQuest and C_QuestLog.GetDistanceSqToQuest(id)
+    return type(d) == "number" and d or math.huge
+end
+
 -- The next quest to focus, step -1 / +1 (round the list): the quests with a
--- node on the map, left to right (UpdateLabels keeps the list), else the
--- tracked ones
+-- node on the map, nearest to farthest (UpdateLabels keeps the list), else
+-- the tracked ones, the same way
 local function MoveFocus(step)
     local ids = {}
     for _, id in ipairs(PeekMap.cycle or {}) do ids[#ids + 1] = id end
     if #ids == 0 then
         for i = 1, C_QuestLog.GetNumQuestWatches() do ids[#ids + 1] = C_QuestLog.GetQuestIDForQuestWatchIndex(i) end
+        table.sort(ids, function(a, b)
+            local da, db = QuestDistance(a), QuestDistance(b)
+            if da ~= db then return da < db end
+            return a < b
+        end)
     end
     local n = #ids
     if n == 0 then return end
@@ -356,13 +368,31 @@ local function UpdateLabels()
             PeekMap.Say(("peek: labels: %d pins, %d with a quest, %d nodes on the map, bounds %s"):format(total,
                 withID, #nodes, tostring(bounds.l)))
         end
-        -- (the focus' order: left to right, top to bottom)
+        -- (the focus' order: a loop round the nodes, clockwise on the
+        -- screen (top, right, bottom, left), starting at the quest nearest to
+        -- the player, so R2 walks the loop and L2 walks it back)
         local byPlace = {}
         for i, n in ipairs(nodes) do byPlace[i] = n end
-        table.sort(byPlace, function(a, b)
-            if a.x ~= b.x then return a.x < b.x end
-            return a.y > b.y
-        end)
+        if #byPlace > 1 then
+            local cx, cy = 0, 0
+            for _, n in ipairs(byPlace) do cx, cy = cx + n.x, cy + n.y end
+            cx, cy = cx / #byPlace, cy / #byPlace
+            for _, n in ipairs(byPlace) do
+                n.angle = math.atan2(n.y - cy, n.x - cx) % (2 * math.pi)
+            end
+            table.sort(byPlace, function(a, b)
+                if a.angle ~= b.angle then return a.angle > b.angle end
+                return a.id < b.id
+            end)
+            local first, best = 1, math.huge
+            for i, n in ipairs(byPlace) do
+                local d = QuestDistance(n.id)
+                if d < best then first, best = i, d end
+            end
+            local rotated = {}
+            for i = 0, #byPlace - 1 do rotated[i + 1] = byPlace[(first - 1 + i) % #byPlace + 1] end
+            byPlace = rotated
+        end
         PeekMap.cycle = {}
         for i, n in ipairs(byPlace) do PeekMap.cycle[i] = n.id end
         table.sort(nodes, function(a, b)
