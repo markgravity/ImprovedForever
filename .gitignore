@@ -6,3 +6,4 @@ dist/
 tools/.lua51/
 tools/.models/
 .codegraph/
+tools/pad/build/

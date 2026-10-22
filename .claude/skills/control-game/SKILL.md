@@ -50,6 +50,16 @@ game": a temporary probe in the module logs lines into `IF.db.<name>Log` on the 
 `WTF/Account/<account>/SavedVariables/ImprovedForever.lua`. Remove the probe and clear its
 table afterwards (`git checkout` the file, `/run ImprovedForever.db.<name>Log=nil`).
 
+## Controller presses (test pad)
+The Mac can't press a pad button from the keyboard, and a virtual pad is ignored by macOS
+(and needs an Apple-restricted entitlement). `tools/pad/` has an ESP32-C3 that pairs as a
+real Bluetooth Xbox controller and takes commands over USB serial:
+`tools/pad/pad.py press LT+SELECT 150`, `pad.py status`, `pad.py "stick L 0 1; wait 800; stick L 0 0"`.
+Set up and flashing: `tools/pad/README.md`. Drafted, not yet run on a board; if `status` is not
+`connected=1` or `/dev/cu.usbmodem*` is missing, the board isn't plugged in or paired: say so
+instead of falling back to the keyboard. The game needs Options > Gamepad (Alpha) > Enable
+Gamepad UI (restore it after the test if it was off).
+
 ## Recipes
 - **Hide-the-UI bugs** (what stays visible): `/run UIParent:SetAlpha(0)`, screenshot, restore
   with `/run UIParent:SetAlpha(1)`. 3D `PlayerModel` frames ignore a parent's alpha: they
