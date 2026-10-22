@@ -82,7 +82,8 @@ IF.AddCommand("chatprobe", function() IN.ChatFade.Probe() end, ": what keeps the
 local DEFAULTS = {
     player = true,      -- the player frame bottom left (and the pet's beside it)
     target = true,      -- the target in the header's place under the top: its health the rule, its name under it
-    cards = true,       -- your pet and party as cards along the bottom
+    minion = true,      -- your pet as a card beside the player frame
+    cards = true,       -- your party as cards along the bottom
     cardFocus = "auto", -- the party cards as your role needs them: auto (your role), tank, healer, off
     chatAbove = true,   -- the chat over the player's frame (in the Edit Mode layout; an experiment)
     hudAuras = true,    -- your buffs and debuffs along the bottom (in the Edit Mode layout; an experiment)
@@ -138,5 +139,6 @@ function IN.Settings()
     -- timelines' bar test's log too)
     settings.chat, settings.auras, settings.camp = nil, nil, nil
     db.timelineBar = nil
+    db.hudLog = nil
     return settings
 end

@@ -498,7 +498,8 @@ end
 -- range a few times a second
 ---------------------------------------------------------------------------
 local function Natives()
-    return { PartyFrame, CompactPartyFrame, PetFrame }
+    local s = IN.Settings()
+    return { { PartyFrame, s.cards }, { CompactPartyFrame, s.cards }, { PetFrame, s.minion } }
 end
 
 -- The member to see to, their button lit (Watch, as their buttons show):
@@ -565,10 +566,11 @@ end
 local function Watch()
     if not IF.db then return end
     local on = IN.Settings().cards
+    local minionOn = IN.Settings().minion
     local edit = UF.EditMode()
-    for _, native in ipairs(Natives()) do
-        IF.Focus.Fade(native, on and not edit)
-        UF.Cover(native, on and not edit)
+    for _, n in ipairs(Natives()) do
+        IF.Focus.Fade(n[1], n[2] and not edit)
+        UF.Cover(n[1], n[2] and not edit)
     end
     local alpha = edit and 0 or 1
     for _, list in ipairs({ minions, party }) do
@@ -579,7 +581,7 @@ local function Watch()
         end
     end
     Highlight()
-    minionLabel:SetShown(on and alpha > 0 and AnyShown(minions))
+    minionLabel:SetShown(minionOn and alpha > 0 and AnyShown(minions))
     partyLabel:SetShown(on and alpha > 0 and AnyShown(party))
 end
 
@@ -777,7 +779,7 @@ function PC.Apply()
     pending = nil
     if previewing then return end
     local on = IN.Settings().cards
-    for _, b in ipairs(minions) do UF.Watched(b, on) end
+    for _, b in ipairs(minions) do UF.Watched(b, IN.Settings().minion) end
     for i, b in ipairs(party) do
         Driven(b, on, "[group:raid] hide; [@party" .. i .. ",exists] show; hide")
     end

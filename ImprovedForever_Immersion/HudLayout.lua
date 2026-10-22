@@ -24,10 +24,26 @@ local IN = IF.Interface
 local HL = {}
 IN.HudLayout = HL
 
+-- Two layouts of ours: the game keeps its controller layouts apart from
+-- the keyboard and mouse ones (one made while on the pad can't be picked
+-- with the mouse, and the other way round), so each mode gets a copy of
+-- its own preset
 local LAYOUT_NAME = "Improved Forever"
--- (each piece's place's version: a layout placed at an older one is placed
--- again)
-local VERSION = { chat = 4, auras = 2, cooldowns = 1 }
+local MOUSE_LAYOUT_NAME = "Improved Forever (Mouse)"
+
+local function PadMode()
+    -- (the game's Gamepad UI, Options > Gamepad: not the pad's input being
+    -- enabled, which stays on while the mouse plays)
+    return IF.Input and IF.Input.PadEnabled and IF.Input.PadEnabled() and true or false
+end
+
+local function LayoutName()
+    return PadMode() and LAYOUT_NAME or MOUSE_LAYOUT_NAME
+end
+-- (each piece's place's version: a layout placed at another one is placed
+-- again; the chat's carries the player frame's top it was placed over, so a
+-- taller frame moves it up)
+local VERSION = { chat = 5 + IN.UnitFrames.PLAYER_TOP / 1000, auras = 2, cooldowns = 1 }
 
 local EDIT_BOX_ROOM = 34
 local AURA_GAP = 20          -- (after the minion card)
@@ -78,15 +94,16 @@ end
 local function Changeable(info)
     local active = info.layouts[info.activeLayout]
     if not active or not IsPreset(active) then return active end
+    local name = LayoutName()
     for i, layout in ipairs(info.layouts) do
-        if not IsPreset(layout) and layout.layoutName == LAYOUT_NAME then
+        if not IsPreset(layout) and layout.layoutName == name then
             info.activeLayout = i
             return layout
         end
     end
     local copy = CopyTable(active)
     copy.layoutType = Enum.EditModeLayoutType.Account
-    copy.layoutName = LAYOUT_NAME
+    copy.layoutName = name
     info.layouts[#info.layouts + 1] = copy
     info.activeLayout = #info.layouts
     return copy
@@ -220,7 +237,7 @@ function HL.Apply()
     local todo = {}
     local placed = not IsPreset(active) and s.hudPlaced[active.layoutName] or {}
     for piece, on in pairs(wanted) do
-        if on and (placed[piece] or 0) < VERSION[piece] then todo[#todo + 1] = piece end
+        if on and placed[piece] ~= VERSION[piece] then todo[#todo + 1] = piece end
     end
     if #todo == 0 then return end
     active = Changeable(info)
