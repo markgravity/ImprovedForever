@@ -25,7 +25,7 @@
 - A power line under your health, and your experience as a ring round your player frame.
 - Level ups, quest progress, the target, the way to your focused quest and zone names take turns in one
   header under the top of the screen.
-- Recent loot as tiles.
+- Recent loot as tiles (an experiment, off by default).
 - The campfire scene left for its own Camp module.
 
 ## Fishing 0.1.1
