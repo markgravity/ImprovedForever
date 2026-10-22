@@ -267,6 +267,21 @@ local function Border(frame)
     end
 end
 
+-- A model draws at its own alpha, whatever its parents' (UIParent faded to
+-- 0 by DialogueUI's hidden UI left it standing): each one takes its parent's
+-- effective alpha
+local models = {}
+local modelAlpha = CreateFrame("Frame")
+modelAlpha:SetScript("OnUpdate", function()
+    for _, m in ipairs(models) do
+        local alpha = m:GetParent():GetEffectiveAlpha()
+        if alpha ~= m.parentAlpha then
+            m.parentAlpha = alpha
+            m:SetAlpha(alpha)
+        end
+    end
+end)
+
 local function Avatar(parent, w, h)
     local a = CreateFrame("Frame", nil, parent)
     a:SetSize(w, h)
@@ -280,6 +295,7 @@ local function Avatar(parent, w, h)
     a.portrait:SetSize(side, side)
     a.portrait:SetPoint("CENTER", 0, 4)
     a.model = CreateFrame("PlayerModel", nil, a)
+    models[#models + 1] = a.model
     a.model:SetPoint("TOPLEFT", AVATAR_INSET, -AVATAR_INSET - STRIP_H)
     a.model:SetPoint("BOTTOMRIGHT", -AVATAR_INSET, AVATAR_INSET)
 
