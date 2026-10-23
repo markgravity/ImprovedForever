@@ -23,7 +23,6 @@ local NAME_SIZE = 13
 local STEP = 0.1
 local OTHER_SCALE, OTHER_ALPHA = 0.8, 0.85
 local FADE_SPEED = 8                    -- (how fast alpha and size ease)
-local FLY, RISE = 0.4, 45               -- (seconds, and how far up: your target's plate leaving)
 
 ---------------------------------------------------------------------------
 -- One plate of ours (pooled)
@@ -90,14 +89,6 @@ local function Draw(p)
     p:SetShown(p.alpha > 0.01)
 end
 
--- Your target's plate leaving for the header: it can't be flown there (its
--- place on screen can't be read: measuring the game's plate, or a frame
--- anchored to it, is blocked and taints), so it rises toward the top and
--- fades as the header's words come in.
-local function Fly(p)
-    p.fly = { t = 0, dx = 0, dy = RISE }
-end
-
 local function Refresh(p)
     local unit = p.unit
     if not unit then return end
@@ -120,8 +111,6 @@ local function Refresh(p)
     -- stays, full size)
     local target = Flag(IsTarget, unit)
     local inHeader = target and IN.Settings().target and not UF.EditMode()
-    if inHeader and not p.inHeader then Fly(p) end
-    p.inHeader = inHeader
     p.goalAlpha = inHeader and 0 or target and 1 or OTHER_ALPHA
     p.goalScale = inHeader and OTHER_SCALE * 0.85 or target and 1 or OTHER_SCALE
     p:SetFrameLevel(target and 20 or 10)
@@ -171,8 +160,6 @@ local function Add(unit)
     local p = table.remove(pool) or Build()
     a.ours = p
     p.unit = unit
-    p.game = game
-    p.fly, p.inHeader = nil, nil
     p.alpha = nil
     HideGame(game, true)
     p:ClearAllPoints()
@@ -210,25 +197,6 @@ end)
 
 local function Ease(p, elapsed)
     if not p.alpha then return end
-    local f = p.fly
-    if f then
-        f.t = f.t + elapsed
-        local k = math.min(1, f.t / FLY)
-        local e = HS.Ease(k, 0, 1)
-        p:ClearAllPoints()
-        p:SetPoint("CENTER", p.game, "CENTER", f.dx * e, f.dy * e)
-        p.scale = p.goalScale + (1.25 - p.goalScale) * (1 - math.abs(2 * e - 1))
-        p.alpha = OTHER_ALPHA * (1 - HS.Ease(k, 0.5, 1))
-        Draw(p)
-        if k >= 1 then
-            p.fly = nil
-            p:ClearAllPoints()
-            p:SetPoint("CENTER", p.game, "CENTER", 0, 0)
-            p.alpha, p.scale = 0, p.goalScale
-            Draw(p)
-        end
-        return
-    end
     local k = math.min(1, elapsed * FADE_SPEED)
     p.alpha = p.alpha + (p.goalAlpha - p.alpha) * k
     p.scale = p.scale + (p.goalScale - p.scale) * k
