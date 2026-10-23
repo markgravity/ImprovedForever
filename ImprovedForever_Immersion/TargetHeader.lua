@@ -210,6 +210,8 @@ local function NameplateColor(unit)
     return 1, 0, 0
 end
 
+TH.NameplateColor = NameplateColor
+
 -- What it is: the nameplate's icon and the diamond's rim
 local CLASSIFICATION = {
     worldboss = { icon = "nameplates-icon-elite-gold", tint = { 1, 0.6, 0.25 } },

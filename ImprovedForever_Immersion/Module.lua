@@ -133,6 +133,7 @@ end
 
 function IN.Settings()
     local db = IF.db
+    db.plateLog = nil           -- (the nameplate probe's log, done)
     db.interface = db.interface or {}
     local settings = db.interface
     for key, value in pairs(DEFAULTS) do

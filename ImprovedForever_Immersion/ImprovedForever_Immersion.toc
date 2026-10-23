@@ -16,6 +16,7 @@ HeaderSlot.lua
 UnitFrames.lua
 Breath.lua
 TargetHeader.lua
+TargetPlate.lua
 PartyCards.lua
 IconColors.lua
 PlayerCast.lua
