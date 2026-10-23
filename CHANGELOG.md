@@ -1,9 +1,42 @@
 # Changelog
 
-## Immersion (next)
+## Core 0.12.0
+
+- **Double-tap the touchpad corners** to run a window action; the bind editor lists them and the layer text shows the pad's glyphs.
+- The touchpad glyph keeps its proportions.
+
+## Auction 0.8.0
+
+- The Buy and Owned pages are redesigned as a scene: a grid of items on Buy, capsule status tags on Owned.
+- Immersion has a toggle for the auction house scene; switch it off to get the classic window back.
+
+## Immersion 0.4.0
 
 - A first-time tour in the middle of the screen, in the header's look: the pages' names on a gold rule, revealed one by one with a diamond showing the current page's picture, the page's example in the middle made of the real party cards, action bar tiles, recent loot tiles, cast line and header. A diamond button on the rule reveals the next page; Close under the words (B with the pad, Esc). `/if tour` plays it again.
 - The Immersion settings call the spell diamonds the action bar: "Action bar style" (was "Tile style") and "Cooldowns beside the action bar".
+- Nameplates are drawn in the Immersion look, with a toggle in the settings. The target's plate fades on the mob and rises toward the header.
+- Your debuffs show under the nameplates, with a toggle.
+- A breath bar on your player frame while you are underwater, in place of the XP ring.
+- Recent loot tiles are marked with badges for upgrades, quest items, recipes, auction items, rarities and collectibles.
+- The target's name always shows at its in-combat size.
+- Recent loot waits for the end of combat to refresh.
+- Double-tap the touchpad corners works on the recent loot tiles.
+
+## Wheel 0.10.0
+
+- Recent loot tiles are marked with badges for upgrades, quest items, recipes, auction items, rarities and collectibles.
+
+## Fishing 0.2.1
+
+- Double-tap the touchpad corners to act on the collection window.
+
+## Junk 0.7.3
+
+- Double-tap the touchpad corners to act on the Junk and Destroy windows.
+
+## Wiki 0.8.1
+
+- Double-tap the touchpad corners to act on the Wiki window.
 
 ## Immersion 0.3.1
 
