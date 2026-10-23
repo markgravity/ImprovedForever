@@ -19,6 +19,12 @@ local ITEMS = {
             .. "A step, a jump, a cast or a fight: all of it back as it was, your camera too.",
     }, Toggle("scene", "Campfire scene")),
     Item({
+        key = "logout", group = "scene", label = "Logout scene",
+        tip = "Logging out or quitting (the game's countdown): the same cutscene, the camp breaking up. "
+            .. "The time left until you leave, a few last lines, the picture fading to black as it ends. "
+            .. "The game's popup stays to cancel; a step or cancelling brings everything back.",
+    }, Toggle("logout", "Logout scene")),
+    Item({
         key = "recap", group = "scene", label = "Day recap",
         tip = "In the scene, while the camp's benefits count down: your day so far told back, a line at a "
             .. "time, word by word, from the Journal module's diary. Off, or without the Journal: what you "

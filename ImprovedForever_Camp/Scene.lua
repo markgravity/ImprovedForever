@@ -19,6 +19,11 @@
 -- (kept per character until then, IF.charDB.campCamSaved, so a /reload or
 -- a logout puts them back). The Welcoming Campfire coming and going while
 -- you sit (it does, each minute) changes nothing.
+-- Logging out or quitting (the game's 20 second countdown, its "CAMP" /
+-- "QUIT" popup left in place to cancel) is the same scene: the camp
+-- breaking up. The countdown reads "Leaving in", your day is told back,
+-- and the picture fades to black over the last seconds. Cancelled (the
+-- popup, a step, LOGOUT_CANCEL): all of it back, as above.
 local IF = ImprovedForever
 local C = IF.Camp
 
@@ -126,6 +131,14 @@ end
 -- /if camptest [seconds]: the scene without a fire, a countdown of its
 -- own (20 seconds) then these benefits; again, or getting up: out
 local test
+-- Logging out / quitting: { endAt, quit } while its countdown runs; pending
+-- until the game's popup shows (an inn or city logs out at once, no
+-- countdown: no scene)
+local logout, pending
+local LOGOUT_POPUP = { [false] = "CAMP", [true] = "QUIT" }
+local LOGOUT_TIME, LOGOUT_FADE = 20, 2.5 -- (the countdown unless the popup says; the black over its last seconds)
+local LOGOUT_WORDS = { "Putting out the fire", "Rolling up the bedroll", "Shouldering the pack",
+    "One last look at the stars", "The road will keep", "Until the next fire" }
 -- (every Tier 1 camp object's line, as the Camp Benefits tooltip words
 -- it, at the guides' top values)
 local TEST_BENEFITS = {
@@ -148,6 +161,10 @@ end
 
 -- (the Welcoming Campfire's time left: nil without it)
 local function Left()
+    if logout then
+        local left = logout.endAt - GetTime()
+        return left > 0 and left or nil
+    end
     if test then
         local left = test.endAt - GetTime()
         return left > 0 and left or nil
@@ -212,7 +229,32 @@ local function Clean(text)
     return (tostring(text):gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""):gsub("|T.-|t", "")
         :gsub("\226\128\156", '"'):gsub("\226\128\157", '"'):gsub("\226\128\152", "'"):gsub("\226\128\153", "'"))
 end
-local function Recap()
+-- The opening line from what the first sentence told is about (the first
+-- of these whose words it holds; else the caller's): the same story always
+-- opens the same way
+local OPENERS_BY = {
+    { "I fell", "spirit healers", "bested by", "cut down by", "I died", "My corpse" }, "The road took its toll on me...",
+    { "fought", "cut down", "slew", "bested", "fell to my blade", "stood my ground", "lost count" }, "Steel drawn, blood on the road...",
+    { "quest", "finished", "completed", "turned in", "accepted", "was asked", "task" }, "Another task behind me...",
+    { "dove", "swam", "depths" }, "Down beneath the waves...",
+    { "sold", "merchant", "coin", "gold", "silver", "copper", "bought" }, "Counting what the road paid...",
+    { "rare find", "among my finds", "came away with", "I found", "I looted" }, "A find worth remembering...",
+    { "grew stronger", "reached level", "level" }, "Stronger than when I began...",
+    { "woke", "rose early", "lay down", "rest" }, "From the first light...",
+    { "road led", "came upon", "made my way", "arrived", "set out", "crossed", "flew" }, "The road led on...",
+}
+local function OpenerFor(sentence, fallback)
+    local text = (sentence or ""):lower()
+    for i = 1, #OPENERS_BY, 2 do
+        for _, word in ipairs(OPENERS_BY[i]) do
+            if text:find(word:lower(), 1, true) then return OPENERS_BY[i + 1] end
+        end
+    end
+    return fallback
+end
+
+local function Recap(count, opener)
+    count = count or RECAP
     local J = IF.Journal
     if not (J and J.Write and J.Days and J.Day) then return nil end
     local ok, lines = pcall(function()
@@ -227,13 +269,23 @@ local function Recap()
                 end
             end
             for i = #day, 1, -1 do table.insert(all, 1, day[i]) end
-            if #all >= RECAP then break end
+            if #all >= count then break end
         end
-        local out = { "Looking back on the road..." }
-        for i = math.max(1, #all - RECAP + 1), #all do out[#out + 1] = all[i] end
+        local first = math.max(1, #all - count + 1)
+        local out = { OpenerFor(all[first], opener or "Looking back on the road...") }
+        for i = first, #all do out[#out + 1] = all[i] end
         return #out > 1 and out or nil
     end)
     return ok and lines or nil
+end
+
+-- Logging out: the same opening every time, then the last LOGOUT_RECAP
+-- sentences of the Journal's latest day (what just happened), the fixed
+-- lines when there's no Journal or nothing written. nil: not logging out.
+local LOGOUT_RECAP = 2
+local function LogoutLines()
+    if not logout then return nil end
+    return Recap(LOGOUT_RECAP, "Breaking camp, the day behind me...") or LOGOUT_WORDS
 end
 
 ---------------------------------------------------------------------------
@@ -383,6 +435,60 @@ clock:SetPoint("BOTTOMRIGHT")
 local label = Text(card, 13, 0.85, 0.82, 0.76)
 label:SetPoint("BOTTOMRIGHT", clock, "TOPRIGHT", 0, 2)
 label:SetText("Benefits in")
+-- (logging out: how to cancel, under the clock; the pad's own glyph with the pad)
+local hint = Text(card, 14, 0.85, 0.82, 0.76)
+hint:SetPoint("TOPRIGHT", clock, "BOTTOMRIGHT", 0, -6)
+hint:Hide()
+-- (logging out with the mouse: the popup's buttons as ours, top right, over the bar; its
+-- functions, not a click on the game's hidden ones. In a frame of our own, above the HUD)
+local actions = CreateFrame("Frame", nil, UIParent)
+actions:SetFrameStrata("DIALOG")
+actions:SetSize(240, 30)
+actions:SetPoint("TOPRIGHT", UIParent, "TOPRIGHT", -30, -34)
+actions:Hide()
+-- (flat, dark, thin gold rule, the scene's own face: lit when the mouse is over)
+local function ActionButton(text, run)
+    local b = CreateFrame("Button", nil, actions)
+    b:SetSize(112, 30)
+    local fill = b:CreateTexture(nil, "BACKGROUND")
+    fill:SetAllPoints()
+    fill:SetColorTexture(0, 0, 0, 0.45)
+    local rules = {}
+    for _, p in ipairs({ { "TOPLEFT", "TOPRIGHT", true }, { "BOTTOMLEFT", "BOTTOMRIGHT", true },
+        { "TOPLEFT", "BOTTOMLEFT", false }, { "TOPRIGHT", "BOTTOMRIGHT", false } }) do
+        local r = b:CreateTexture(nil, "BORDER")
+        r:SetColorTexture(1, 0.82, 0.45, 1)
+        r:SetPoint(p[1])
+        r:SetPoint(p[2])
+        if p[3] then r:SetHeight(1) else r:SetWidth(1) end
+        rules[#rules + 1] = r
+    end
+    local face = b:CreateFontString(nil, "OVERLAY")
+    if not face:SetFont(FONT, 16, "") then face:SetFont(STANDARD_TEXT_FONT, 16, "") end
+    face:SetPoint("CENTER", 0, 1)
+    face:SetShadowOffset(1, -1)
+    face:SetShadowColor(0, 0, 0, 1)
+    face:SetText(text)
+    local function Light(on)
+        fill:SetColorTexture(1, 0.82, 0.45, on and 0.18 or 0)
+        if not on then fill:SetColorTexture(0, 0, 0, 0.45) end
+        for _, r in ipairs(rules) do r:SetAlpha(on and 0.95 or 0.45) end
+        face:SetTextColor(1, on and 0.94 or 0.82, on and 0.8 or 0.55)
+    end
+    Light(false)
+    b:SetScript("OnEnter", function() Light(true) end)
+    b:SetScript("OnLeave", function() Light(false) end)
+    b:SetScript("OnClick", function() pcall(run) end)
+    return b
+end
+local cancelButton = ActionButton("Cancel", function()
+    pcall(CancelLogout)
+    C.Leave() -- (the scene out at once; the game's event may come late or not at all)
+end)
+cancelButton:SetPoint("RIGHT")
+local exitButton = ActionButton("Exit now", function() ForceQuit() end)
+exitButton:SetPoint("RIGHT", cancelButton, "LEFT", -8, 0)
+
 local title = Text(card, 18, 1, 0.82, 0.45)
 title:SetPoint("BOTTOMRIGHT", label, "TOPRIGHT", 0, 6)
 title:SetText(WELCOMING)
@@ -786,8 +892,36 @@ local function StepTexts(dt)
     StepItems(dt)
 end
 
+-- (the card's words: the fire's, or the camp breaking up)
+local function CardWords()
+    local pad = IF.Input and IF.Input.Pad and IF.Input.Pad()
+    hint:SetShown(logout ~= nil and pad and true or false)
+    actions:SetShown(logout ~= nil and not pad)
+    exitButton:SetShown(logout ~= nil and logout.quit and true or false)
+    if logout then
+        title:SetText(logout.quit and "Exiting the game" or "Logging out")
+        label:SetText("Leaving in")
+        -- (the pad: the game's popup, hidden under ours: quit has "Exit now" (A) as well as Cancel (B))
+        local no = pad and IF.GlyphAtlas and IF.GlyphAtlas("B")
+        local yes = pad and IF.GlyphAtlas and IF.GlyphAtlas("A")
+        local cancel = no and ("|A:" .. no .. ":18:18|a Cancel") or "Cancel"
+        if logout.quit and yes then
+            hint:SetText("|A:" .. yes .. ":18:18|a Exit now     " .. cancel)
+        else
+            hint:SetText(no and ("Press |A:" .. no .. ":18:18|a to cancel") or "Press Esc to cancel")
+        end
+    else
+        title:SetText(WELCOMING)
+        label:SetText("Benefits in")
+    end
+end
+
 local function Refresh()
     local left = Left()
+    if logout then
+        if left then clock:SetText(Format(left)) end
+        return
+    end
     local rewards, expires = C.Rewards()
     if not given and expires and (not benefitsAt or expires > benefitsAt + 1) and rewards and #rewards > 0 then
         given = true
@@ -1014,7 +1148,7 @@ end
 local order = {}
 local function NextShot()
     if #order == 0 then
-        for i = 2, #SHOTS do order[#order + 1] = i end
+        for i = 1, #SHOTS do order[#order + 1] = i end
         for i = #order, 2, -1 do
             local j = math.random(i)
             order[i], order[j] = order[j], order[i]
@@ -1023,6 +1157,11 @@ local function NextShot()
     end
     return table.remove(order, 1)
 end
+
+-- (the scene opens on any of the level shots, not always the same: the
+-- ones looking steeply up or down over you open nothing well)
+local OPENERS = { 1, 2, 4, 5, 6, 7, 9, 10, 11 }
+local function FirstShot() return OPENERS[math.random(#OPENERS)] end
 
 local function Shot(i)
     shot, shotT = i, 0
@@ -1063,23 +1202,46 @@ local function Enter()
     rewards, benefitsAt = C.Rewards()
     -- (a test's benefits are new however they start)
     if test then benefitsAt = nil end
-    wordList, wordIndex, wordAt = (C.Settings().recap and Recap()) or Words(rewards), 1, 0
+    wordList, wordIndex, wordAt = LogoutLines() or (C.Settings().recap and Recap()) or Words(rewards), 1, 0
     SetLine(wordList[1])
     given, cardA, sumA = false, 0, 0
+    CardWords()
     Refresh()
     stage:Show()
     CameraSave()
     if C_CVar and C_CVar.SetTempCVar then pcall(C_CVar.SetTempCVar, CENTERED, "0") end
     SetCVarSafe("test_cameraDynamicPitch", 1)
     wipe(order)
-    Shot(1)
+    Shot(FirstShot())
     ChatOn(true)
+end
+
+-- The game's logout / quit popup drawn at alpha 0 while the scene runs (an
+-- animation of ours, never its properties): ours says how to cancel, the
+-- popup still takes the pad's cancel and Esc underneath
+local popupFaded = {}
+local function PopupFade(on)
+    if on then
+        for i = 1, 4 do
+            local f = rawget(_G, "StaticPopup" .. i)
+            local which = f and f:IsShown() and f.which
+            if (which == LOGOUT_POPUP[false] or which == LOGOUT_POPUP[true]) and not popupFaded[f] then
+                IF.Focus.Fade(f, true, 0)
+                popupFaded[f] = true
+            end
+        end
+    else
+        for f in pairs(popupFaded) do IF.Focus.Fade(f, false) end
+        wipe(popupFaded)
+    end
 end
 
 -- (fast: a fight; the camera back at once, no black)
 local function Leave(fast)
     if phase ~= "in" and phase ~= "on" then return end
-    leftAt, away, test = GetTime(), 0, nil
+    leftAt, away, test, logout, pending = GetTime(), 0, nil, nil, nil
+    PopupFade(false)
+    actions:Hide()
     ChatOn(false)
     if fast then
         cut = nil
@@ -1099,6 +1261,7 @@ local function Leave(fast)
     end)
 end
 
+C.Leave = function(...) return Leave(...) end
 function C.Active() return phase == "in" or phase == "on" end
 
 stage:SetScript("OnUpdate", function(_, dt)
@@ -1130,10 +1293,19 @@ stage:SetScript("OnUpdate", function(_, dt)
     end
     PlaceBars(bars)
     texts:SetAlpha(textA)
+    actions:SetAlpha(textA)
     if phase == "in" or phase == "on" then
         StepTexts(dt)
         shotT = shotT + dt
-        if shotT >= SHOTS[shot].time and not cut then Shot(NextShot()) end
+        -- (logging out: the picture to black over the last seconds, no more cuts)
+        local ending = logout and logout.endAt - GetTime() < LOGOUT_FADE + CUT_UP
+        if ending then
+            if not cut then
+                black:SetAlpha(Smooth(1 - (logout.endAt - GetTime()) / LOGOUT_FADE))
+            end
+        elseif shotT >= SHOTS[shot].time and not cut then
+            Shot(NextShot())
+        end
     end
 end)
 
@@ -1144,10 +1316,54 @@ local function Moving()
     return (GetUnitSpeed("player") or 0) > 0 or (IsFalling and IsFalling()) or false
 end
 
+-- (the game's countdown popup showing: nil without the API, then taken as shown)
+local function PopupShown(quit)
+    if not StaticPopup_Visible then return true end
+    local ok, shown = pcall(StaticPopup_Visible, LOGOUT_POPUP[quit])
+    return not ok or shown ~= nil and shown ~= false
+end
+
+-- (a logout or quit began: the scene once its popup shows, an inn's instant
+-- one never does)
+local function LogoutStep()
+    if not pending then return end
+    if not PopupShown(pending.quit) then
+        if GetTime() - pending.at > 1.5 then pending = nil end
+        return
+    end
+    if IF.InCombat() or not C.Settings().logout then pending = nil return end
+    if phase and not C.Active() then return end -- (the last scene still going out: next tick)
+    local popup = StaticPopupDialogs and StaticPopupDialogs[LOGOUT_POPUP[pending.quit]]
+    logout = { endAt = GetTime() + (popup and popup.timeout or LOGOUT_TIME), quit = pending.quit }
+    pending, test = nil, nil
+    if C.Active() then
+        -- (a campfire scene already: its card and words turned to the logout's)
+        wordList, wordIndex, wordAt = LogoutLines(), 1, 0
+        SetLine(wordList[1])
+        given = false
+        CardWords()
+        Refresh()
+    else
+        Enter()
+    end
+end
+
 local still = 0
 C.Watcher("camp scene", 0.25, function()
     if not IF.db then return end
+    LogoutStep()
     local on = C.Settings().scene
+    if logout then
+        -- (the countdown's popup gone, or a step: cancelled)
+        -- (past its end the game is logging out: the black stays; a test's end just ends it)
+        if logout.fake and not Left() then return Leave() end
+        if t > GRACE and Left() and (Moving() or not logout.fake and not PopupShown(logout.quit)) then return Leave() end
+        if IF.InCombat() then return Leave(true) end
+        HUD(hudA, phase == "on")
+        PopupFade(true)
+        Refresh()
+        return
+    end
     if C.Active() then
         -- (up: a step or a jump; a fight; the setting off; away from the
         -- fire a while, no Welcoming Campfire either. Not the Welcoming
@@ -1176,8 +1392,22 @@ local events = CreateFrame("Frame")
 events:RegisterEvent("PLAYER_REGEN_DISABLED")
 events:RegisterUnitEvent("UNIT_SPELLCAST_START", "player")
 events:RegisterUnitEvent("UNIT_SPELLCAST_CHANNEL_START", "player")
--- (a fight: at once; a cast gets you up)
-events:SetScript("OnEvent", function(_, event) Leave(event == "PLAYER_REGEN_DISABLED") end)
+events:RegisterEvent("PLAYER_CAMPING")
+events:RegisterEvent("PLAYER_QUITING")
+events:RegisterEvent("LOGOUT_CANCEL")
+-- (a fight: at once; a cast gets you up; a logout or quit begun: the scene
+-- when its popup shows, LOGOUT_CANCEL: out)
+events:SetScript("OnEvent", function(_, event)
+    if event == "PLAYER_CAMPING" or event == "PLAYER_QUITING" then
+        pending = { quit = event == "PLAYER_QUITING", at = GetTime() }
+    elseif event == "LOGOUT_CANCEL" then
+        pending = nil
+        if logout then Leave() end
+    elseif not logout or event == "PLAYER_REGEN_DISABLED" then
+        -- (a cast while logging out doesn't cancel it: the game's own rule decides)
+        Leave(event == "PLAYER_REGEN_DISABLED")
+    end
+end)
 
 function C.Test(seconds)
     if C.Active() then return Leave() end
@@ -1188,6 +1418,17 @@ function C.Test(seconds)
 end
 IF.AddCommand("camptest", function(args) C.Test(tonumber(args[1])) end,
     "[seconds]: try the campfire scene without a fire (again, or a step: out)")
+
+-- /if logouttest [seconds]: the logout scene without logging out (again, or a step: out)
+function C.TestLogout(seconds)
+    if C.Active() then return Leave() end
+    if phase then return end
+    if IF.InCombat() then return IF.Print("Not in a fight.") end
+    logout = { endAt = GetTime() + (seconds or LOGOUT_TIME), fake = true }
+    Enter()
+end
+IF.AddCommand("logouttest", function(args) C.TestLogout(tonumber(args[1])) end,
+    "[seconds]: try the logout scene without logging out (again, or a step: out)")
 
 -- /if campsummary [mine]: the scene straight at its benefits: every camp
 -- object's; mine: yours, from the camp that gave them
