@@ -94,6 +94,11 @@ local ITEMS = {
             .. "the game's own.",
     }, Toggle("nameplates", "Nameplates", function() IN.Nameplates.Apply() end)),
     Item({
+        key = "nameplateDebuffs", group = "top", label = "Nameplate debuffs",
+        tip = "Your debuffs on a mob as small icons under its nameplate, with their time left and stacks. "
+            .. "Needs the nameplates on.",
+    }, Toggle("nameplateDebuffs", "Nameplate debuffs", function() IN.Nameplates.Apply() end)),
+    Item({
         key = "castRange", group = "top", label = "Target range",
         tip = "Out of reach of your longest-range harmful spell, the target's portrait turns grey and its "
             .. "health line faint.",

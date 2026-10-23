@@ -64,6 +64,62 @@ local function Same(other)
 end
 local IsTarget, IsSoft = Same("target"), Same("softinteract")
 
+-- Your debuffs on it, under the line: the game's aura container (filled
+-- by the game itself, so it reads them in a fight too), one per plate of
+-- ours, the unit handed to it.
+local DEBUFF_SIZE, DEBUFF_MAX, DEBUFF_GAP = 16, 5, 2
+
+local function StyleDebuff(b)
+    b:SetSize(DEBUFF_SIZE, DEBUFF_SIZE)
+    local icon = b:CreateTexture(nil, "ARTWORK")
+    icon:SetAllPoints()
+    local count = b:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmall")
+    count:SetPoint("BOTTOMRIGHT", 1, 0)
+    local time = b:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+    time:SetPoint("TOP", b, "BOTTOM", 0, -1)
+    pcall(b.SetIcon, b, icon)
+    pcall(b.SetApplicationCount, b, count)
+    pcall(b.SetDurationText, b, time)
+    local styles = Enum.CustomAuraButtonDispelTypeTextureStyle
+    local border = b:CreateTexture(nil, "OVERLAY")
+    border:SetPoint("CENTER")
+    border:SetSize(DEBUFF_SIZE * 1.2, DEBUFF_SIZE * 1.2)
+    pcall(b.AddDispelTypeTexture, b, border, {
+        style = styles and styles.Border or 0,
+        showWhenHarmful = true, showWithoutDispelType = true,
+    })
+end
+
+-- (nil: this client has none)
+local function AuraList(p)
+    if p.auras ~= nil then return p.auras or nil end
+    p.auras = false
+    if not (AuraContainerSortMethod and AuraContainerSortDirection) then return nil end
+    local ok, c = pcall(CreateFrame, "AuraContainer", nil, p, "CustomAuraContainerTemplate")
+    if not (ok and c) then return nil end
+    pcall(c.AddAuraGroup, c, "debuffs", "HARMFUL|PLAYER", {
+        maxFrameCount = DEBUFF_MAX,
+        sortMethod = AuraContainerSortMethod.Expiration,
+        sortDirection = AuraContainerSortDirection.Reverse,
+        layout = { elementSpacing = DEBUFF_GAP, groupSpacing = 0, elementWidth = DEBUFF_SIZE, elementHeight = DEBUFF_SIZE },
+        initializeFrame = StyleDebuff,
+    })
+    c:SetPoint("TOPLEFT", p, "BOTTOMLEFT", 0, -3)
+    c:Hide()
+    p.auras = c
+    return c
+end
+
+-- (shown for the unit, or hidden: the setting off, or none)
+local function Auras(p, unit)
+    local on = unit and IN.Settings().nameplateDebuffs ~= false
+    local c = (on or p.auras) and AuraList(p)
+    if not c then return end
+    if on then pcall(c.SetUnit, c, unit) end
+    c:SetShown(on and true or false)
+    pcall(c.SetEnabled, c, on and true or false)
+end
+
 local function Level(p, unit)
     local ok, l, r, g, b = pcall(function()
         local v = UnitLevel(unit)
@@ -142,6 +198,7 @@ local function Release(unit)
     active[unit] = nil
     HideGame(a.game, false)
     if a.ours then
+        Auras(a.ours, nil)
         a.ours:Hide()
         a.ours.unit = nil
         pool[#pool + 1] = a.ours
@@ -163,6 +220,7 @@ local function Add(unit)
     p:ClearAllPoints()
     p:SetPoint("CENTER", game, "CENTER", 0, 0)
     Refresh(p)
+    Auras(p, unit)
 end
 
 -- (an error said once, then no more)

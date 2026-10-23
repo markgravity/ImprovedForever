@@ -94,6 +94,7 @@ local DEFAULTS = {
     castBar = true,     -- your casts as a long line over the party cards, filling out from the middle
     breath = true,      -- your breath under water as water filling the player frame, dropping as it runs out
     nameplates = true,  -- the nameplates over mobs in our look: name, health line, level (the game's hidden)
+    nameplateDebuffs = true, -- your debuffs on the mob, under its nameplate (the game fills them, in a fight too)
     castRange = true,   -- the target header greyed while an enemy is out of your reach
     hpLine = true,      -- your health as a bar over the power line
     mpLine = true,      -- your power (mana, rage, energy...) as a bar along the screen's bottom edge
