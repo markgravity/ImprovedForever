@@ -1092,6 +1092,7 @@ B.Add({
     accepts = B.Single,
     specs = function() return B.One(LB.Key()) end,
     set = function(spec) LB.Settings().holdKey = spec or false end,
+    reset = function() LB.Settings().holdKey = nil end,
     click = function(item)
         if LB.Settings().enabled and ItemID(item.link) then OpenFromMouse(item) end
     end,

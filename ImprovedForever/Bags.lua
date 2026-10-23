@@ -144,4 +144,8 @@ B.Add({
         IF.db.bagSort = spec ~= nil
         if spec then IF.SetBagSortKey(spec) else IF.UpdateBagBinding() end
     end,
+    reset = function()
+        IF.db.bagSort = nil
+        IF.UpdateBagBinding()
+    end,
 })

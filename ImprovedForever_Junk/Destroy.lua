@@ -1212,5 +1212,6 @@ B.Add({
         IF.db.bagClean = spec ~= nil
         if spec then IF.Destroy.SetOpenKey(spec) end
     end,
+    reset = function() IF.db.bagClean = nil end,
     run = function(down) if down then OpenByHand() end end,
 })

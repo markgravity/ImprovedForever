@@ -25,6 +25,19 @@ local PAD_STICK = 4       -- StickConfigNameToIndex("Pad") is nil on Forever
 local KEY = "PADBACK"     -- what the game calls a touchpad click
 local MODIFIERS = { "", "SHIFT-", "CTRL-", "ALT-", "CTRL-SHIFT-", "ALT-SHIFT-", "CTRL-ALT-", "CTRL-ALT-SHIFT-" }
 
+-- Double taps: run by the secure click (below) when a corner has one; none
+-- by default now ({ downright = "recentloot" } was one); the Bindings tab
+-- records one (RECORD_DOUBLE)
+touch.DOUBLE_DEFAULTS = {}
+
+-- A corner's press with L2 held, by default (each only once its action's
+-- button is there: the module loaded; "none": the player's choice)
+touch.LAYER_DEFAULTS = {
+    LT = { downright = "recentloot", upright = "questlog", downleft = "professions", upleft = "talents" },
+    RT = { upleft = "journal", upright = "fishcollection", downleft = "wiki" },
+}
+touch.RECORD_DOUBLE = true
+
 touch.REGIONS = { "upleft", "upright", "downleft", "downright" }
 touch.REGION_LABELS = {
     up = "Top", down = "Bottom", left = "Left", right = "Right", centre = "Centre",
@@ -33,7 +46,7 @@ touch.REGION_LABELS = {
 
 -- (top right: the peek map when the Map module is loaded, else the spellbook)
 local DEFAULTS = {
-    upleft = "questlog",
+    upleft = "character",
     upright = function() return IF.PeekMap and "peekmap" or "spellbook" end,
     downleft = "character",
     downright = "bags",
@@ -63,10 +76,55 @@ function touch.GetSettings()
             settings.regions[gone] = nil
         end
     end
+    -- (the top left's earlier default, the quest log, now the Character
+    -- window's: moved once, when it was never changed)
+    if not settings.upleftMoved then
+        settings.upleftMoved = true
+        if settings.regions.upleft == "questlog" then settings.regions.upleft = "character" end
+    end
     for region, action in pairs(DEFAULTS) do
         -- (one that depends on a module: only once every addon has loaded)
         if settings.regions[region] == nil and (type(action) ~= "function" or IsLoggedIn()) then
             settings.regions[region] = type(action) == "function" and action() or action
+        end
+    end
+    -- (a corner's double tap: supported, none made by default for now, nor
+    -- recorded in the Bindings tab: touch.RECORD_DOUBLE)
+    settings.doubles = settings.doubles or {}
+    -- (a corner's press with L2 / R2 held: layers.LT / RT / LTRT[region])
+    settings.layers = settings.layers or {}
+    -- (the doubles made while it was a test (a single click recorded as a
+    -- double, a corner's single stopping for it): given up, once)
+    if settings.doublesReset ~= 2 then
+        settings.doublesReset = 2
+        wipe(settings.doubles)
+    end
+    -- (L2 + bottom left's earlier default, the Journal: now Talents, moved
+    -- once, when it was never changed)
+    if not settings.downleftLTMoved then
+        settings.downleftLTMoved = true
+        if settings.layers.LT and settings.layers.LT.downleft == "journal" then
+            settings.layers.LT.downleft = "talents"
+        end
+    end
+    -- (and then Talents: now Professions, moved once, when never changed)
+    if not settings.downleftLTMoved2 then
+        settings.downleftLTMoved2 = true
+        if settings.layers.LT and settings.layers.LT.downleft == "talents" then
+            settings.layers.LT.downleft = "professions"
+        end
+    end
+    for layer, corners in pairs(touch.LAYER_DEFAULTS) do
+        settings.layers[layer] = settings.layers[layer] or {}
+        for region, action in pairs(corners) do
+            if IsLoggedIn() and settings.layers[layer][region] == nil and IF.Actions.Macro(action) then
+                settings.layers[layer][region] = action
+            end
+        end
+    end
+    for region, action in pairs(touch.DOUBLE_DEFAULTS) do
+        if IsLoggedIn() and settings.doubles[region] == nil and IF.Actions.Macro(action) then
+            settings.doubles[region] = action
         end
     end
     return settings
@@ -118,6 +176,59 @@ function touch.ToggleOff(region)
     return settings.off[region] == true
 end
 
+-- A corner's double tap action (a second tap within a moment of the
+-- first), or nil
+function touch.DoubleOf(region)
+    local action = touch.GetSettings().doubles[region]
+    return IF.Actions.IsBound(action) and action or nil
+end
+
+function touch.SetDouble(region, key)
+    touch.GetSettings().doubles[region] = key or "none"
+    touch.Apply()
+end
+
+-- A corner's press with L1 ("LB"), R1 ("RB"), L2 ("LT"), R2 ("RT") or
+-- several held (in that order: "LBRT"): its action, or nil
+local HELD_NAME = { PADLSHOULDER = "LB", PADRSHOULDER = "RB", PADLTRIGGER = "LT", PADRTRIGGER = "RT" }
+local ORDER = { "LB", "RB", "LT", "RT" }
+touch.LAYERS = {}
+for mask = 1, 15 do
+    local name = ""
+    for i, part in ipairs(ORDER) do
+        if math.floor(mask / 2 ^ (i - 1)) % 2 == 1 then name = name .. part end
+    end
+    touch.LAYERS[#touch.LAYERS + 1] = name
+end
+
+function touch.LayerAction(region, layer)
+    local settings = touch.GetSettings()
+    local action = settings.layers[layer] and settings.layers[layer][region]
+    return IF.Actions.IsBound(action) and action or nil
+end
+
+function touch.SetLayerAction(region, layer, key)
+    local settings = touch.GetSettings()
+    settings.layers[layer] = settings.layers[layer] or {}
+    settings.layers[layer][region] = key or "none"
+    touch.Apply()
+end
+
+-- The layer of a held list ("PADLSHOULDER", "PADRTRIGGER+PADLTRIGGER"), or
+-- nil (nothing held, or a button that makes none)
+function touch.LayerOf(held)
+    local has = {}
+    for key in (held or ""):gmatch("[^%+]+") do
+        if not HELD_NAME[key] then return nil end
+        has[HELD_NAME[key]] = true
+    end
+    local name = ""
+    for _, part in ipairs(ORDER) do
+        if has[part] then name = name .. part end
+    end
+    return name ~= "" and name or nil
+end
+
 function touch.SetAction(region, key)
     touch.GetSettings().regions[region] = key or "none"
     touch.Apply()
@@ -133,6 +244,34 @@ click:SetSize(1, 1)
 click:SetPoint("TOPLEFT", UIParent, "TOPLEFT", -20, 20)
 click:RegisterForClicks("AnyDown", "AnyUp")
 click:SetAttribute("ic-stick", PAD_STICK)
+
+-- A double tap: a second tap within DOUBLE seconds of the first. The secure
+-- click can't tell time, so a plain frame per corner, shown that long after
+-- a tap (from insecure code, fine in combat), tells it
+local DOUBLE = 0.35
+local windows = {}
+for _, region in ipairs(touch.REGIONS) do
+    local w = CreateFrame("Frame", nil, UIParent)
+    w:Hide()
+    w:SetScript("OnUpdate", function(self, elapsed)
+        self.left = self.left - elapsed
+        if self.left <= 0 then self:Hide() end
+    end)
+    -- (the click is the game's once it's over, a window being open: Apply)
+    w:SetScript("OnHide", function()
+        if IF.db and not IF.InCombat() then touch.Apply() end
+    end)
+    SecureHandlerSetFrameRef(click, "win-" .. region, w)
+    windows[region] = w
+end
+
+-- A tap's window is open (a second one runs the double tap's action)
+function touch.DoubleOpen()
+    for _, w in pairs(windows) do
+        if w:IsShown() then return true end
+    end
+    return false
+end
 
 -- Acts on the press or the release, whichever ActionButtonUseKeyDown makes
 -- action buttons fire on, and only once per click (the pad's left and right
@@ -185,8 +324,38 @@ SecureHandlerWrapScript(click, "OnClick", click, [[
         return false
     end
     self:SetAttribute("ic-region", region)
+    self:SetAttribute("ic-twice", nil)
     local macro = self:GetAttribute("ic-macro-" .. region)
+    -- L2 / R2 held: the corner's press of that layer, when it has one (as the
+    -- crossbar's layers: the game's bars read the triggers themselves)
+    local pad = state and state.buttons
+    local lb, rb = self:GetAttribute("ic-lb"), self:GetAttribute("ic-rb")
+    local lt, rt = self:GetAttribute("ic-lt"), self:GetAttribute("ic-rt")
+    if pad then
+        local layer = ((lb and pad[lb]) and "LB" or "") .. ((rb and pad[rb]) and "RB" or "")
+            .. ((lt and pad[lt]) and "LT" or "") .. ((rt and pad[rt]) and "RT" or "")
+        local layered = layer ~= "" and self:GetAttribute("ic-lmacro-" .. layer .. "-" .. region)
+        if layered then
+            self:SetAttribute("ic-region", nil)
+            self:SetAttribute("macrotext", layered)
+            self:SetAttribute("type", "macro")
+            return
+        end
+    end
+    -- A second tap within a moment of the first: the corner's double
+    -- tap's action instead (its window shown by the first, PostClick)
+    local again = self:GetAttribute("ic-dmacro-" .. region)
+    local window = again and self:GetFrameRef("win-" .. region)
+    if window and window:IsShown() then
+        self:SetAttribute("ic-twice", true)
+        self:SetAttribute("macrotext", again)
+        self:SetAttribute("type", "macro")
+        return
+    end
     if not macro then
+        if again then
+            return
+        end
         return false
     end
     -- (the peek map's press opens it, PeekMap.SNIPPET)
@@ -199,6 +368,18 @@ SecureHandlerWrapScript(click, "OnClick", click, [[
 
 click:SetScript("PostClick", function(self, button, down)
     local settings = IF.db and touch.GetSettings()
+    -- (the tap that acted: a window for the second one, or the pair done)
+    local acts = (self:GetAttribute("ic-keydown") == 1) == (down and true or false)
+    local tapped = self:GetAttribute("ic-region")
+    if acts and tapped and windows[tapped] and settings and touch.DoubleOf(tapped) then
+        local w = windows[tapped]
+        if self:GetAttribute("ic-twice") then
+            w:Hide()
+        else
+            w.left = DOUBLE
+            w:Show()
+        end
+    end
     -- (the peek map's corner opened the map: shown as the peek map)
     local region = self:GetAttribute("ic-region")
     if IF.PeekMap and IF.PeekMap.debug then
@@ -273,16 +454,44 @@ function touch.Apply()
     pending = false
     local settings = touch.GetSettings()
     click:SetAttribute("ic-keydown", GetCVarSafe("ActionButtonUseKeyDown") == "0" and 0 or 1)
+    local function PadIndex(button)
+        local index = C_GamePad and C_GamePad.ButtonBindingToIndex and C_GamePad.ButtonBindingToIndex(button)
+        return index and index + 1 or nil
+    end
+    click:SetAttribute("ic-lb", PadIndex("PADLSHOULDER"))
+    click:SetAttribute("ic-rb", PadIndex("PADRSHOULDER"))
+    click:SetAttribute("ic-lt", PadIndex("PADLTRIGGER"))
+    click:SetAttribute("ic-rt", PadIndex("PADRTRIGGER"))
     local keydown = click:GetAttribute("ic-keydown") == 1
     for _, region in ipairs(touch.REGIONS) do
         local off = touch.IsOff(region)
         local action = settings.regions[region]
         -- The peek map: open while the pad is held (where actions run on
         -- the press; else each click opens / closes it)
-        local peek = action == "peekmap" and keydown and not off
+        -- (a corner with a double tap keeps its single one: a secure press can't
+        -- be held back to see whether a second follows; as the fishing pole's
+        -- R2, the second tap first undoes the first's)
+        local double = touch.DoubleOf(region)
+        local peek = action == "peekmap" and keydown and not off and not double
         click:SetAttribute("ic-off-" .. region, off or nil)
         click:SetAttribute("ic-macro-" .. region, not off and touch.Macro(action) or nil)
         click:SetAttribute("ic-peek-" .. region, peek or nil)
+        for _, layer in ipairs(touch.LAYERS) do
+            local held = touch.LayerAction(region, layer)
+            click:SetAttribute("ic-lmacro-" .. layer .. "-" .. region, not off and held and touch.Macro(held) or nil)
+        end
+        -- (its double tap's action, after what undoes the first tap's: a window
+        -- toggled again, a cast stopped (Fishing.lua's lure does the same))
+        local dmacro = not off and double and touch.Macro(double) or nil
+        if dmacro then
+            local single = touch.Macro(action)
+            if single and IF.Actions.IsWindow(action) and action ~= "peekmap" then
+                dmacro = single .. "\n" .. dmacro
+            elseif type(action) == "string" and action:match("^spell:") then
+                dmacro = "/stopcasting\n" .. dmacro
+            end
+        end
+        click:SetAttribute("ic-dmacro-" .. region, dmacro)
     end
     if WorldMapFrame then
         click:SetFrameRef("map", WorldMapFrame)
@@ -299,7 +508,7 @@ function touch.Apply()
     -- window of its open for its own click to focus; through combat whatever
     -- is open, as the other world bindings. Or the peek map has it: the
     -- pad's release closes it)
-    local free = not WindowsShown() or UnitAffectingCombat("player")
+    local free = not WindowsShown() or UnitAffectingCombat("player") or touch.DoubleOpen()
     local inGame = (IF.Binds.InGame() and free) or (IF.PeekMap and IF.PeekMap.IsPeeking())
     local ours = settings.enabled ~= false and IF.PadStyle() == "Shapes"
     if ours and not panelOpen and inGame then

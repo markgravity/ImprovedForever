@@ -117,14 +117,34 @@ end
 -- Presses: a spec, or a touchpad corner ("TOUCH:upleft")
 ---------------------------------------------------------------------------
 local function CornerOf(press)
-    return press and press:match("^TOUCH:(%a+)$")
+    return press and press:match("^TOUCH:(%a+)")
 end
+
+-- (a corner's double tap press: "TOUCH:downright:double"; with L2 / R2 held:
+-- "TOUCH:downright:LT")
+local function IsDoubleTap(press)
+    return press ~= nil and press:match(":double$") ~= nil
+end
+
+local function LayerOfPress(press)
+    return press and press:match(":(%u+)$")
+end
+local PART_TEXT = { LB = "L1", RB = "R1", LT = "L2", RT = "R2" }
+local LAYER_TEXT = setmetatable({}, { __index = function(t, layer)
+    local parts = {}
+    for part in layer:gmatch("%u%u") do parts[#parts + 1] = PART_TEXT[part] or part end
+    local text = table.concat(parts, " + ")
+    t[layer] = text
+    return text
+end })
 
 -- "L1 + R3" (with glyphs at size), a corner: the touchpad's, and which
 local function PressText(press, size)
     local region = CornerOf(press)
     if region then
         return B.Text("PADBACK", size) .. "  |cff9d917a·|r  " .. touch.REGION_LABELS[region]
+            .. (IsDoubleTap(press) and "  |cff9d917a(double tap)|r" or "")
+            .. (LayerOfPress(press) and ("  |cff9d917a(" .. LAYER_TEXT[LayerOfPress(press)] .. " held)|r") or "")
     end
     return B.Text(press, size)
 end
@@ -148,6 +168,12 @@ local function ActionPresses()
         for _, region in ipairs(touch.REGIONS) do
             local action = touch.GetSettings().regions[region]
             if touch.IsBound(action) then add(action, "TOUCH:" .. region) end
+            local twice = touch.DoubleOf(region)
+            if twice then add(twice, "TOUCH:" .. region .. ":double") end
+            for _, layer in ipairs(touch.LAYERS) do
+                local held = touch.LayerAction(region, layer)
+                if held then add(held, "TOUCH:" .. region .. ":" .. layer) end
+            end
         end
     end
     return map
@@ -158,7 +184,7 @@ local function PressesOf(e, map)
     if not e then return {} end
     if e.def then
         -- (a binding that can go on a touchpad corner too, def.corner: the corner is its press)
-        if not (e.def.corner and HasTouchpad()) then return e.def.specs() end
+        if not ((e.def.corner or IF.Actions.IsWindow(e.def.id)) and HasTouchpad()) then return e.def.specs() end
         local list = {}
         for _, spec in ipairs(e.def.specs()) do list[#list + 1] = spec end
         for _, press in ipairs((map or ActionPresses())[e.def.id] or {}) do list[#list + 1] = press end
@@ -492,7 +518,10 @@ local function TakeOff(action, keep)
     for _, press in ipairs(ActionPresses()[action] or {}) do
         if press ~= keep then
             local region = CornerOf(press)
-            if region then touch.SetAction(region, "none") else B.SetAction(press, nil) end
+            if region and LayerOfPress(press) then touch.SetLayerAction(region, LayerOfPress(press), "none")
+            elseif region and IsDoubleTap(press) then touch.SetDouble(region, "none")
+            elseif region then touch.SetAction(region, "none")
+            else B.SetAction(press, nil) end
         end
     end
 end
@@ -545,17 +574,28 @@ end
 
 -- An action onto a touchpad corner (the corner turned on), moved from
 -- where it was
-function P:BindCorner(region, e, confirmed)
-    local from = touch.GetSettings().regions[region]
-    if from == e.action then return menu.Toast((e.name or "") .. " is on " .. PressText("TOUCH:" .. region) .. " already") end
+function P:BindCorner(region, e, confirmed, double, layer)
+    local settings = touch.GetSettings()
+    local from = layer and (settings.layers[layer] or {})[region]
+        or (double and settings.doubles[region] or settings.regions[region])
+    local where = PressText("TOUCH:" .. region) .. (double and " (double tap)" or "")
+        .. (layer and (" (" .. LAYER_TEXT[layer] .. " held)") or "")
+    if from == e.action then return menu.Toast((e.name or "") .. " is on " .. where .. " already") end
     if touch.IsBound(from) and not confirmed then
-        return self:Confirm(PressText("TOUCH:" .. region, 16) .. " runs |cffffffff" .. touch.ActionLabel(from)
-            .. "|r.\nReplace it with |cffffffff" .. (e.name or "") .. "|r?", function() P:BindCorner(region, e, true) end)
+        return self:Confirm(PressText("TOUCH:" .. region, 16) .. (double and " twice" or "") .. " runs |cffffffff"
+            .. touch.ActionLabel(from) .. "|r.\nReplace it with |cffffffff" .. (e.name or "") .. "|r?",
+            function() P:BindCorner(region, e, true, double, layer) end)
     end
-    touch.GetSettings().enabled = true
-    touch.SetAction(region, e.action)
-    TakeOff(e.action, "TOUCH:" .. region)
-    Done((e.name or "") .. ": " .. PressText("TOUCH:" .. region)
+    settings.enabled = true
+    if layer then
+        touch.SetLayerAction(region, layer, e.action)
+    elseif double then
+        touch.SetDouble(region, e.action)
+    else
+        touch.SetAction(region, e.action)
+        TakeOff(e.action, "TOUCH:" .. region)
+    end
+    Done((e.name or "") .. ": " .. where
         .. (touch.IsBound(from) and from ~= e.action and (", " .. touch.ActionLabel(from) .. " off it") or ""))
 end
 
@@ -579,20 +619,27 @@ function P:Bind()
         accept = function(spec)
             if def then
                 -- (the touchpad's click: the corner under the finger, for one that takes a corner)
-                if def.corner and spec == "PADBACK" and HasTouchpad() then return true end
+                local held, base = B.Parse(spec)
+                if (def.corner or IF.Actions.IsWindow(def.id)) and base == "PADBACK" and HasTouchpad()
+                    and (not held or touch.LayerOf(held)) then
+                    return true
+                end
                 return def.accepts(spec)
             end
-            local _, pressed = B.Parse(spec)
-            return (pressed == "PADBACK" and HasTouchpad()) or B.ActionFits(spec)
+            local held, pressed = B.Parse(spec)
+            if pressed == "PADBACK" and HasTouchpad() then return not held or touch.LayerOf(held) ~= nil end
+            return B.ActionFits(spec)
         end,
         reject = function(spec) return B.GameOwns(spec) or ((e.name or "It") .. " can't go on that press") end,
         onDone = function(spec, info)
-            local _, pressed = B.Parse(spec)
-            if def and not (def.corner and pressed == "PADBACK" and HasTouchpad()) then return P:BindDef(def, spec) end
+            local held, pressed, double = B.Parse(spec)
+            -- (a def with an action of its own, the corner's: any def with its button; else as the corner is)
+            local cornerDef = def and (def.corner or IF.Actions.IsWindow(def.id))
+            if def and not (cornerDef and pressed == "PADBACK" and HasTouchpad()) then return P:BindDef(def, spec) end
             if pressed == "PADBACK" and HasTouchpad() then
                 local region = info and info.touch and touch.RegionAt(info.touch[1], info.touch[2])
                 if not region then return menu.Toast("Click the touchpad in the corner you want", true) end
-                return P:BindCorner(region, e)
+                return P:BindCorner(region, e, nil, double, touch.LayerOf(held))
             end
             P:BindAction(e, spec)
         end,
@@ -646,9 +693,13 @@ function P:Unbind(which)
     if not presses[1] then return menu.Toast((e and e.name or "It") .. " isn't bound") end
     if e.def then
         B.Assign(e.def.id, nil)
-        if e.def.corner then
+        if e.def.corner or IF.Actions.IsWindow(e.def.id) then
             for _, region in ipairs(touch.REGIONS) do
                 if touch.GetSettings().regions[region] == e.def.id then touch.SetAction(region, "none") end
+                if touch.GetSettings().doubles[region] == e.def.id then touch.SetDouble(region, "none") end
+                for _, layer in ipairs(touch.LAYERS) do
+                    if touch.LayerAction(region, layer) == e.def.id then touch.SetLayerAction(region, layer, "none") end
+                end
             end
         end
     else
@@ -683,7 +734,53 @@ function P:CornerTriangle(region)
             if touch.IsBound(touch.GetSettings().regions[region]) then
                 touch.SetAction(region, "none")
                 Done(touch.REGION_LABELS[region] .. " cleared")
+            elseif touch.DoubleOf(region) then
+                touch.SetDouble(region, "none")
+                Done(touch.REGION_LABELS[region] .. " double tap cleared")
             end
+        elseif elapsed >= FEEL_AFTER and IF.Vibe then
+            IF.Vibe.Hold(elapsed / HOLD)
+        end
+    end)
+end
+
+-- Triangle held on a card: its default presses back (def.reset, or def.default
+-- and its keyboard press's default); an action has none
+function P:ResetDefault()
+    if IF.InCombat() then return menu.Toast("Not in combat", true) end
+    local e = self:Entry()
+    local def = e and e.def
+    if not def then return menu.Toast((e and e.name or "It") .. " has no default") end
+    if def.reset then
+        def.reset()
+    else
+        B.Assign(def.id, def.default)
+    end
+    -- (its keyboard / mouse press: its own default again)
+    if IF.db.keyBinds then IF.db.keyBinds[def.id] = nil end
+    B.ApplyKeys()
+    Done((e.name or "") .. ": default binding restored")
+end
+
+-- Triangle on a card: a press unbinds it, held (0.6 s) puts its default
+-- back; the same rumble as a corner's
+function P:OptionTriangle()
+    if self.holding then return end
+    local started = GetTime()
+    self.holding = true
+    self.holdTicker = C_Timer.NewTicker(0.05, function(ticker)
+        local held = IsKeyDown and IsKeyDown("PAD4")
+        local elapsed = GetTime() - started
+        if held and elapsed >= HOLD then
+            ticker:Cancel()
+            P.holding = nil
+            if IF.Vibe and IF.Vibe.Confirm then IF.Vibe.Confirm() end
+            P:ResetDefault()
+        elseif not held then
+            ticker:Cancel()
+            P.holding = nil
+            if IF.Vibe and elapsed >= FEEL_AFTER then IF.Vibe.Hold(nil) end
+            P:Unbind()
         elseif elapsed >= FEEL_AFTER and IF.Vibe then
             IF.Vibe.Hold(elapsed / HOLD)
         end
@@ -708,7 +805,7 @@ function P:Press(name)
     -- (Cross on a card: picked already, nothing to start)
     if name == "A" then return true end
     if name == "Y" then
-        if Region() then self:CornerTriangle(Region()) else self:Unbind() end
+        if Region() then self:CornerTriangle(Region()) else self:OptionTriangle() end
         return true
     end
     -- L1 / R1: the lists (as L2 / R2)
@@ -723,7 +820,8 @@ function P:Help()
     if self.popup then return { H({ "A" }, "Replace", "A"), H({ "B" }, "Cancel", "B") } end
     local hints = { H({ "DPAD" }, "Move"), H({ "LB", "RB" }, "List"), H({ "X" }, "Bind", "X") }
     if self.key then
-        hints[#hints + 1] = H({ "Y" }, Region() and ("Clear / Hold to " .. (touch.IsOff(Region()) and "Turn On" or "Turn Off")) or "Unbind", "Y")
+        hints[#hints + 1] = H({ "Y" }, Region() and ("Clear / Hold to " .. (touch.IsOff(Region()) and "Turn On" or "Turn Off"))
+            or "Unbind / Hold to Reset", "Y")
     end
     hints[#hints + 1] = H({ "RS" }, "Tab")
     hints[#hints + 1] = H({ "B" }, "Close", "B")
@@ -755,6 +853,14 @@ local function RenderCorners(f)
             Tint(b.glow, KC.focus, 0.9)
             b.ring:SetShown(picked)
             Tint(b.ring, KC.focus)
+            if not b.twice then
+                b.twice = K.Text(b, 12, KC.dimGold, "OVERLAY")
+                b.twice:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", -3, 3)
+                b.twice:SetText("x2")
+            end
+            local twice = touch.DoubleOf(region)
+            b.twice:SetShown(twice ~= nil)
+            if twice and not bound then K.SetIcon(b.icon, touch.ActionIcon(twice) or 134400) b.icon:SetShown(true) end
             b.dot:SetShown(off)
             Tint(b.dot, KC.danger)
             b:SetAlpha((off or not on) and 0.45 or 1)

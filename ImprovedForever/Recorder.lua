@@ -190,7 +190,24 @@ function R.Stop()
     end
 end
 
+-- (a touchpad click reports twice, its left and right halves are two raw
+-- buttons: a second press right on the heels of the last one's event is
+-- the same click, not a double tap)
+local lastPadBack = 0
+local SAME_CLICK = 0.05
+
 function R.OnDown(button)
+    if button == "PADBACK" then
+        local now = GetTime()
+        -- (the click's other half, while the first is still held, or just after)
+        local held = false
+        for _, b in ipairs(down) do
+            if b == "PADBACK" then held = true end
+        end
+        local same = held or now - lastPadBack < SAME_CLICK
+        lastPadBack = now
+        if same and state ~= nil then return end
+    end
     if state == "release" then
         down[#down + 1] = button
         return
@@ -217,6 +234,7 @@ function R.OnDown(button)
 end
 
 function R.OnUp(button)
+    if button == "PADBACK" then lastPadBack = GetTime() end
     -- (not one pressed while recording: Square's own release)
     local ours = false
     for _, b in ipairs(down) do
@@ -236,7 +254,9 @@ end
 -- moment for its second press
 function R.Released()
     local held, _, double = IF.Binds.Parse(spec)
-    if opts.double and not held and not double and not again then
+    -- (a touchpad click: a double only when IF.Touch.RECORD_DOUBLE is on)
+    if opts.double and not held and not double and not again
+        and (spec ~= "PADBACK" or (IF.Touch and IF.Touch.RECORD_DOUBLE)) then
         again = true
         state, deadline = "again", GetTime() + DOUBLE
         return R.Render()

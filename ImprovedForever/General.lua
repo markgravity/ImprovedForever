@@ -14,6 +14,18 @@ local ITEMS = {
         IF.db.wandShoot = on
         IF.Override.Apply()
     end, "Square shoots the wand")),
+    Item({
+        key = "resetBindings", group = "gamepad", label = "Reset all bindings",
+        tip = "Puts every binding back to its default: the buttons and keys of the Bindings tab, the actions "
+            .. "put on presses and keys, and the touchpad's corners. The crossbar's own slots stay as they are.",
+    }, {
+        button = "Reset",
+        run = function()
+            if IF.InCombat() then return IF.Print("Not in combat.") end
+            if IF.Binds.ResetAll() then IF.Print("Every binding is back to its default.") end
+        end,
+        confirm = true, confirmText = "Reset every binding to its default?",
+    }),
 }
 
 local GROUPS = {

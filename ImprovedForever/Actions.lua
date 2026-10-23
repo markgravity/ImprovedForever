@@ -137,6 +137,9 @@ local WINDOWS = {
     { key = "fishcollection", label = "Fish Collection", ours = true, desc = "Opens the Fish Collection",
         icon = IF.TEX .. "ic_mod_fishing", macroIcon = "Interface\\Icons\\Trade_Fishing",
         buttons = { "ImprovedForeverFishCollectionToggle" } },
+    { key = "recentloot", label = "Recent loot", ours = true, desc = "Puts the pad on your recent loot tiles",
+        icon = IF.TEX .. "ic_addon", macroIcon = "Interface\\Icons\\INV_Misc_Bag_08",
+        buttons = { "ImprovedForeverRecentLootFocus" } },
     { key = "destroy", label = "Destroy", ours = true, desc = "Opens the Destroy panel", icon = IF.TEX .. "ic_mod_destroy",
         macroIcon = "Interface\\Icons\\INV_Misc_Bag_08", buttons = { "ImprovedForeverDestroyToggle" } },
     -- (its press runs /reload itself: a /click to a button of ours is
@@ -183,6 +186,11 @@ AC.PressButton("ImprovedForeverReload", function() ReloadUI() end)
 local ACTION_BY_KEY = {}
 for _, action in ipairs(WINDOWS) do
     ACTION_BY_KEY[action.key] = action
+end
+
+-- One of the interface windows (a toggle: the same press closes it)
+function AC.IsWindow(key)
+    return ACTION_BY_KEY[key] ~= nil
 end
 
 -- Holds something (not "none")

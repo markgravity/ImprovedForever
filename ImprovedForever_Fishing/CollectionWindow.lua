@@ -619,5 +619,6 @@ Binds.Add({
     accepts = Binds.NotDouble,
     specs = function() return Binds.One(B.Key()) end,
     set = function(spec) F.Settings().collectionKey = spec or false end,
+    reset = function() F.Settings().collectionKey = nil end,
     run = function(down) if down then B.Toggle() end end,
 })

@@ -104,6 +104,7 @@ local DEFAULTS = {
     xp = true,          -- the experience as a ring round the player frame
     pad = true,         -- the gamepad bar as Hogwarts Legacy's spell diamonds, bottom right
     recentLoot = false, -- your last four loots as tiles beside the bags' one, flying in from the loot window (an experiment)
+    recentLootKey = false, -- the binding's controller press (RecentLoot.lua)
     padStyle = "square", -- its tiles: "diamond", "square" (rows and columns) or "circle" (GamepadBar.lua)
     partyPad = false,   -- L1 ours: + the D-pad picks a party spell, + a face button casts it on party 1 to 4 (an experiment)
 }

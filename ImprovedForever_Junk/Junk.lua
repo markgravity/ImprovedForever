@@ -438,6 +438,7 @@ B.Add({
         J.Settings().mark = spec ~= nil
         if spec then J.SetMarkKey(spec) end
     end,
+    reset = function() J.Settings().mark = nil end,
     click = MarkHovered,
     defaultKey = "ALT-BUTTON2",
 })

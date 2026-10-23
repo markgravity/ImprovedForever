@@ -278,6 +278,7 @@ B.Add({
     accepts = function(spec) return spec == "PADFORWARD:double" end,
     specs = function() return IF.db.menuDouble ~= false and { "PADFORWARD:double" } or {} end,
     set = function(spec) IF.db.menuDouble = spec ~= nil end,
+    reset = function() IF.db.menuDouble = nil end,
     run = function(down) if down and IF.Menu then IF.Menu.Toggle() end end,
 })
 
@@ -629,6 +630,31 @@ function B.SetKey(id, spec)
     KeyDB()[id] = spec or false
     B.ApplyKeys()
     return gone
+end
+
+-- Every binding back to its default: each binding's own (def.reset), the
+-- keyboard / mouse presses, the actions put on presses and keys (the
+-- Bindings tab's), the touchpad's corners. Not the crossbar's slots
+-- (Native.lua). Out of combat; true once done.
+function B.ResetAll()
+    if IF.InCombat() or not IF.db then return false end
+    for _, def in ipairs(B.All()) do
+        if def.reset then pcall(def.reset) end
+    end
+    IF.db.keyBinds = nil
+    IF.db.keyActions = nil
+    IF.db.overrides = nil
+    -- (the touchpad: its corners and doubles; the touch cursor's saved setting kept)
+    local keep = IF.db.touch and IF.db.touch.touchCursor
+    IF.db.touch = { touchCursor = keep }
+    B.ApplyKeys()
+    if IF.Override then
+        IF.Override.Apply()
+        IF.Override.ApplyKeys()
+    end
+    if IF.Touch then IF.Touch.Apply() end
+    B.FocusChanged()
+    return true
 end
 
 -- The binding a click on an item runs, or nil
