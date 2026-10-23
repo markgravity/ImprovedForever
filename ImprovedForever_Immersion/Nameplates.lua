@@ -23,6 +23,7 @@ local NAME_SIZE = 13
 local STEP = 0.1
 local OTHER_SCALE, OTHER_ALPHA = 0.8, 0.85
 local FADE_SPEED = 8                    -- (how fast alpha and size ease)
+local FLY = 0.4                         -- (seconds: your target's plate to the header)
 
 ---------------------------------------------------------------------------
 -- One plate of ours (pooled)
@@ -89,6 +90,25 @@ local function Draw(p)
     p:SetShown(p.alpha > 0.01)
 end
 
+-- Your target's plate going to the header: the name's place there, found
+-- from our own frames (the header's origin, and ours: read as numbers
+-- only when they are; else it just fades). The plate keeps its anchor to
+-- the game's, with an offset easing out to the header, fading as it
+-- gets there.
+local function Fly(p)
+    p.fly = nil
+    local ok, dx, dy = pcall(function()
+        local hx, hy = HS.Origin:GetCenter()
+        local px, py = p:GetCenter()
+        if Secret(hx) or Secret(px) or not (hx and hy and px and py) then return nil end
+        local hs, ps = HS.Origin:GetEffectiveScale(), p:GetEffectiveScale()
+        local ty = hy - (HS.NAME_GAP + 10) - HS.NAME_SIZE / 2
+        return (hx * hs - px * ps) / ps, (ty * hs - py * ps) / ps
+    end)
+    IF.db.plateFly = ok and dx and ("fly %.0f,%.0f"):format(dx, dy) or ("no centre: " .. tostring(ok and dx or dx))
+    if ok and dx then p.fly = { t = 0, dx = dx, dy = dy } end
+end
+
 local function Refresh(p)
     local unit = p.unit
     if not unit then return end
@@ -111,6 +131,8 @@ local function Refresh(p)
     -- stays, full size)
     local target = Flag(IsTarget, unit)
     local inHeader = target and IN.Settings().target and not UF.EditMode()
+    if inHeader and not p.inHeader then Fly(p) end
+    p.inHeader = inHeader
     p.goalAlpha = inHeader and 0 or target and 1 or OTHER_ALPHA
     p.goalScale = inHeader and OTHER_SCALE * 0.85 or target and 1 or OTHER_SCALE
     p:SetFrameLevel(target and 20 or 10)
@@ -160,6 +182,8 @@ local function Add(unit)
     local p = table.remove(pool) or Build()
     a.ours = p
     p.unit = unit
+    p.game = game
+    p.fly, p.inHeader = nil, nil
     p.alpha = nil
     HideGame(game, true)
     p:ClearAllPoints()
@@ -197,6 +221,25 @@ end)
 
 local function Ease(p, elapsed)
     if not p.alpha then return end
+    local f = p.fly
+    if f then
+        f.t = f.t + elapsed
+        local k = math.min(1, f.t / FLY)
+        local e = HS.Ease(k, 0, 1)
+        p:ClearAllPoints()
+        p:SetPoint("CENTER", p.game, "CENTER", f.dx * e, f.dy * e)
+        p.scale = p.goalScale + (1.25 - p.goalScale) * (1 - math.abs(2 * e - 1))
+        p.alpha = OTHER_ALPHA * (1 - HS.Ease(k, 0.5, 1))
+        Draw(p)
+        if k >= 1 then
+            p.fly = nil
+            p:ClearAllPoints()
+            p:SetPoint("CENTER", p.game, "CENTER", 0, 0)
+            p.alpha, p.scale = 0, p.goalScale
+            Draw(p)
+        end
+        return
+    end
     local k = math.min(1, elapsed * FADE_SPEED)
     p.alpha = p.alpha + (p.goalAlpha - p.alpha) * k
     p.scale = p.scale + (p.goalScale - p.scale) * k
