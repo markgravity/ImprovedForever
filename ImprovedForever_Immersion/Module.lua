@@ -25,9 +25,9 @@ IF.Interface = IN
 -- under it still clear of the power line and the health bar over it
 IN.BOTTOM = 38
 -- The power line's height, on the bottom edge (PlayerHealth.lua)
-IN.MP_H = 5
+IN.MP_H = 2
 -- The health bar's, over it (PlayerHealth.lua): the old experience line's
-IN.HP_H = 8
+IN.HP_H = 4
 
 -- The game's colours of a monster's level against yours, its own when it
 -- has them: green, yellow, orange, red (a card's alert, a cooldown's time

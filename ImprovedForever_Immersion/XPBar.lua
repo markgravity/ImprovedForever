@@ -1,7 +1,7 @@
 -- The experience as a ring round the player frame bottom left (its card,
 -- UnitFrames.lua), in place of the game's experience bar, drawn as the
 -- gamepad bar's cast ring (GamepadBar.lua): a line on the card's border
--- with a wider, fainter one under it as its glow, clockwise from the
+-- with a wider, fainter one under it as its glow, on a faint track all the way round, clockwise from the
 -- level badge at its top left round to it again, in the experience bar's own fills (Forever's
 -- experience purple, the rested part beyond it in blue, fainter), easing
 -- to a new value. The mouse over the card shows the numbers in its
@@ -63,6 +63,8 @@ end
 local fill = Arc(FILL, FILL_COLOR, 1, true)
 local rested = Arc(RESTED, RESTED_COLOR, RESTED_ALPHA, false)
 local air = Arc("", AIR_COLOR, 1, true)
+-- (the whole way round, faint under the fill: the progress reads against it)
+local track = Arc("", { 1, 1, 1 }, 0.14, false)
 local breath          -- (the breath's share left, 0 to 1, while under water; else nil)
 -- (the switch between the two: mix 0 is the experience, 1 the breath, eased;
 -- the breath's arc eased to its share, from nothing as it comes)
@@ -176,6 +178,7 @@ local shown = { f = 0, r = 0 }
 local goal = { f = 0, r = 0 }
 
 local function Draw()
+    DrawArc(track, 0, 1, 1 - mix)
     DrawArc(fill, 0, shown.f, 1 - mix)
     DrawArc(rested, shown.f, shown.r, 1 - mix)
     DrawArc(air, 0, airShown, mix)

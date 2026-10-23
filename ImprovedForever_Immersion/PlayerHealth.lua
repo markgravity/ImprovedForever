@@ -1,18 +1,18 @@
 -- Your health and power as two bars along the screen's bottom edge, the
 -- power (mana, rage, energy...) on the edge and the health over it, sharing
--- its top border, each drawn as it is: a dark track in a thin grey frame,
--- cut in 10 by notches, full from end to end, two halves out from the
--- middle (lost draws them in from both ends to the middle), a glow at the
--- fill's ends.
+-- each a 1px line as the header's rule (the quest guide's, HeaderSlot.lua):
+-- full from end to end, two halves out from the middle, each fading out
+-- toward its end (lost draws them in from both ends to the middle).
 -- * the health: the game's own fills (the reputation bar's green, turning
 --   orange past half and red when low, red pulsing under URGENT), a pale
 --   trail showing the health just lost, then easing in after it;
 -- * the power: the unit frames' fill of its kind (UnitFrames.lua), easing
---   to a new value, its glow in the game's colour of it.
--- They peek together: shown in a fight, while you're hurt or your power
--- isn't at rest (mana, energy short of full; rage, runic power above
--- none), faded out a moment after both are again out of a fight (never
--- while dead or a ghost). Either one off: the other alone on the edge.
+--   to a new value, in the game's colour of it.
+-- The health's line is always on while you're alive; the power's peeks:
+-- shown in a fight or while your power isn't at rest (mana, energy short
+-- of full; rage, runic power above none), faded out when it's at rest
+-- again (the lines never show while dead or a ghost). Either one off: the
+-- other alone on the edge.
 -- Your health and power are secret in a fight: they go to the bars as
 -- their max and value as they are (the bars work the fill out, never
 -- compared here), the health colours' strength from the game's percent
@@ -26,21 +26,15 @@ IN.PlayerHealth = PlayerHealth
 
 local LINE_H = IN.HP_H or 5
 local POWER_H = IN.MP_H or 5
-local COMPARTMENTS = 10
-local FRAME = { 0.25, 0.25, 0.25 }      -- (its frame's and notches' grey, the experience ring's track)
 local FADE = 0.3
 local HOLD = 0.8                 -- (whole again: shown this long before fading)
 local TRAIL_DELAY = 0.4          -- (the trail waits this long, then eases in)
-local FILL = "UI-HUD-ExperienceBar-Fill-Reputation-Faction-Green-Camelot"
-local ORANGE = "UI-HUD-ExperienceBar-Fill-Reputation-Faction-Orange-Camelot"
-local RED = "UI-HUD-ExperienceBar-Fill-Reputation-Faction-Red-Camelot"
+-- (the health's colours, plain: green, turning orange then red)
+local GREEN = { 0.25, 0.9, 0.3 }
+local ORANGE = { 1, 0.6, 0.1 }
+local RED = { 0.95, 0.2, 0.15 }
 local TRAIL = { 1, 0.93, 0.82, 0.55 }
-local GLOW = { 0.6, 1, 0.6 }
 local POWER_COLOR = { 0, 0, 1 }         -- (the power's, when the game has no colour for it: mana's)
--- (the power's fill: the game's plain status bar, tinted in the power's
--- colour; the unit frames' fills have dark rounded ends, which meet in the
--- middle as a dark patch)
-local POWER_FILL = "Interface\\TargetingFrame\\UI-StatusBar"
 -- (the powers at rest when empty: out of a fight, the rest at full)
 local RESTS_EMPTY = { RAGE = true, RUNIC_POWER = true }
 -- (the colours over the green, by health left: orange from three quarters
@@ -50,9 +44,6 @@ local URGENT = 0.35
 local ORANGE_POINTS = { { 0, 1 }, { 0.5, 1 }, { 0.75, 0 }, { 1, 0 } }
 local RED_POINTS = { { 0, 1 }, { 0.25, 1 }, { 0.4, 0 }, { 1, 0 } }
 local URGENT_POINTS = { { 0, 1 }, { URGENT, 1 }, { URGENT + 0.001, 0 }, { 1, 0 } }
--- (the power's glows out while it's empty: both would sit at the middle)
-local POWER_GLOW_POINTS = { { 0, 0 }, { 0.03, 1 }, { 1, 1 } }
-
 local Try, Flag = UF.Try, UF.Flag
 local SI = Enum.StatusBarInterpolation
 local function Secret(v)
@@ -69,46 +60,10 @@ holder:SetAlpha(0)
 holder:Hide()
 PlayerHealth.holder = holder
 
--- A track: a dark line in a thin grey frame cut by notches; t.over over
--- its fills (the glows, the notches, the frame)
+-- A track: a bare frame the bars sit in
 local function Track(height)
     local t = CreateFrame("Frame", nil, holder)
     t:SetHeight(height)
-    local bg = t:CreateTexture(nil, "BACKGROUND")
-    bg:SetAllPoints()
-    bg:SetColorTexture(0, 0, 0, 0.7)
-    t.over = CreateFrame("Frame", nil, t)
-    t.over:SetAllPoints()
-    t.over:SetFrameLevel(t:GetFrameLevel() + 4)
-    for _, e in ipairs({ { "TOPLEFT", "TOPRIGHT", nil, 1 }, { "BOTTOMLEFT", "BOTTOMRIGHT", nil, 1 },
-        { "TOPLEFT", "BOTTOMLEFT", 1, nil }, { "TOPRIGHT", "BOTTOMRIGHT", 1, nil } }) do
-        local edge = t.over:CreateTexture(nil, "OVERLAY")
-        edge:SetColorTexture(FRAME[1], FRAME[2], FRAME[3], 1)
-        edge:SetPoint(e[1])
-        edge:SetPoint(e[2])
-        if e[3] then edge:SetWidth(e[3]) end
-        if e[4] then edge:SetHeight(e[4]) end
-    end
-    -- (the notches: two screen pixels wide, re-placed as the width changes)
-    local notches = {}
-    local function Notches()
-        local width = t:GetWidth()
-        if not width or width <= 0 then return end
-        local pixel = 768 / (select(2, GetPhysicalScreenSize()) or 768) / t:GetEffectiveScale()
-        for i = 1, COMPARTMENTS - 1 do
-            local n = notches[i]
-            if not n then
-                n = t.over:CreateTexture(nil, "OVERLAY", nil, 1)
-                n:SetColorTexture(FRAME[1], FRAME[2], FRAME[3], 1)
-                notches[i] = n
-            end
-            n:SetSize(2 * pixel, height - 2)
-            n:ClearAllPoints()
-            n:SetPoint("CENTER", t, "LEFT", i * width / COMPARTMENTS, 0)
-        end
-    end
-    t:SetScript("OnSizeChanged", Notches)
-    t:HookScript("OnShow", Notches)
     return t
 end
 
@@ -140,28 +95,25 @@ local function Bar(track, left, level)
     return bar
 end
 
-local function Over(bar, atlas, sub)
+local function Over(bar, sub, color)
     local t = bar:CreateTexture(nil, "ARTWORK", nil, sub)
     t:SetAllPoints(bar:GetStatusBarTexture())
-    t:SetAtlas(atlas)
+    t:SetColorTexture(color[1], color[2], color[3], 1)
     t:SetAlpha(0)
     return t
 end
 
--- (the glow at a fill's outer end, in color)
-local function Glow(track, fill, left, height)
-    local glow = track.over:CreateTexture(nil, "ARTWORK")
-    glow:SetSize(48, height - 2)
-    glow:SetPoint(left and "LEFT" or "RIGHT", fill, left and "LEFT" or "RIGHT")
-    glow:SetColorTexture(1, 1, 1, 1)
-    glow:SetBlendMode("ADD")
-    return glow
-end
-
-local function GlowColor(glow, left, color)
-    if not (glow.SetGradient and CreateColor) then return end
-    local clear, lit = CreateColor(color[1], color[2], color[3], 0), CreateColor(color[1], color[2], color[3], 0.45)
-    glow:SetGradient("HORIZONTAL", left and lit or clear, left and clear or lit)
+-- (a line's fill faded out toward its end, as the header's rule: its
+-- colour at RULE_ALPHA at the middle, to nothing at the end)
+local RULE_ALPHA = 0.9
+local function Fade(tex, left, color, alpha)
+    if not (tex and tex.SetGradient and CreateColor) then return end
+    local a = (alpha or 1) * RULE_ALPHA
+    local clear, lit = CreateColor(color[1], color[2], color[3], 0), CreateColor(color[1], color[2], color[3], a)
+    -- (the gradient must not undo the texture's own alpha: the colours' strength)
+    local own = tex:GetAlpha()
+    pcall(tex.SetGradient, tex, "HORIZONTAL", left and clear or lit, left and lit or clear)
+    tex:SetAlpha(own)
 end
 
 -- (two halves each, full out from the middle; the health's each a trail
@@ -172,12 +124,12 @@ for i = 1, 2 do
     local h = {}
     h.trail = Bar(line, left, 1)
     h.trail:SetStatusBarTexture("Interface\\Buttons\\WHITE8x8")
-    h.trail:SetStatusBarColor(TRAIL[1], TRAIL[2], TRAIL[3], TRAIL[4])
+    Fade(h.trail:GetStatusBarTexture(), left, TRAIL, TRAIL[4])
     h.bar = Bar(line, left, 2)
-    h.bar:SetStatusBarTexture(FILL)
+    h.bar:SetStatusBarTexture("Interface\\Buttons\\WHITE8x8")
     local fill = h.bar:GetStatusBarTexture()
-    h.orange, h.red = Over(h.bar, ORANGE, 1), Over(h.bar, RED, 2)
-    GlowColor(Glow(line, fill, left, LINE_H), left, GLOW)
+    h.orange, h.red = Over(h.bar, 1, ORANGE), Over(h.bar, 2, RED)
+    Fade(fill, left, GREEN)
     -- (the pulse's red over it)
     local alarm = pulse:CreateTexture(nil, "OVERLAY")
     alarm:SetAllPoints(fill)
@@ -189,8 +141,7 @@ for i = 1, 2 do
 
     local p = { left = left }
     p.bar = Bar(power, left, 2)
-    p.bar:SetStatusBarTexture(POWER_FILL)
-    p.glow = Glow(power, p.bar:GetStatusBarTexture(), left, POWER_H)
+    p.bar:SetStatusBarTexture("Interface\\Buttons\\WHITE8x8")
     powerHalves[i] = p
 end
 
@@ -212,6 +163,20 @@ end
 
 -- (a texture's alpha from a curve of your health percent, secret or not)
 local function Shade(t, points)
+    -- (health read whole, out of a fight: worked out here, never by the curve)
+    local value, max = UnitHealth("player"), UnitHealthMax("player")
+    if not (Secret(value) or Secret(max)) and type(value) == "number" and type(max) == "number" and max > 0 then
+        local x, alpha = value / max, points[#points][2]
+        for i = 2, #points do
+            local p, q = points[i - 1], points[i]
+            if x <= q[1] then
+                alpha = p[2] + (q[2] - p[2]) * (x - p[1]) / math.max(q[1] - p[1], 0.0001)
+                break
+            end
+        end
+        t:SetAlpha(math.min(math.max(alpha, 0), 1))
+        return
+    end
     local c = Curve(points)
     if not (c and pcall(function() t:SetAlpha(UnitHealthPercent("player", true, c)) end)) then
         t:SetAlpha(0)
@@ -265,7 +230,7 @@ local function PowerToken()
     return token
 end
 
--- (the power's halves: its kind's colour on the fill and glow, its value as
+-- (the power's halves: its kind's colour on the fill, its value as
 -- it is, eased on a change of it; its kind a secret: the last one kept)
 local function FillPower(ease)
     local token = PowerToken() or powerHalves[1].token or "MANA"
@@ -276,9 +241,7 @@ local function FillPower(ease)
         local bar = p.bar
         if p.token ~= token then
             p.token = token
-            bar:SetStatusBarColor(color[1], color[2], color[3])
-            -- (the glow lighter than the fill: mana's pure blue would barely show)
-            GlowColor(p.glow, p.left, { 0.5 + color[1] / 2, 0.5 + color[2] / 2, 0.5 + color[3] / 2 })
+            Fade(bar:GetStatusBarTexture(), p.left, color)
         end
         if not Try(bar.SetMinMaxValues, bar, 0, max) then
             bar:SetMinMaxValues(0, 1)
@@ -287,19 +250,7 @@ local function FillPower(ease)
             and not Try(bar.SetValue, bar, value) then
             bar:SetValue(0)
         end
-        local c = Curve(POWER_GLOW_POINTS)
-        if not (c and pcall(function() p.glow:SetAlpha(UnitPowerPercent("player", nil, false, c)) end)) then
-            p.glow:SetAlpha(1)
-        end
     end
-end
-
--- (wanted: alive, and in a fight or hurt (read whole out of one))
-local function HealthWanted()
-    if IF.InCombat() then return true end
-    local value, max = UnitHealth("player"), UnitHealthMax("player")
-    if Secret(value) or Secret(max) or type(value) ~= "number" or type(max) ~= "number" then return true end
-    return max > 0 and value < max
 end
 
 -- (wanted: in a fight or not at rest (read whole out of one))
@@ -316,7 +267,13 @@ end
 
 local function Wanted()
     if Flag(UnitIsDeadOrGhost, "player") then return false end
-    return (PlayerHealth.health and HealthWanted()) or (PlayerHealth.power and PowerWanted()) or false
+    -- (the health's line always on while alive; the power's peeks)
+    return PlayerHealth.health or (PlayerHealth.power and PowerWanted()) or false
+end
+
+-- (the power's own fade: with the health's line always on, it peeks alone)
+local function PowerGoal()
+    return (not PlayerHealth.health or PowerWanted()) and 1 or 0
 end
 
 holder:SetScript("OnUpdate", function(self, elapsed)
@@ -327,6 +284,10 @@ holder:SetScript("OnUpdate", function(self, elapsed)
     if a ~= goal then
         a = goal > a and math.min(goal, a + elapsed / FADE) or math.max(goal, a - elapsed / FADE)
         self:SetAlpha(a)
+    end
+    local pa, pg = power:GetAlpha(), PowerGoal()
+    if pa ~= pg then
+        power:SetAlpha(pg > pa and math.min(pg, pa + elapsed / FADE) or math.max(pg, pa - elapsed / FADE))
     end
     if a <= 0 and goal == 0 then
         beat:Stop()
@@ -378,12 +339,12 @@ local function Place(health, mp)
     line:SetShown(health)
     power:SetShown(mp)
     line:ClearAllPoints()
-    line:SetPoint("BOTTOMLEFT", holder, "BOTTOMLEFT", 0, mp and POWER_H - 1 or 0)
-    line:SetPoint("BOTTOMRIGHT", holder, "BOTTOMRIGHT", 0, mp and POWER_H - 1 or 0)
+    line:SetPoint("BOTTOMLEFT", holder, "BOTTOMLEFT", 0, mp and POWER_H + 2 or 0)
+    line:SetPoint("BOTTOMRIGHT", holder, "BOTTOMRIGHT", 0, mp and POWER_H + 2 or 0)
     power:ClearAllPoints()
     power:SetPoint("BOTTOMLEFT")
     power:SetPoint("BOTTOMRIGHT")
-    local h = (health and LINE_H or 0) + (mp and POWER_H or 0) - (health and mp and 1 or 0)
+    local h = (health and LINE_H or 0) + (mp and POWER_H or 0) + (health and mp and 2 or 0)
     holder:SetHeight(math.max(h, 1))
     if not health then beat:Stop() end
 end
