@@ -182,9 +182,17 @@ local function On()
     return IF.db and IN.Settings().recentLoot and true or false
 end
 
+local combatPending
+
 local function Refresh()
     local bar = GB()
-    if not bar or (not row and IF.InCombat()) then return end
+    if not bar then return end
+    -- (the tiles hold secure buttons: shown, hidden and placed out of
+    -- combat only, else after it)
+    if IF.InCombat() then
+        combatPending = true
+        return
+    end
     Tiles(bar)
     Place(bar)
     row:SetShown(On() and bar.BagTile:IsShown())
@@ -219,6 +227,15 @@ local function Refresh()
     end
 end
 RL.Refresh = Refresh
+
+local regen = CreateFrame("Frame")
+regen:RegisterEvent("PLAYER_REGEN_ENABLED")
+regen:SetScript("OnEvent", function()
+    if combatPending then
+        combatPending = nil
+        Refresh()
+    end
+end)
 
 -- The row's left edge (its last tile's, in UIParent's units), or nil
 -- while none shows: the cooldowns' lane ends before it (BuffTimeline.lua)
