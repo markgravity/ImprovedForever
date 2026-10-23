@@ -129,22 +129,25 @@ end
 local function LayerOfPress(press)
     return press and press:match(":(%u+)$")
 end
-local PART_TEXT = { LB = "L1", RB = "R1", LT = "L2", RT = "R2" }
-local LAYER_TEXT = setmetatable({}, { __index = function(t, layer)
+local PART_KEY = { LB = "LB", RB = "RB", LT = "LT", RT = "RT" }
+-- "L1 + R2" of a layer, each with its glyph at size
+local function LayerText(layer, size)
     local parts = {}
-    for part in layer:gmatch("%u%u") do parts[#parts + 1] = PART_TEXT[part] or part end
-    local text = table.concat(parts, " + ")
-    t[layer] = text
-    return text
-end })
+    for part in layer:gmatch("%u%u") do
+        local key = PART_KEY[part]
+        parts[#parts + 1] = key and ((size and (IF.GlyphText(key, size) .. " ") or "") .. IF.ButtonName(key)) or part
+    end
+    return table.concat(parts, " + ")
+end
 
 -- "L1 + R3" (with glyphs at size), a corner: the touchpad's, and which
 local function PressText(press, size)
     local region = CornerOf(press)
     if region then
-        return B.Text("PADBACK", size) .. "  |cff9d917a·|r  " .. touch.REGION_LABELS[region]
+        local layer = LayerOfPress(press)
+        return (layer and (LayerText(layer, size) .. " + ") or "") .. B.Text("PADBACK", size)
+            .. "  |cff9d917a·|r  " .. touch.REGION_LABELS[region]
             .. (IsDoubleTap(press) and "  |cff9d917a(double tap)|r" or "")
-            .. (LayerOfPress(press) and ("  |cff9d917a(" .. LAYER_TEXT[LayerOfPress(press)] .. " held)|r") or "")
     end
     return B.Text(press, size)
 end
@@ -579,7 +582,7 @@ function P:BindCorner(region, e, confirmed, double, layer)
     local from = layer and (settings.layers[layer] or {})[region]
         or (double and settings.doubles[region] or settings.regions[region])
     local where = PressText("TOUCH:" .. region) .. (double and " (double tap)" or "")
-        .. (layer and (" (" .. LAYER_TEXT[layer] .. " held)") or "")
+        .. (layer and (" (" .. LayerText(layer) .. " held)") or "")
     if from == e.action then return menu.Toast((e.name or "") .. " is on " .. where .. " already") end
     if touch.IsBound(from) and not confirmed then
         return self:Confirm(PressText("TOUCH:" .. region, 16) .. (double and " twice" or "") .. " runs |cffffffff"

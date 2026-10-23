@@ -466,7 +466,15 @@ end
 function IF.GlyphText(key, size)
     local atlas = IF.GlyphAtlas(key)
     if atlas then
-        return string.format("|A:%s:%d:%d|a", atlas, size or 16, size or 16)
+        local h = size or 16
+        local w = h
+        -- the touchpad is wide: keep the atlas's own shape, not a square
+        local info = C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(atlas)
+        if (key == "BACK" or key == "TOUCHPAD" or key == "PADBACK") and atlas:find("touchpad")
+            and info and info.width and info.height and info.height > 0 and info.width > info.height then
+            w = math.floor(h * info.width / info.height + 0.5)
+        end
+        return string.format("|A:%s:%d:%d|a", atlas, h, w)
     end
     return IF.ButtonName(key)
 end
