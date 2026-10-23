@@ -1,8 +1,7 @@
 -- The nameplates in the module's look: the name in gold (the header's
 -- font), under it a thin line in the nameplate's colour over a dark
 -- track, the level in the small circle at the line's end;
--- (the others a little smaller and softer; your target's goes out on the
--- mob, it is in the header's place, TargetHeader.lua). Each is a frame of
+-- (your target's full size, the others a little smaller and softer). Each is a frame of
 -- ours anchored to the game's plate (a plain anchor: probe verified
 -- taint-free; the plate is never measured or changed), and the game's own
 -- look of it (its UnitFrame) drawn at alpha 0 by an animation of ours
@@ -106,13 +105,10 @@ local function Refresh(p)
     local r, g, b = TH.NameplateColor(unit)
     p.bar:SetStatusBarColor(r, g, b)
     Level(p, unit)
-    -- (your target is in the header's place: its plate fades out on the
-    -- mob and comes back when it isn't the target; the header off, it
-    -- stays, full size)
+    -- (your target's at full size, the others softer: eased on a change)
     local target = Flag(IsTarget, unit)
-    local inHeader = target and IN.Settings().target and not UF.EditMode()
-    p.goalAlpha = inHeader and 0 or target and 1 or OTHER_ALPHA
-    p.goalScale = inHeader and OTHER_SCALE * 0.85 or target and 1 or OTHER_SCALE
+    p.goalAlpha = target and 1 or OTHER_ALPHA
+    p.goalScale = target and 1 or OTHER_SCALE
     p:SetFrameLevel(target and 20 or 10)
     if not p.alpha then
         p.alpha, p.scale = p.goalAlpha, p.goalScale
@@ -124,6 +120,8 @@ end
 -- The game's plates in play: unit token -> { game plate, ours }
 ---------------------------------------------------------------------------
 local active = {}
+local N = {}
+IN.Nameplates = N
 
 local function HideGame(game, on)
     local ok, unitFrame = pcall(function() return game.UnitFrame end)
@@ -132,7 +130,7 @@ end
 
 local function Wanted(unit)
     local s = IN.Settings()
-    if s.targetPlate == false or UF.EditMode() then return false end
+    if s.nameplates == false or UF.EditMode() then return false end
     if Flag(UnitNameplateShowsWidgetsOnly, unit) then return false end
     if Flag(IsSoft, unit) and not Flag(IsTarget, unit) then return false end
     return true
@@ -216,3 +214,10 @@ events:SetScript("OnUpdate", function(_, elapsed)
         end
     end
 end)
+
+-- The setting changed: every plate in play drawn again (ours, or the game's)
+function N.Apply()
+    local units = {}
+    for unit in pairs(active) do units[#units + 1] = unit end
+    for _, unit in ipairs(units) do Safe(Add, unit) end
+end

@@ -88,6 +88,12 @@ local ITEMS = {
             .. "of the game's breath bar. Other timers (fatigue) stay the game's.",
     }, Toggle("breath", "Breath", function() IN.Breath.Apply() end)),
     Item({
+        key = "nameplates", group = "top", label = "Nameplates",
+        tip = "The nameplates over mobs in our look: the name in gold, a thin health line in the nameplate's "
+            .. "colour and the level in a small circle. Your target's is full size, the others softer. Off, "
+            .. "the game's own.",
+    }, Toggle("nameplates", "Nameplates", function() IN.Nameplates.Apply() end)),
+    Item({
         key = "castRange", group = "top", label = "Target range",
         tip = "Out of reach of your longest-range harmful spell, the target's portrait turns grey and its "
             .. "health line faint.",
