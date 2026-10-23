@@ -640,6 +640,123 @@ function RL.Test(arg)
 end
 
 ---------------------------------------------------------------------------
+-- The first-time tour's example (Onboarding.lua): a row of these tiles of its
+-- own in `parent`, as the bar draws them (its tile, its border tinted, the
+-- badges), made of what is in your bags, one landing at the front every few
+-- seconds, the rest stepping along. Nothing of the real row is touched.
+---------------------------------------------------------------------------
+function RL.Demo(parent)
+    local bar = GB()
+    if not bar then error("the gamepad bar is not loaded") end
+    local KINDS = { "upgrade", "quest", "recipe", "auction", "rare", "collect", "open" }
+    local FALLBACK = { "Interface\\Icons\\INV_Sword_04", "Interface\\Icons\\INV_Scroll_03",
+        "Interface\\Icons\\INV_Misc_Book_09", "Interface\\Icons\\INV_Misc_Gem_01",
+        "Interface\\Icons\\INV_Misc_Bag_08", "Interface\\Icons\\INV_Misc_Key_03" }
+    -- (what to show: your bags' items, else stand-in icons)
+    local pool, seen = {}, {}
+    local C = C_Container
+    for bag = 0, NUM_BAG_SLOTS or 4 do
+        local slotsIn = C and C.GetContainerNumSlots and C.GetContainerNumSlots(bag) or 0
+        for slot = 1, slotsIn do
+            local ok, info = pcall(C.GetContainerItemInfo, bag, slot)
+            local id = ok and type(info) == "table" and info.itemID
+            if id and not seen[id] and #pool < #KINDS then
+                seen[id] = true
+                pool[#pool + 1] = { id = id, link = info.hyperlink, icon = info.iconFileID,
+                    quality = math.max(info.quality or 1, 1), count = 1 }
+            end
+        end
+    end
+    local i = 0
+    while #pool < #KINDS do
+        i = i + 1
+        pool[#pool + 1] = { id = -i, icon = FALLBACK[(i - 1) % #FALLBACK + 1], quality = 2, count = 1 }
+    end
+    for n, e in ipairs(pool) do e.kind = KINDS[n] end
+
+    local f = CreateFrame("Frame", nil, parent)
+    f:SetSize(1, 1)
+    local step = bar.SUPPLY.width + bar.SUPPLY_GAP
+    local demoTiles = {}
+    for n = 1, MAX do
+        local center = CreateFrame("Frame", nil, f)
+        center:SetSize(1, 1)
+        center:SetPoint("CENTER", f, "CENTER", ((MAX + 1) / 2 - n) * step, 0)
+        local b = bar.Tile(f, center, bar.SUPPLY, { 0, 0 })
+        b:SetScript("OnReceiveDrag", nil)
+        b:SetScript("OnDragStart", nil)
+        b:EnableMouse(false)
+        b.upArrow = IF.Upgrades and IF.Upgrades.Arrow(b, "BOTTOMRIGHT", b, "BOTTOMRIGHT", 3, -3)
+        local bang = b:CreateTexture(nil, "OVERLAY", nil, 4)
+        if C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(QUEST_ATLAS) then
+            bang:SetAtlas(QUEST_ATLAS, true)
+        else
+            bang:SetTexture("Interface\\GossipFrame\\AvailableQuestIcon")
+            bang:SetSize(16, 16)
+        end
+        bang:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", 3, -3)
+        bang:Hide()
+        b.questBang = bang
+        local badge = b:CreateTexture(nil, "OVERLAY", nil, 4)
+        badge:SetSize(14, 14)
+        badge:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+        badge:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", 3, -3)
+        badge:Hide()
+        b.badge = badge
+        b:Hide()
+        demoTiles[n] = b
+    end
+
+    local list, nextItem, since, flashAt = {}, 1, 0, nil
+    local function Render()
+        for n, b in ipairs(demoTiles) do
+            local e = list[n]
+            b:SetShown(e ~= nil)
+            if e then
+                pcall(bar.Mirror, b, bar.StandIn(e.icon))
+                local c = BorderColor(e)
+                if c then b.border:SetVertexColor(c[1], c[2], c[3]) else b.border:SetVertexColor(1, 1, 1) end
+                if b.upArrow then b.upArrow:SetShown(e.kind == "upgrade") end
+                b.questBang:SetShown(e.kind == "quest")
+                local art = BADGES[e.kind]
+                if art then b.badge:SetTexture(art) end
+                b.badge:SetShown(art ~= nil)
+            end
+        end
+    end
+    local function Land()
+        local e = pool[nextItem]
+        nextItem = nextItem % #pool + 1
+        table.insert(list, 1, e)
+        while #list > MAX do table.remove(list) end
+        Render()
+        local c = QualityColor(e.quality)
+        demoTiles[1].flashFill:SetVertexColor(c[1], c[2], c[3], 1)
+        flashAt = GetTime()
+    end
+    for _ = 1, 3 do Land() end
+    flashAt = nil
+    f:SetScript("OnUpdate", function(_, elapsed)
+        since = since + elapsed
+        if since >= 2.4 then
+            since = 0
+            Land()
+        end
+        local front = demoTiles[1]
+        if flashAt then
+            local k = 1 - (GetTime() - flashAt) / LAND_TIME
+            if k <= 0 then
+                front.flashFill:SetAlpha(0)
+                flashAt = nil
+            else
+                front.flashFill:SetAlpha(LAND_FLASH * k)
+            end
+        end
+    end)
+    return f
+end
+
+---------------------------------------------------------------------------
 -- Use, show in the bags
 ---------------------------------------------------------------------------
 local function Forget(e)

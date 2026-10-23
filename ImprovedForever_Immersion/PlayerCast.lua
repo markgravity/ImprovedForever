@@ -296,7 +296,14 @@ local function Claimed(kind, spell)
     return false
 end
 
+-- (the tour's stand-in cast, PlayerCast.Demo: what Casting answers while
+-- it is set)
+local demoCast
+
 local function Casting()
+    if demoCast then
+        return demoCast[1], demoCast[2], demoCast[3], demoCast[4], demoCast[5], demoCast[6]
+    end
     local cname, text, texture, startMs, endMs, _, _, notInterruptible, spellID = UnitCastingInfo("player")
     if Present(cname) then
         local spell = { cname, texture, spellID }
@@ -512,7 +519,7 @@ end)
 ---------------------------------------------------------------------------
 local function Watch()
     if not IF.db then return end
-    local on = IN.Settings().castBar and not UF.EditMode()
+    local on = demoCast ~= nil or (IN.Settings().castBar and not UF.EditMode())
     IF.Focus.Fade(_G.PlayerCastingBarFrame, on)
     if on ~= PlayerCast.on then
         PlayerCast.on = on
@@ -527,5 +534,39 @@ local function Watch()
 end
 
 IN.Watcher("cast line", 0.25, Watch)
+
+-- The first-time tour's example (Onboarding.lua): the line as the game draws
+-- it, in `anchor` (a frame) in place of the screen's bottom, showing a made-up
+-- cast: "cast", "channel", "shield" (can't be interrupted), "interrupt"; nil
+-- ends it, the line back in its place. Asked again it starts the cast over.
+local DEMOS = {
+    cast = { "cast", "Fireball", 2600, false, { "Fireball", 135812, 133 } },
+    channel = { "channel", "Arcane Missiles", 3000, false, { "Arcane Missiles", 136096, 5143 } },
+    shield = { "cast", "Pyroblast", 2600, true, { "Pyroblast", 135808, 11366 } },
+    interrupt = { "cast", "Frostbolt", 1500, false, { "Frostbolt", 135846, 116 } },
+}
+
+function PlayerCast.Demo(kind, anchor)
+    local d = kind and DEMOS[kind]
+    line:ClearAllPoints()
+    if not d then
+        demoCast = nil
+        line:SetPoint("BOTTOM", UIParent, "BOTTOM", 0, LINE_Y)
+        Watch()
+        return
+    end
+    line:SetPoint("CENTER", anchor or UIParent, "CENTER", 0, 6)
+    local now = GetTime() * 1000
+    demoCast = { d[1], d[2], now, now + d[3], d[4], d[5] }
+    Start(unpack(demoCast))
+    if kind == "interrupt" then
+        C_Timer.After(1, function()
+            if demoCast and demoCast[2] == d[2] then
+                demoCast = nil
+                Interrupted()
+            end
+        end)
+    end
+end
 
 PlayerCast.Apply = Watch

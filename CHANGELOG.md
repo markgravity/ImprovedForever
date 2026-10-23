@@ -2,7 +2,7 @@
 
 ## Immersion (next)
 
-- A first-time tour in the middle of the screen, in the header's look: the five pages' names on a gold rule, revealed one by one with a diamond showing the current page's picture, the page's example in the middle made of the real party cards and spell diamond tiles. A diamond button on the rule reveals the next page; Close under the words (B with the pad, Esc). `/if tour` plays it again.
+- A first-time tour in the middle of the screen, in the header's look: the pages' names on a gold rule, revealed one by one with a diamond showing the current page's picture, the page's example in the middle made of the real party cards, action bar tiles, recent loot tiles, cast line and header. A diamond button on the rule reveals the next page; Close under the words (B with the pad, Esc). `/if tour` plays it again.
 
 ## Immersion 0.3.1
 

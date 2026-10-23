@@ -53,9 +53,19 @@ local PAGES = {
             "Your health and power run as lines along the bottom edge." },
     },
     {
-        name = "Spell diamonds", icon = SPELLS[1], example = "diamonds",
-        lines = { "Your gamepad bar, bottom right, as diamonds with their cooldowns.",
+        name = "Action bar", icon = SPELLS[1], example = "diamonds",
+        lines = { "Your gamepad bar, bottom right: its spells as diamonds, with their cooldowns.",
             "Tiles can be squares or circles instead." },
+    },
+    {
+        name = "Recent loot", icon = "Interface\\Icons\\INV_Misc_Bag_08", example = "loot",
+        lines = { "The last things you looted that matter, as tiles beside the bags.",
+            "Upgrades, quest starters, recipes, finds for the auction house and rares." },
+    },
+    {
+        name = "Cast bar", icon = "Interface\\Icons\\Spell_Fire_FlameBolt", example = "cast",
+        lines = { "Your casts as a long line over the party cards, filling out from the middle.",
+            "Grey when it can't be interrupted, red when it is cut." },
     },
     {
         name = "Pet and party", icon = "Interface\\Icons\\Spell_Holy_PrayerOfHealing", example = "cards",
@@ -305,6 +315,14 @@ Example("cards", function(f)
     t:SetPoint("BOTTOM", 0, 10)
 end)
 
+-- Recent loot: its tiles, the bar's own, new ones landing at the front
+Example("loot", function(f)
+    local row = IN.RecentLoot.Demo(f)
+    row:SetPoint("CENTER", 0, 8)
+    local t = Label(f, "Newest nearest the bags. The badge says why it is worth a look.", 11, 0.7, 0.7, 0.7)
+    t:SetPoint("BOTTOM", 0, 14)
+end)
+
 -- The header: the real one, moved into the example (HS.MoveOrigin: every
 -- owner of its place hangs on one anchor), taking turns as it does: your
 -- target as a friend and as an enemy (a stand-in, TH.Demo), the way to a
@@ -335,6 +353,7 @@ function OB.StopDemos()
     demoOn = nil
     pcall(IN.TargetHeader.Demo, nil)
     pcall(IN.QuestArrow.Demo, false)
+    pcall(IN.PlayerCast.Demo, nil)
     HS.ResetOrigin()
 end
 
@@ -363,6 +382,36 @@ Example("header", function(f)
         if t >= STEP_HOLD then
             t = 0
             Run(index % #STEPS + 1)
+        end
+    end)
+end)
+
+-- The cast bar: the real line, moved into the example, a made-up cast of each
+-- kind in turn
+local CASTS = {
+    { kind = "cast", label = "A cast fills from the middle out" },
+    { kind = "channel", label = "A channel drains in to the middle" },
+    { kind = "shield", label = "Grey: it can't be interrupted" },
+    { kind = "interrupt", label = "Red: it was interrupted" },
+}
+local CAST_HOLD = 3.4
+
+Example("cast", function(f)
+    local label = Label(f, "", 13, 0.75, 0.75, 0.75)
+    label:SetPoint("BOTTOM", 0, 14)
+    local index, t = 0, CAST_HOLD
+    f:SetScript("OnShow", function() index, t = 0, CAST_HOLD end)
+    f:SetScript("OnHide", function() OB.StopDemos() end)
+    f:SetScript("OnUpdate", function(_, elapsed)
+        if goal ~= 1 or not root:IsShown() then return end
+        t = t + elapsed
+        if t >= CAST_HOLD then
+            t = 0
+            index = index % #CASTS + 1
+            local c = CASTS[index]
+            label:SetText(c.label)
+            demoOn = true
+            Quietly(function() IN.PlayerCast.Demo(c.kind, f) end)
         end
     end)
 end)
