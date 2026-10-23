@@ -113,8 +113,10 @@ local ITEMS = {
     }, Toggle("zoneBanner", "Zone names", function() IN.ZoneBanner.Apply() end)),
     Item({
         key = "recentLoot", group = "bottom", label = "Recent loot (experiment)",
-        tip = "An experiment. Your last four loots as small tiles beside the bags, ringed in their "
-            .. "quality's colour. Mouse over one for its tooltip.",
+        tip = "An experiment. Your last four loots that matter as small tiles beside the bags: upgrades "
+            .. "(green arrow), quest starters (gold !), recipes for your professions, finds worth more at "
+            .. "the auction house, rares, mounts, pets and toys to learn, and bags that open. The rest "
+            .. "flies to the bags' tile. Mouse over one for its tooltip.",
     }, Toggle("recentLoot", "Recent loot (experiment)", function() IN.RecentLoot.Apply() end)),
     Item({
         key = "padStyle", group = "bottom", label = "Tile style",

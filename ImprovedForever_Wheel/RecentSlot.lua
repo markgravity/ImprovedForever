@@ -63,6 +63,8 @@ end
 
 local tile, standIn, tileCount
 local diamond = false
+local glyphScale = 1
+local STICK_BIG = 1.6            -- (R3 / L3's glyph, bigger than a face button's)
 
 -- (the round look or the tile; the slot the tile's size)
 local function Look(GB, d)
@@ -75,7 +77,10 @@ local function Look(GB, d)
     frame:SetShown(not diamond)
     count:SetShown(not diamond)
     if tile then tile:SetShown(diamond) end
-    if diamond then slot:SetSize(d.width, d.width) end
+    if diamond then
+        slot:SetSize(d.width, d.width)
+        glyphScale = d.glyph / 22 * STICK_BIG   -- (the row is built at 22; the stick's glyph draws small in its square)
+    end
 end
 
 -- A stand-in for the recent action (its spell's or item's cooldown and
@@ -303,8 +308,9 @@ local function Refresh(force)
     slot:Show()
     Resize()
     slot:SetAlpha(Layout().alpha or 1)
-    label:SetShown(not Layout().hideName)
+    label:SetShown(not Layout().hideName and not diamond)
     glyphs:SetShown(not Layout().hideGlyphs)
+    if diamond then glyphs:SetScale(math.max(0.3, glyphScale * (Layout().glyphScale or 1))) end
     local recent = IF.RecentAction(wheel)
     icon:SetShown(recent ~= nil and not diamond)
     standIn, tileCount = nil, ""
@@ -331,7 +337,12 @@ local function Refresh(force)
     local keys = COMBO_GLYPHS[combo]
     local w = glyphs:Set(keys) or 0
     glyphs:ClearAllPoints()
-    glyphs:SetPoint("TOPLEFT", slot, "BOTTOM", -w / 2, -4)
+    if diamond then
+        -- (as the other tiles' glyphs: above it, its count inside)
+        glyphs:SetPoint("BOTTOMLEFT", slot, "TOP", -w / 2, 4)
+    else
+        glyphs:SetPoint("TOPLEFT", slot, "BOTTOM", -w / 2, -4)
+    end
 end
 
 IF.RecentChanged = function() Refresh(true) end
@@ -749,7 +760,7 @@ local function Build()
     checkText:SetText("Show Action Name")
     check:SetScript("OnClick", function(self)
         Layout().hideName = not self:GetChecked() or nil
-        label:SetShown(not Layout().hideName)
+        label:SetShown(not Layout().hideName and not diamond)
     glyphs:SetShown(not Layout().hideGlyphs)
     end)
     dialog.check = check
@@ -776,7 +787,7 @@ local function Build()
         if opened then SetLayout(Copy(opened)) end
         Place()
         Resize(true)
-        label:SetShown(not Layout().hideName)
+        label:SetShown(not Layout().hideName and not diamond)
     glyphs:SetShown(not Layout().hideGlyphs)
         dialog:Refresh()
     end)
@@ -828,7 +839,7 @@ local function Apply()
     Place()
     Resize(true)
     slot:SetAlpha(Layout().alpha or 1)
-    label:SetShown(not Layout().hideName)
+    label:SetShown(not Layout().hideName and not diamond)
     glyphs:SetShown(not Layout().hideGlyphs)
     if RS.SettingsShown() then RS.RefreshSettings() end
 end

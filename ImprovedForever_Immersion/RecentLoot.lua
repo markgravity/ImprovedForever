@@ -1,8 +1,14 @@
--- Your recent loot: up to four small tiles left of the bags' tile under
--- the spell diamonds (GamepadBar.lua's supplies), the newest nearest it;
+-- Your recent loot: only what is worth a look, each marked by its badge:
+-- an upgrade for what you wear (the green arrow), an item that starts a
+-- quest (!), a recipe for your professions (a book), a find worth more at
+-- the auction house (a coin), a rare or better (its ring), a mount, pet
+-- or toy not learned yet (a horse), a bag that opens (a key). Anything
+-- else flies to the bags' tile and is gone. Up to four small tiles left of
+-- the bags' tile under the spell diamonds (GamepadBar.lua's supplies), the
+-- newest nearest it;
 -- the same item looted again grouped into its tile (its count summed, the
 -- tile back to the front). Each the bar's tile, its border tinted as the
--- bags tint an item's (its quality from uncommon up, a quest item gold).
+-- bags tint an item's (its quality from uncommon up, a quest starter gold).
 -- An item taken from the loot
 -- window flies from its row there into the front tile (the window not
 -- shown, autoloot: from the middle of the screen, where you stand), the
@@ -60,10 +66,18 @@ end
 -- else as it is
 ---------------------------------------------------------------------------
 local QUEST = { 1, 0.82, 0 }
+local QUEST_ATLAS = "QuestNormal"
+-- (a kind's badge texture, for the ones with no art of the game's own)
+local BADGES = {
+    recipe = "Interface\\Icons\\INV_Misc_Book_09",
+    auction = "Interface\\MoneyFrame\\UI-GoldIcon",
+    collect = "Interface\\Icons\\Ability_Mount_RidingHorse",
+    open = "Interface\\Icons\\INV_Misc_Key_03",
+}
 
 -- (the border's tint, or nil: none)
 local function BorderColor(e)
-    if e.quest then return QUEST end
+    if e.kind == "quest" then return QUEST end
     if (e.quality or 1) < 2 then return nil end
     local c = BAG_ITEM_QUALITY_COLORS and BAG_ITEM_QUALITY_COLORS[e.quality]
     if type(c) == "table" and c.r then return { c.r, c.g, c.b } end
@@ -101,6 +115,24 @@ local function Tiles(bar)
             b.flashFill:SetAlpha(LAND_FLASH * f)
         end)
         b.landFlash = flash
+        -- (its badge: the upgrade arrow, or the quest's !)
+        b.upArrow = IF.Upgrades and IF.Upgrades.Arrow(b, "BOTTOMRIGHT", b, "BOTTOMRIGHT", 3, -3)
+        local bang = b:CreateTexture(nil, "OVERLAY", nil, 4)
+        if C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(QUEST_ATLAS) then
+            bang:SetAtlas(QUEST_ATLAS, true)
+        else
+            bang:SetTexture("Interface\\GossipFrame\\AvailableQuestIcon")
+            bang:SetSize(16, 16)
+        end
+        bang:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", 3, -3)
+        bang:Hide()
+        b.questBang = bang
+        local badge = b:CreateTexture(nil, "OVERLAY", nil, 4)
+        badge:SetSize(14, 14)
+        badge:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+        badge:SetPoint("BOTTOMRIGHT", b, "BOTTOMRIGHT", 3, -3)
+        badge:Hide()
+        b.badge = badge
         b:Hide()
         tiles[i] = { tile = b, center = center }
     end
@@ -138,6 +170,11 @@ local function Refresh()
             pcall(bar.Mirror, b, stand)
             local c = BorderColor(e)
             if c then b.border:SetVertexColor(c[1], c[2], c[3]) else b.border:SetVertexColor(1, 1, 1) end
+            if b.upArrow then b.upArrow:SetShown(e.kind == "upgrade") end
+            b.questBang:SetShown(e.kind == "quest")
+            local art = BADGES[e.kind]
+            if art then b.badge:SetTexture(art) end
+            b.badge:SetShown(art ~= nil)
         end
     end
 end
@@ -156,13 +193,78 @@ function RL.Left()
     end
 end
 
--- (a quest item: as the loot window or bags say, else by its class)
-local QUEST_CLASS = Enum.ItemClass and Enum.ItemClass.Questitem or 12
-local function IsQuest(item)
-    if item.quest then return true end
-    local get = C_Item and C_Item.GetItemInfoInstant or GetItemInfoInstant
-    local ok, _, _, _, _, _, classID = pcall(get, item.id)
-    return ok and classID == QUEST_CLASS or false
+-- What makes an item worth a tile: "upgrade" (better than what is worn),
+-- "quest" (starts a quest not yet taken or done), or nil: not shown
+local function Done(questID)
+    local log = C_QuestLog
+    return log and log.IsQuestFlaggedCompleted and log.IsQuestFlaggedCompleted(questID) or false
+end
+
+local function InLog(questID)
+    local log = C_QuestLog
+    return log and log.GetLogIndexForQuestID and log.GetLogIndexForQuestID(questID) and true or false
+end
+
+local function StartsQuest(id)
+    local GD = IF.GameData
+    if not (GD and GD.ItemQuests) then return false end
+    local ok, starts = pcall(GD.ItemQuests, id)
+    if not (ok and starts) then return false end
+    if InLog(starts) or Done(starts) then return false end
+    return not GD.QuestOpen or GD.QuestOpen(starts) and true or false
+end
+
+-- (a bag slot holding the item, newest stack last found: nil while it hasn't come)
+local function FindInBags(id)
+    local C = C_Container
+    if not (C and C.GetContainerNumSlots) then return nil end
+    for bag = 0, NUM_BAG_SLOTS or 4 do
+        for slot = 1, C.GetContainerNumSlots(bag) or 0 do
+            local info = C.GetContainerItemInfo(bag, slot)
+            if info and info.itemID == id then return bag, slot, info end
+        end
+    end
+end
+
+-- (a mount, a pet or a toy the character hasn't learned: the tooltip's
+-- "Already known" says; a toy by the toy box)
+local MOUNT_CLASS, PET_SUB, MOUNT_SUB = 15, 2, 5
+local function IsNewCollectible(id, bag, slot, classID, subclassID)
+    local toys = C_ToyBox
+    if toys and toys.GetToyInfo and toys.GetToyInfo(id) then
+        return not (PlayerHasToy and PlayerHasToy(id))
+    end
+    if classID ~= MOUNT_CLASS or (subclassID ~= PET_SUB and subclassID ~= MOUNT_SUB) then return false end
+    local tips = C_TooltipInfo
+    if not (tips and tips.GetBagItem) then return true end
+    local ok, data = pcall(tips.GetBagItem, bag, slot)
+    if not ok or type(data) ~= "table" or not data.lines then return true end
+    for _, line in ipairs(data.lines) do
+        if ITEM_SPELL_KNOWN and line.leftText == ITEM_SPELL_KNOWN then return false end
+    end
+    return true
+end
+
+-- What makes an item worth a tile, once it is in the bags (the verdict
+-- of ItemValue.lua is by bag slot): "quest" (starts one not yet taken or
+-- done), "upgrade", "recipe" (for the character's professions, not
+-- known), "auction" (worth clearly more there than to a vendor),
+-- "collect" (a mount, pet or toy to learn), "open" (a bag that opens),
+-- "rare" (blue or better), or nil: not shown, flown to the bags' tile
+local function Kind(item)
+    if StartsQuest(item.id) then return "quest" end
+    local bag, slot, info = FindInBags(item.id)
+    if not bag then return nil, true end
+    local IV = IF.ItemValue
+    local e = IV and IV.Judge and IV.Judge(bag, slot)
+    if not e then return nil, true end
+    if e.tag == "Upgrade" then return "upgrade" end
+    if e.tag == "Recipe" and e.verdict == "keep" then return "recipe" end
+    local _, _, _, _, _, _, _, _, _, _, _, classID, subclassID = GetItemInfo(item.id)
+    if IsNewCollectible(item.id, bag, slot, classID, subclassID) then return "collect" end
+    if e.verdict == "auction" then return "auction" end
+    if info and info.hasLoot then return "open" end
+    if (item.quality or e.quality or 1) >= 3 then return "rare" end
 end
 
 -- An item come in: grouped into its tile, or a new one, at the front
@@ -171,13 +273,14 @@ local function Add(item)
         if e.id == item.id then
             table.remove(recent, i)
             e.count = e.count + item.count
-            e.link, e.icon, e.quality = item.link, item.icon or e.icon, item.quality or e.quality
+            e.link, e.icon, e.quality, e.kind = item.link, item.icon or e.icon, item.quality or e.quality,
+                item.kind or e.kind
             table.insert(recent, 1, e)
             return
         end
     end
     table.insert(recent, 1, { id = item.id, link = item.link, icon = item.icon, quality = item.quality,
-        count = item.count, quest = IsQuest(item) })
+        count = item.count, kind = item.kind })
     while #recent > MAX do table.remove(recent) end
 end
 
@@ -215,6 +318,16 @@ local function Flight()
     return f
 end
 
+-- (an item that goes to the bags' tile: the tile flashing white once)
+local function Pulse()
+    local bt = GB() and GB().BagTile
+    if bt and bt.flashFill then
+        bt.flashFill:SetVertexColor(1, 1, 1, 1)
+        bt.flashFill:SetAlpha(LAND_FLASH * 0.6)
+        C_Timer.After(0.15, function() bt.flashFill:SetAlpha(0) end)
+    end
+end
+
 local function Ease(t)
     return t < 0.5 and 4 * t * t * t or 1 - (-2 * t + 2) ^ 3 / 2
 end
@@ -225,17 +338,26 @@ local function Step(f)
         f:SetAlpha(0)
         return
     end
-    local target = tiles[1]
     local tx, ty, tw
-    if row and row:IsShown() and target then
-        tx, ty = Center(target.center)
-        tw = GB() and GB().SUPPLY.width or FALLBACK_SIZE
+    if f.item.kind then
+        local target = tiles[1]
+        if row and row:IsShown() and target then
+            tx, ty = Center(target.center)
+            tw = GB() and GB().SUPPLY.width or FALLBACK_SIZE
+        end
+    else
+        local bt = GB() and GB().BagTile
+        if bt and bt:IsVisible() then tx, ty, tw = Center(bt) end
     end
     if not tx or t >= 1 then
         f:SetScript("OnUpdate", nil)
         f:Hide()
         pool[#pool + 1] = f
-        Land(f.item)
+        if f.item.kind then
+            Land(f.item)
+        else
+            Pulse()
+        end
         return
     end
     f:Show()
@@ -250,10 +372,12 @@ local function Step(f)
 end
 
 local function Fly(item, from)
-    -- (the tiles not to be seen (faded: fishing, the camp): straight in)
+    -- (the tiles not to be seen (faded: fishing, the camp): straight in;
+    -- an item for the bags' tile only flies when that is seen)
     local faded = row and IF.Focus.Faded(row:GetParent())
-    if not (On() and row and row:IsVisible() and not faded) then
-        Land(item)
+    local seen = On() and row and row:IsVisible() and not faded
+    if not seen then
+        if item.kind then Land(item) end
         return
     end
     local f = Flight()
@@ -283,6 +407,25 @@ end
 -- while it's shown (a row is gone by the time its slot is cleared)
 ---------------------------------------------------------------------------
 local slots, places = {}, {}
+-- Items taken, waiting to be in the bags (their verdict is by bag slot):
+-- { item, from, at }; dropped if they never come (full bags)
+local pending = {}
+local PENDING_TIME = 2
+
+local function Process()
+    local i = 1
+    while i <= #pending do
+        local p = pending[i]
+        local kind, wait = Kind(p.item)
+        if wait and GetTime() - p.at < PENDING_TIME then
+            i = i + 1
+        else
+            table.remove(pending, i)
+            p.item.kind = kind
+            Fly(p.item, p.from)
+        end
+    end
+end
 
 -- (an item that goes by a roll or the master looter: its slot cleared from
 -- your window whoever gets it, so not counted)
@@ -299,12 +442,12 @@ local function Snapshot()
     wipe(slots)
     local n = GetNumLootItems and GetNumLootItems() or 0
     for slot = 1, n do
-        local ok, icon, _, quantity, _, quality, locked, quest = pcall(GetLootSlotInfo, slot)
+        local ok, icon, _, quantity, _, quality, locked = pcall(GetLootSlotInfo, slot)
         local link = ok and GetLootSlotLink(slot)
         local id = ItemID(link)
         if id and not Rolled(quality, locked) then
             slots[slot] = { id = id, link = link, icon = icon, quality = quality or 1,
-                count = math.max(1, tonumber(quantity) or 1), quest = quest and true or false }
+                count = math.max(1, tonumber(quantity) or 1) }
         end
     end
 end
@@ -361,18 +504,22 @@ events:SetScript("OnEvent", function(_, event, slot)
         ReadPlaces()
         local item = slots[slot]
         slots[slot] = nil
-        if item and On() then Fly(item, places[slot]) end
+        if item and On() then pending[#pending + 1] = { item = item, from = places[slot], at = GetTime() } end
     elseif event == "LOOT_CLOSED" then
         watch:Hide()
         wipe(slots)
     else
+        Process()
         Refresh()
     end
 end)
 
 -- (placed and shown again now and then: the bags' tile comes, goes and
 -- moves with the style and Edit Mode)
-IN.Watcher("recent loot", 0.5, Refresh)
+IN.Watcher("recent loot", 0.5, function()
+    Process()
+    Refresh()
+end)
 
 function RL.Apply()
     Refresh()
@@ -381,7 +528,8 @@ end
 ---------------------------------------------------------------------------
 -- /if loottest [n | clear]: n items from your bags (3 by default, the
 -- first twice: grouped) flown in as if taken from a loot window on the
--- left, one row each; clear: the row emptied
+-- left, one row each, each taken for the next kind in turn (the last for
+-- the bags' tile) whatever it is; clear: the row emptied
 ---------------------------------------------------------------------------
 function RL.Test(arg)
     if arg == "clear" then
@@ -404,10 +552,8 @@ function RL.Test(arg)
             local id = ok and type(info) == "table" and info.itemID
             if id and not seen[id] then
                 seen[id] = true
-                local qok, q = pcall(C.GetContainerItemQuestInfo, bag, slot)
                 items[#items + 1] = { id = id, link = info.hyperlink, icon = info.iconFileID,
-                    quality = info.quality or 1, count = 1,
-                    quest = qok and type(q) == "table" and q.isQuestItem or false }
+                    quality = info.quality or 1, count = 1 }
             end
         end
     end
@@ -415,13 +561,14 @@ function RL.Test(arg)
         IF.Print("Recent loot test: no items in your bags to fly in.")
         return
     end
-    -- (the rows of a loot window left of the middle)
+    -- (the rows of a loot window left of the middle; the kinds in turn,
+    -- the last one for the bags' tile, whatever each item is)
+    local KINDS = { "upgrade", "quest", "recipe", "auction", "rare", "collect", "open" }
     local x, top = UIParent:GetWidth() * 0.3, UIParent:GetHeight() * 0.6
     for i = 1, n do
         local item = items[(i - 1) % #items + 1]
-        if i == n and n > 1 then item = items[1] end
-        local copy = { id = item.id, link = item.link, icon = item.icon, quality = item.quality, count = 1,
-            quest = item.quest }
+        local copy = { id = item.id, link = item.link, icon = item.icon, quality = item.quality, count = 1 }
+        if not (i == n and n > 1) then copy.kind = KINDS[(i - 1) % #KINDS + 1] end
         Fly(copy, { x, top - (i - 1) * 44, 36 })
     end
     local bar = GB()

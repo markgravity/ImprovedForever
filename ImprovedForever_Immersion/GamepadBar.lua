@@ -183,6 +183,8 @@ local GCD_MAX = 1.6
 -- (the cast ring: on the border, RING_AT of the tile's half width out; its
 -- line and glow's thickness)
 local RING_AT, RING_LINE, RING_GLOW = 0.96, 2.5, 4
+local COUNT_BADGE = 22              -- (the count's circle, inside a tile's foot, clear of its glyph)
+local COUNT_LIFT = 3
 -- (an icon's share of its tile: a turned one's side, the diamond mask's
 -- width; an upright one fits inside at half the diamond's width)
 local ICON_FILL = 0.94
@@ -304,8 +306,21 @@ local function Button(center, d, dir, key, parent)
     b.timer:SetPoint("CENTER")
     b.timer:SetShadowOffset(1, -1)
     b.timer:Hide()
-    b.count = over:CreateFontString(nil, "OVERLAY", "NumberFontNormal")
-    b.count:SetPoint("BOTTOM", b, "CENTER", 0, -d.width / 2 + 6)
+    -- (the count in the game's level badge, under the tile's foot: legible
+    -- on any icon; as wide as its digits need)
+    b.countBg = over:CreateTexture(nil, "OVERLAY", nil, 2)
+    b.countBg:SetAtlas("UI-HUD-UnitFrame-SmallCircle")
+    b.countBg:Hide()
+    b.count = over:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    b.count:SetDrawLayer("OVERLAY", 3)
+    b.count:SetShadowOffset(1, -1)
+    b.count:SetPoint("CENTER", b.countBg, "CENTER", 0, -0.5)
+    b.countBg:SetPoint("BOTTOM", b, "CENTER", 0, -d.width / 2 + (b.countLift or COUNT_LIFT))
+    hooksecurefunc(b.count, "SetText", function(self, text)
+        local on = type(text) == "string" and text ~= ""
+        b.countBg:SetShown(on)
+        if on then b.countBg:SetSize(math.max(COUNT_BADGE, self:GetStringWidth() + 10), COUNT_BADGE) end
+    end)
 
     b.key = over:CreateTexture(nil, "OVERLAY", nil, 2)
     b.key:SetSize(d.glyph, d.glyph)
@@ -363,8 +378,8 @@ local function Reshape(b)
     b.borderAtlas = nil
     SetBorder(b, SLOT.normal)
     b.ring.r = d.width / 2 * RING_AT
-    b.count:ClearAllPoints()
-    b.count:SetPoint("BOTTOM", b, "CENTER", 0, -d.width / 2 + 6)
+    b.countBg:ClearAllPoints()
+    b.countBg:SetPoint("BOTTOM", b, "CENTER", 0, -d.width / 2 + (b.countLift or COUNT_LIFT))
     if not b.placed then
         local px, py = Place(b.dir)
         b.key:ClearAllPoints()
@@ -1520,8 +1535,11 @@ local function Supply(read, tip)
     local center = CreateFrame("Frame", nil, holder)
     center:SetSize(1, 1)
     local b = Button(center, SUPPLY, { 0, 0 }, nil, holder)
-    b.count:SetFontObject(NumberFontNormal)
     b.read, b.tip = read, tip
+    -- (no glyph on it: its count as the level badge, under its foot)
+    b.countLift = -COUNT_BADGE / 2
+    b.countBg:ClearAllPoints()
+    b.countBg:SetPoint("BOTTOM", b, "CENTER", 0, -SUPPLY.width / 2 + b.countLift)
     b:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_TOP")
         self.tip()
