@@ -170,8 +170,13 @@ end
 -- (the first a gap past the bags' tile's edge, the rest a step apart)
 local function Place(bar)
     local step = bar.SUPPLY.width + bar.SUPPLY_GAP
+    -- (put by the bags' tile's rect, not anchored to it: a secure button
+    -- in the row would make the tile protected in combat)
+    local x, y = bar.BagTile:GetCenter()
+    if not (x and y) then return end
+    local k = bar.BagTile:GetEffectiveScale() / row:GetEffectiveScale()
     row:ClearAllPoints()
-    row:SetPoint("CENTER", bar.BagTile, "CENTER")
+    row:SetPoint("CENTER", UIParent, "BOTTOMLEFT", x * k, y * k)
     for i, t in ipairs(tiles) do
         t.center:ClearAllPoints()
         t.center:SetPoint("CENTER", row, "CENTER", -i * step, 0)
@@ -317,7 +322,7 @@ local function Kind(item)
     if not e then return nil, true end
     if e.tag == "Upgrade" then return "upgrade" end
     if e.tag == "Recipe" and e.verdict == "keep" then return "recipe" end
-    local _, _, _, _, _, _, _, _, _, _, _, classID, subclassID = GetItemInfo(item.id)
+    local _, _, _, _, _, _, _, _, _, _, _, classID, subclassID = ((C_Item and C_Item.GetItemInfo) or GetItemInfo)(item.id)
     if IsNewCollectible(item.id, bag, slot, classID, subclassID) then return "collect" end
     if e.verdict == "auction" then return "auction" end
     if info and info.hasLoot then return "open" end

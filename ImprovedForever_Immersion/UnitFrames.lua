@@ -408,7 +408,12 @@ do
     p.name:SetHeight(CARD_NAME_H)
     p.combat = Atlas(over, "OVERLAY", "UI-HUD-UnitFrame-Player-CombatIcon")
     p.combat:SetSize(CARD_NAME_H, CARD_NAME_H)
-    p.combat:SetPoint("BOTTOMLEFT", p.health.box, "TOPLEFT", 2, 1)
+    p.combat:SetAlpha(0)
+    -- (at the name's right end, its room kept always: the frame is secure,
+    -- so in combat only alpha changes, no show or placing)
+    p.combat:SetPoint("BOTTOMRIGHT", p.health.box, "TOPRIGHT", -2, 1)
+    p.name:SetPoint("BOTTOMLEFT", p.health.box, "TOPLEFT", 2, 1)
+    p.name:SetPoint("BOTTOMRIGHT", p.health.box, "TOPRIGHT", -(CARD_NAME_H + 4), 1)
 end
 
 function player:Refresh(event)
@@ -419,12 +424,9 @@ function player:Refresh(event)
     AvatarLook(self.avatar, unit, dead and GREY or color, dead)
     Try(self.name.SetText, self.name, UnitName(unit))
     NameColor(self)
-    -- (the name after the combat mark while in a fight)
+    -- (the combat mark by alpha: a region of a secure frame, protected)
     local fighting = Flag(UnitAffectingCombat, unit)
-    self.combat:SetShown(fighting)
-    self.name:ClearAllPoints()
-    self.name:SetPoint("BOTTOMLEFT", self.health.box, "TOPLEFT", fighting and (CARD_NAME_H + 2) or 2, 1)
-    self.name:SetPoint("BOTTOMRIGHT", self.health.box, "TOPRIGHT", -2, 1)
+    self.combat:SetAlpha(fighting and 1 or 0)
     FillHealth(self)
     FillPower(self)
 end
@@ -476,6 +478,8 @@ local covers = {}
 
 local function Cover(native, on)
     if not native then return end
+    -- (in combat the game's frames' rects are secret: kept as last placed)
+    if IF.InCombat() then return end
     local f = covers[native]
     if not f then
         if not on then return end
@@ -486,12 +490,18 @@ local function Cover(native, on)
         f:Hide()
         return
     end
+    -- (a rect can be secret just as a fight starts, before the lockdown:
+    -- then kept as last placed)
     local l, b, w, h = native:GetRect()
+    if issecretvalue and (issecretvalue(l) or issecretvalue(b) or issecretvalue(w) or issecretvalue(h)) then
+        return
+    end
     if not (l and b and w and h) then
         f:Hide()
         return
     end
     local k = native:GetEffectiveScale() / UIParent:GetEffectiveScale()
+    if issecretvalue and issecretvalue(k) then return end
     f:ClearAllPoints()
     f:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", l * k, b * k)
     f:SetSize(w * k, h * k)
