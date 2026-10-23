@@ -23,7 +23,7 @@ local NAME_SIZE = 13
 local STEP = 0.1
 local OTHER_SCALE, OTHER_ALPHA = 0.8, 0.85
 local FADE_SPEED = 8                    -- (how fast alpha and size ease)
-local FLY = 0.4                         -- (seconds: your target's plate to the header)
+local FLY, RISE = 0.4, 45               -- (seconds, and how far up: your target's plate leaving)
 
 ---------------------------------------------------------------------------
 -- One plate of ours (pooled)
@@ -90,23 +90,12 @@ local function Draw(p)
     p:SetShown(p.alpha > 0.01)
 end
 
--- Your target's plate going to the header: the name's place there, found
--- from our own frames (the header's origin, and ours: read as numbers
--- only when they are; else it just fades). The plate keeps its anchor to
--- the game's, with an offset easing out to the header, fading as it
--- gets there.
+-- Your target's plate leaving for the header: it can't be flown there (its
+-- place on screen can't be read: measuring the game's plate, or a frame
+-- anchored to it, is blocked and taints), so it rises toward the top and
+-- fades as the header's words come in.
 local function Fly(p)
-    p.fly = nil
-    local ok, dx, dy = pcall(function()
-        local hx, hy = HS.Origin:GetCenter()
-        local px, py = p:GetCenter()
-        if Secret(hx) or Secret(px) or not (hx and hy and px and py) then return nil end
-        local hs, ps = HS.Origin:GetEffectiveScale(), p:GetEffectiveScale()
-        local ty = hy - (HS.NAME_GAP + 10) - HS.NAME_SIZE / 2
-        return (hx * hs - px * ps) / ps, (ty * hs - py * ps) / ps
-    end)
-    IF.db.plateFly = ok and dx and ("fly %.0f,%.0f"):format(dx, dy) or ("no centre: " .. tostring(ok and dx or dx))
-    if ok and dx then p.fly = { t = 0, dx = dx, dy = dy } end
+    p.fly = { t = 0, dx = 0, dy = RISE }
 end
 
 local function Refresh(p)
