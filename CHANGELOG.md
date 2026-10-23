@@ -1,5 +1,9 @@
 # Changelog
 
+## Immersion (next)
+
+- A first-time tour in the middle of the screen, in the header's look: the five pages' names on a gold rule, revealed one by one with a diamond showing the current page's picture, the page's example in the middle made of the real party cards and spell diamond tiles. Continue and Close at the bottom (A and B with the pad, Esc closes). `/if tour` plays it again.
+
 ## Immersion 0.3.1
 
 - Your player and pet models no longer stay on screen when another addon hides the interface during an NPC conversation (DialogueUI).

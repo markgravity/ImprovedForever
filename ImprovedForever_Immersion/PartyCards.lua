@@ -743,6 +743,22 @@ local function RefreshAll()
     end
 end
 
+-- A real card with a stand-in's look, for a place that isn't the HUD (the
+-- first-time tour, Onboarding.lua): drawn once as /if cards draws them, no
+-- events, no clicks. sample: { name, class, role, health, threat }.
+function PC.Demo(parent, sample, scale)
+    local b = Card(nil, "player", scale or 1)
+    b:SetParent(parent)
+    b:SetFrameStrata(parent:GetFrameStrata())
+    b:SetFrameLevel(parent:GetFrameLevel() + 2)
+    b:EnableMouse(false)
+    b.unit, b.sample = "player", sample
+    b:Show()
+    UF.AvatarUnit(b.avatar, "player", true)
+    Refresh(b)
+    return b
+end
+
 function PC.TogglePreview(arg)
     if IF.InCombat() then return IF.Print("cards preview: not in combat") end
     arg = arg and arg:lower()

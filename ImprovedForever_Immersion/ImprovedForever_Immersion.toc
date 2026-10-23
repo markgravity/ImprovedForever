@@ -35,3 +35,4 @@ PartyPad.lua
 ChatView.lua
 ChatFade.lua
 InterfaceEditor.lua
+Onboarding.lua
