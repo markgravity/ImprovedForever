@@ -10,6 +10,8 @@
 -- (SC.Legend), a frame faded in (SC.FadeIn), the window placed in the
 -- room between the header and the legend (SC.Place).
 local IF = ImprovedForever
+-- (the scene only with the Immersion module and its switch on: Module.lua)
+if not IF.auctionScene then return end
 
 local K = IF.ConfigKit
 

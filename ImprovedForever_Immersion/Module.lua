@@ -108,6 +108,7 @@ local DEFAULTS = {
     padStyle = "square", -- its tiles: "diamond", "square" (rows and columns) or "circle" (GamepadBar.lua)
     tourDone = false,   -- the first-time tour has been shown (Onboarding.lua)
     partyPad = false,   -- L1 ours: + the D-pad picks a party spell, + a face button casts it on party 1 to 4 (an experiment)
+    auctionScene = true, -- the Auction module's window as a scene in our look (read as it loads: after a reload)
 }
 
 -- A watcher: fn() every `every` seconds. One that errors stops, said once

@@ -12,7 +12,10 @@
 -- The left stick works the lists: left / right the column (tasks, items),
 -- up / down the pick in it; the D-pad and the buttons work the item's
 -- screen. Circle closes the auction house.
+-- With the Immersion module and its "Auction house scene" switch on only
+-- (IF.auctionScene, Module.lua); else AuctionTasksClassic.lua's classic look runs instead.
 local IF = ImprovedForever
+if not IF.auctionScene then return end
 
 local K = IF.ConfigKit
 local KC = K.C

@@ -6,7 +6,10 @@
 -- held (the row says what cancelling costs; the deposit is lost), and once full letting go
 -- cancels (the server wants a hardware event: the release is one).
 -- Triangle looks again; the picked one's tooltip beside the window.
+-- With the Immersion module and its "Auction house scene" switch on only
+-- (IF.auctionScene, Module.lua); else AuctionOwnedClassic.lua's classic look runs instead.
 local IF = ImprovedForever
+if not IF.auctionScene then return end
 
 local K = IF.ConfigKit
 local KC = K.C

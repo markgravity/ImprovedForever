@@ -9,7 +9,7 @@
 ## IconTexture: Interface\AddOns\ImprovedForever\textures\ic_mod_auction
 ## Group: ImprovedForever
 ## Dependencies: ImprovedForever
-## OptionalDeps: ImprovedForever_Vibration
+## OptionalDeps: ImprovedForever_Vibration, ImprovedForever_Immersion
 ## SavedVariables: ImprovedForeverAuctionDB
 
 Module.lua
@@ -18,10 +18,14 @@ AuctionChart.lua
 AuctionConfirm.lua
 AuctionScene.lua
 AuctionBuy.lua
+AuctionBuyClassic.lua
 AuctionSellTab.lua
+AuctionSellClassic.lua
 AuctionOwned.lua
+AuctionOwnedClassic.lua
 Tasks.lua
 AuctionTasks.lua
+AuctionTasksClassic.lua
 TaskCraft.lua
 VendorTasks.lua
 AuctionEditor.lua

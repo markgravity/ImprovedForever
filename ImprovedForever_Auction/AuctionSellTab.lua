@@ -19,7 +19,10 @@
 -- held, and once full letting go posts (posting wants a hardware event: the
 -- release is one; a timer isn't). A price the server warns about: asked in
 -- a popup (AuctionConfirm.lua).
+-- With the Immersion module and its "Auction house scene" switch on only
+-- (IF.auctionScene, Module.lua); else AuctionSellClassic.lua's classic look runs instead.
 local IF = ImprovedForever
+if not IF.auctionScene then return end
 
 local K = IF.ConfigKit
 local KC = K.C

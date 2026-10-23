@@ -160,6 +160,15 @@ local ITEMS = {
             .. "your Edit Mode layout once.",
     }, Toggle("hudCooldowns", "Cooldowns beside the diamonds (experiment)", function() IN.HudLayout.Apply() end)),
     Item({
+        key = "auctionScene", group = "auction", label = "Auction house scene",
+        tip = "With the Auction module, the auction house as a scene in this look: no window frame, the "
+            .. "world dimmed, the HUD faded, items as a grid. Off, its classic window. Changes after a "
+            .. "/reload.",
+    }, Toggle("auctionScene", "Auction house scene", function()
+        IF.Print("Auction house scene " .. (IN.Settings().auctionScene and "on" or "off")
+            .. ": it changes after a /reload.")
+    end)),
+    Item({
         key = "npcDialog", group = "dialog", label = "NPC dialog as subtitles",
         tip = "NPC talk (greetings, quests, gossip) as subtitles low in the middle, in place of the game's "
             .. "window. Pad and mouse both work. With Spoken installed, its voice reads the words.",
@@ -173,6 +182,7 @@ local GROUPS = {
     { key = "cast", label = "Cast bar" },
     { key = "auras", label = "Buffs & cooldowns" },
     { key = "dialog", label = "NPC dialog" },
+    { key = "auction", label = "Auction house" },
 }
 
 IF.InterfaceEditor = IF.SettingsPage({ key = "interface", label = "Immersion", module = "interface", order = 35 },

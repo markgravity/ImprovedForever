@@ -8,6 +8,14 @@ local IF = ImprovedForever
 
 IF.AddModule({ key = "auction", label = "Auction", icon = IF.TEX .. "ic_mod_auction", addon = ... })
 
+-- The auction window as a scene (AuctionScene.lua) only with the Immersion
+-- module (loaded first: an optional dependency) and its "Auction house
+-- scene" switch on; else its classic look (the *Classic.lua files). Read
+-- from the saved table itself: IF.db comes at login, after the files load.
+local saved = rawget(_G, "ImprovedForeverDB")
+IF.auctionScene = IF.Interface ~= nil
+    and not (type(saved) == "table" and type(saved.interface) == "table" and saved.interface.auctionScene == false)
+
 -- /if scan: scan the auction house's prices (it must be open)
 IF.AddCommand("scan", function() IF.Auction.Scan() end, ": scan the auction house's prices")
 -- /if upgrade: why the Buy tab's picked item is an upgrade or not

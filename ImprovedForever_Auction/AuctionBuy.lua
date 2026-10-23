@@ -23,7 +23,10 @@
 -- change them); Circle comes back to the list, and from it closes the
 -- auction house. R3 (a click) shows / hides the tooltips (with what is
 -- worn in the item's place beside them).
+-- With the Immersion module and its "Auction house scene" switch on only
+-- (IF.auctionScene, Module.lua); else AuctionBuyClassic.lua's classic look runs instead.
 local IF = ImprovedForever
+if not IF.auctionScene then return end
 
 local K = IF.ConfigKit
 local KC = K.C
