@@ -693,3 +693,121 @@ function SC.TextButton(parent, label, fn, size)
     b:SetScript("OnLeave", function(self) self.text:SetTextColor(SC.GREY[1], SC.GREY[2], SC.GREY[3]) end)
     return b
 end
+
+---------------------------------------------------------------------------
+-- A row of a list, in the scene's look (the Sell, Auctions and Tasks
+-- pages): nothing behind it but a faint gold rule under it; the item's
+-- icon in the square ring (how many on its corner), its name, a grey line
+-- under it, a price in Morpheus on the right, a capsule under that. The
+-- picked one in a soft gold light, the game's cursor at its left while its
+-- list has the pad. row:Fill({ icon, quality, count, name, nameColor,
+-- line, price, tag = { text, color }, upgrade }), row:Lit(on, active)
+---------------------------------------------------------------------------
+SC.PRICE = { 1, 0.94, 0.82 }
+function SC.Row(parent, height, side)
+    local r = K.NewFrame("Button", nil, parent)
+    r:SetHeight(height or 40)
+    r.band = SC.Band(r)
+    r.icon = SC.RingIcon(r, side or 28)
+    r.icon:SetPoint("LEFT", 12, 0)
+    r.upgrade = IF.Upgrades and IF.Upgrades.Arrow(r, "TOPLEFT", r.icon, "TOPLEFT", -5, 5)
+    r.count = r:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmall")
+    r.count:SetPoint("BOTTOMRIGHT", r.icon, "BOTTOMRIGHT", 4, -3)
+    r.price = SC.Text(r, 14, SC.PRICE)
+    r.name = SC.Text(r, 12, nil, SC.BODY)
+    r.name:SetJustifyH("LEFT")
+    r.line = SC.Text(r, 10, SC.GREY, SC.BODY)
+    r.line:SetJustifyH("LEFT")
+    r.tag = SC.Capsule(r, 14, 8)
+    r.tag:SetPoint("BOTTOMRIGHT", -10, 4)
+    r.rule = SC.Rule(r, 300, false, 0.15)
+    r.rule:SetPoint("TOP", r, "BOTTOM", 0, -2)
+    local hover = r:CreateTexture(nil, "HIGHLIGHT")
+    hover:SetAllPoints()
+    hover:SetColorTexture(1, 1, 1, 0.04)
+
+    function r:Fill(o)
+        local c = ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[o.quality or 1]
+        self.icon:SetIcon(o.icon)
+        if self.upgrade then self.upgrade:SetShown(o.upgrade and true or false) end
+        local n = o.count or 0
+        self.count:SetText(n > 1 and n or "")
+        self.name:SetText(o.name or "...")
+        local nc = o.nameColor or (((o.quality or 1) <= 1 or not c) and { 0.9, 0.9, 0.9 } or { c.r, c.g, c.b })
+        self.name:SetTextColor(nc[1], nc[2], nc[3])
+        local line = o.line and o.line ~= "" and o.line or nil
+        self.line:SetText(line or "")
+        self.price:SetText(o.price or "")
+        self.tag:Set(o.tag and o.tag[1], o.tag and o.tag[2])
+        -- (the price up when a capsule is under it, else in the middle; the
+        -- name up when a line is under it, else in the middle)
+        self.price:ClearAllPoints()
+        if self.tag:IsShown() then self.price:SetPoint("TOPRIGHT", -10, -5) else self.price:SetPoint("RIGHT", -10, 0) end
+        self.name:ClearAllPoints()
+        if line then
+            self.name:SetPoint("TOPLEFT", self.icon, "TOPRIGHT", 10, 1)
+        else
+            self.name:SetPoint("LEFT", self.icon, "RIGHT", 10, 0)
+        end
+        self.name:SetPoint("RIGHT", self.price, "LEFT", -8, 0)
+        self.line:ClearAllPoints()
+        self.line:SetPoint("BOTTOMLEFT", self.icon, "BOTTOMRIGHT", 10, -1)
+        if self.tag:IsShown() then
+            self.line:SetPoint("RIGHT", self.tag, "LEFT", -8, 0)
+        else
+            self.line:SetPoint("RIGHT", -10, 0)
+        end
+        local w = self:GetWidth()
+        if w and w > 40 then self.rule:SetLength(w - 20) end
+    end
+    -- on: the picked one; active: its list has the pad
+    function r:Lit(on, active)
+        self.band:SetLight(on and (active and 0.18 or 0.07) or 0)
+        local cursorOn = on and active and IF.Input.Pad()
+        if cursorOn and not self.cursor then self.cursor = IF.Focus.Cursor(self) end
+        if self.cursor then
+            if cursorOn then self.cursor:Point(self) else self.cursor:Hide() end
+        end
+    end
+    return r
+end
+
+---------------------------------------------------------------------------
+-- A section's name in a list (the Sell page's "Sell here", the ready
+-- tasks): in Morpheus in its colour, how many on the right in grey, a gold
+-- rule under them. sec:Set(label, color, info)
+---------------------------------------------------------------------------
+function SC.Section(parent, height)
+    local h = K.NewFrame("Frame", nil, parent)
+    h:SetHeight(height or 40)
+    h.text = SC.Text(h, 15, SC.GOLD)
+    h.text:SetPoint("BOTTOMLEFT", 10, 7)
+    h.info = SC.Text(h, 10, SC.GREY, SC.BODY)
+    h.info:SetPoint("BOTTOMRIGHT", -10, 8)
+    h.rule = SC.Rule(h, 300, false, 0.5)
+    h.rule:SetPoint("BOTTOM", 0, 3)
+    function h:Set(label, color, info)
+        self.text:SetText(label or "")
+        color = color or SC.GOLD
+        self.text:SetTextColor(color[1], color[2], color[3])
+        self.info:SetText(info or "")
+        local w = self:GetWidth()
+        if w and w > 40 then self.rule:SetLength(w - 10) end
+    end
+    return h
+end
+
+---------------------------------------------------------------------------
+-- A column's title, in Morpheus (gold while its list has the pad), the
+-- pad's glyph before it. title:Set(text, active, key)
+---------------------------------------------------------------------------
+function SC.Title(parent)
+    local t = SC.Text(parent, 16, SC.GREY)
+    function t:Set(text, active, key)
+        local glyph = active and key and IF.Input.Pad() and (IF.GlyphText(key, 18) .. " ") or ""
+        self:SetText(glyph .. text)
+        local c = active and SC.GOLD or SC.GREY
+        self:SetTextColor(c[1], c[2], c[3])
+    end
+    return t
+end

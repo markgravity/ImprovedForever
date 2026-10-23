@@ -26,20 +26,21 @@ local KC = K.C
 local A = IF.Auction
 local AH = C_AuctionHouse
 local BY = IF.AuctionBuy
+local SC = IF.AuctionScene
 
 local ST = { key = "sell", label = "Sell", icon = "Interface\\Icons\\INV_Misc_Coin_01" }
 IF.AuctionSellTab = ST
 
-local LEFT_W = 430
-local ROW_H = 36
+local LEFT_W = 410
+local ROW_H = 42
 local SEARCH_AFTER = 0.35          -- resting on an item this long: its listings looked up
 local DURATIONS = A.Durations()
 
 local SECTIONS = {
-    { key = "profit", label = "Sell here", color = "|cff5fd35f" },
-    { key = "unknown", label = "No price yet", color = "|cffc9a25a" },
-    { key = "vendor", label = "Sell to a vendor", color = "|cffd8ccb0" },
-    { key = "keep", label = "Keep", color = "|cffff7a5c" },
+    { key = "profit", label = "Sell here", color = "|cff8fd98f", rgb = { 0.56, 0.85, 0.56 } },
+    { key = "unknown", label = "No price yet", color = "|cffd9b36a", rgb = { 0.85, 0.7, 0.42 } },
+    { key = "vendor", label = "Sell to a vendor", color = "|cffd8ccb0", rgb = { 0.85, 0.8, 0.69 } },
+    { key = "keep", label = "Keep", color = "|cffeb8c80", rgb = { 0.92, 0.55, 0.5 } },
 }
 
 local Glyph = function(key, size) return BY.Glyph(key, size) end
@@ -331,58 +332,44 @@ local function Entry()
 end
 
 local function VisibleRows()
-    return math.floor((BY.H - 30 - 40) / ROW_H)
+    return math.floor((BY.H - 20 - 40) / ROW_H)
 end
 
+-- The page, in the scene's look (AuctionScene.lua): no panels. Down the
+-- left the bags' items under their sections' names, each a bare row (its
+-- icon in the square ring, its name, its worth on the right), the picked
+-- one in a soft gold light; a gold rule standing between the two sides.
+-- On the right the picked item: its icon and name in Morpheus, why it's in
+-- its section; the lowest price now and the usual one, the price chart;
+-- the price asked big in Morpheus between gold arrows, the suggestion's
+-- name under it; the receipt; "Hold to Sell" along the bottom.
 function ST.Build(parent)
     f = K.NewFrame("Frame", nil, parent)
     f:SetAllPoints(parent)
     f:Hide()
 
     -- Left: the list
-    local listW = BY.W - 14 - 12 - LEFT_W - 16
-    listBox = BY.Panel(f, 0.4)
-    listBox:SetPoint("TOPLEFT", f, "TOPLEFT", 14, -30)
+    local listW = BY.W - 14 - LEFT_W - 40
+    listBox = K.NewFrame("Frame", nil, f)
+    listBox:SetPoint("TOPLEFT", f, "TOPLEFT", 14, -20)
     listBox:SetPoint("BOTTOMLEFT", f, "BOTTOMLEFT", 14, 36)
     listBox:SetWidth(listW)
     rows = {}
-    local width = listW - 12
     for i = 1, VisibleRows() do
-        local r = K.NewFrame("Button", nil, listBox)
-        r:SetSize(width, ROW_H - 4)
-        r:SetPoint("TOPLEFT", 6, -6 - (i - 1) * ROW_H)
-        r.bg = r:CreateTexture(nil, "BACKGROUND")
-        r.bg:SetAllPoints()
-        r.focus = BY.FocusStroke(r)
-        r.icon = BY.ItemIcon(r, 26)
-        r.icon:SetPoint("LEFT", 6, 0)
-        r.count = r:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmall")
-        r.count:SetPoint("BOTTOMRIGHT", r.icon, "BOTTOMRIGHT", 0, 0)
-        r.name = r:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-        r.name:SetPoint("LEFT", r.icon, "RIGHT", 8, 0)
-        r.name:SetPoint("RIGHT", r, "RIGHT", -110, 0)
-        r.name:SetJustifyH("LEFT")
-        r.name:SetWordWrap(false)
-        r.value = K.ChatText(r, 11, KC.cream2)
-        r.value:SetPoint("RIGHT", -8, 0)
-        r.value:SetJustifyH("RIGHT")
-        r.header = r:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-        r.header:SetPoint("LEFT", 6, -4)
-        r.headerInfo = K.ChatText(r, 11, KC.help)
-        r.headerInfo:SetPoint("RIGHT", -8, -4)
-        r.rule = r:CreateTexture(nil, "ARTWORK")
-        r.rule:SetHeight(1)
-        r.rule:SetPoint("BOTTOMLEFT", 0, 2)
-        r.rule:SetPoint("BOTTOMRIGHT", 0, 2)
-        r.rule:SetColorTexture(0.45, 0.38, 0.25, 0.8)
+        local r = SC.Row(listBox, ROW_H - 4, 28)
+        r:SetPoint("TOPLEFT", 0, -(i - 1) * ROW_H)
+        r:SetPoint("RIGHT", listBox, "RIGHT", 0, 0)
+        r.header = SC.Section(listBox, ROW_H - 4)
+        r.header:SetPoint("TOPLEFT", r, "TOPLEFT")
+        r.header:SetPoint("TOPRIGHT", r, "TOPRIGHT")
         r:SetScript("OnClick", function(self)
-            if self.line and self.line.entry then
+            if self.listLine and self.listLine.entry then
                 sel = self.lineIndex
                 ST.Pick()
             end
         end)
         BY.Hover(r, function(self)
-            local e = self.line and self.line.entry
+            local e = self.listLine and self.listLine.entry
             if not e then return false end
             GameTooltip:SetBagItem(e.bag, e.slot)
         end)
@@ -396,108 +383,122 @@ function ST.Build(parent)
         top = math.max(1, math.min(math.max(1, #lines - #rows + 1), top + dir))
         BY.Render()
     end)
-    f.empty = K.ChatText(listBox, 13, KC.grey)
+    f.empty = SC.Text(listBox, 13, SC.GREY, SC.BODY)
     f.empty:SetPoint("CENTER")
     f.empty:SetText("Nothing in the bags to sell")
+    local standing = SC.Rule(f, BY.H - 60, true)
+    standing:SetPoint("TOP", f, "TOPRIGHT", -LEFT_W - 22, -20)
 
     -- Right: the picked item
-    left = BY.Panel(f, 0.4)
-    left:SetPoint("TOPRIGHT", f, "TOPRIGHT", -16, -30)
-    left:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -16, 36)
+    left = K.NewFrame("Frame", nil, f)
+    left:SetPoint("TOPRIGHT", f, "TOPRIGHT", -10, -20)
+    left:SetPoint("BOTTOMRIGHT", f, "BOTTOMRIGHT", -10, 36)
     left:SetWidth(LEFT_W)
-    left.icon = BY.ItemIcon(left, 40)
-    left.icon:SetPoint("TOPLEFT", 14, -14)
+    left.icon = SC.RingIcon(left, 44)
+    left.icon:SetPoint("TOP", 0, -6)
     left.count = left:CreateFontString(nil, "OVERLAY", "NumberFontNormal")
-    left.count:SetPoint("BOTTOMRIGHT", left.icon, "BOTTOMRIGHT", -1, 1)
-    left.name = left:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-    left.name:SetPoint("TOPLEFT", left.icon, "TOPRIGHT", 10, -2)
-    left.name:SetPoint("RIGHT", left, "RIGHT", -14, 0)
-    left.name:SetJustifyH("LEFT")
-    left.name:SetWordWrap(false)
-    left.why = K.ChatText(left, 11, KC.help)
-    left.why:SetPoint("BOTTOMLEFT", left.icon, "BOTTOMRIGHT", 10, 2)
-    left.why:SetPoint("RIGHT", left, "RIGHT", -14, 0)
-    left.why:SetJustifyH("LEFT")
+    left.count:SetPoint("BOTTOMRIGHT", left.icon, "BOTTOMRIGHT", 5, -4)
+    left.name = SC.Text(left, 19)
+    left.name:SetPoint("TOP", left.icon, "BOTTOM", 0, -10)
+    left.name:SetWidth(LEFT_W - 20)
+    left.why = SC.Text(left, 11, SC.GREY, SC.BODY)
+    left.why:SetPoint("TOP", left.name, "BOTTOM", 0, -4)
+    left.why:SetWidth(LEFT_W - 30)
+    left.why:SetWordWrap(true)
+    left.rule = SC.Rule(left, LEFT_W - 40, false, 0.6)
+    left.rule:SetPoint("TOP", left.why, "BOTTOM", 0, -10)
+    -- The lowest price now and the usual one, side by side (as the Buy
+    -- page's item screen)
+    local function Price(x)
+        local label = SC.Text(left, 9, SC.GREY, SC.BODY)
+        label:SetPoint("TOP", left.rule, "BOTTOM", x, -8)
+        local value = SC.Text(left, 16, SC.PRICE)
+        value:SetPoint("TOP", label, "BOTTOM", 0, -3)
+        return label, value
+    end
+    left.lowLabel, left.low = Price(-LEFT_W / 4)
+    left.usualLabel, left.usual = Price(LEFT_W / 4)
+    left.lowLabel:SetText("LOWEST NOW")
+    left.usualLabel:SetText("USUALLY")
     left.chart = IF.AuctionChart.New(left, "Yours")
-    left.chart:SetPoint("TOPLEFT", 10, -66)
-    left.chart:SetPoint("TOPRIGHT", -10, -66)
-    left.chart:SetHeight(140)
-    -- The price, its suggestion, the market: big, centred up and down
-    -- between the chart and the receipt (a group sized to what it shows)
-    -- (the lowest and usual prices under the chart, as the Buy tab's)
-    left.info = K.ChatText(left, 12, KC.cream2)
-    left.info:SetPoint("TOPLEFT", left.chart, "BOTTOMLEFT", 0, -8)
-    left.info:SetPoint("TOPRIGHT", left.chart, "BOTTOMRIGHT", 0, -8)
-    left.info:SetJustifyH("CENTER")
+    left.chart:SetBackdropColor(0, 0, 0, 0)
+    left.chart:SetBackdropBorderColor(0, 0, 0, 0)
+    left.chart:SetPoint("TOP", left.low, "BOTTOM", 0, -6)
+    left.chart:SetPoint("LEFT", 0, 0)
+    left.chart:SetPoint("RIGHT", 0, 0)
+    left.chart:SetHeight(96)
+    -- The price, its suggestion: big, centred up and down between the
+    -- chart and the receipt (a group sized to what it shows)
     left.mid = K.NewFrame("Frame", nil, left)
-    left.mid:SetPoint("TOPLEFT", left.info, "BOTTOMLEFT", 0, -4)
-    left.mid:SetPoint("TOPRIGHT", left.info, "BOTTOMRIGHT", 0, -4)
+    left.mid:SetPoint("TOPLEFT", left.chart, "BOTTOMLEFT", 0, -2)
+    left.mid:SetPoint("TOPRIGHT", left.chart, "BOTTOMRIGHT", 0, -2)
     left.group = K.NewFrame("Frame", nil, left.mid)
     left.group:SetPoint("LEFT")
     left.group:SetPoint("RIGHT")
     left.group:SetPoint("CENTER")
-    left.price = K.Text(left.group, 26, KC.title)
+    left.price = SC.Text(left.group, 28, SC.PRICE)
     left.price:SetPoint("TOP", 0, 0)
-    left.leftArrow = K.Text(left.group, 26, KC.focus)
-    left.leftArrow:SetPoint("RIGHT", left.price, "LEFT", -12, 0)
+    left.leftArrow = SC.Text(left.group, 28, SC.GOLD)
+    left.leftArrow:SetPoint("RIGHT", left.price, "LEFT", -14, 0)
     left.leftArrow:SetText("‹")
-    left.rightArrow = K.Text(left.group, 26, KC.focus)
-    left.rightArrow:SetPoint("LEFT", left.price, "RIGHT", 12, 0)
+    left.rightArrow = SC.Text(left.group, 28, SC.GOLD)
+    left.rightArrow:SetPoint("LEFT", left.price, "RIGHT", 14, 0)
     left.rightArrow:SetText("›")
-    left.preset = K.ChatText(left.group, 16, KC.dimGold)
-    left.preset:SetPoint("TOP", left.price, "BOTTOM", 0, -8)
-    -- With the mouse: the price typed (gold, silver, copper), its arrows
-    -- and the suggestion clicked, the wheel over it
+    left.preset = SC.Text(left.group, 12, SC.GREY, SC.BODY)
+    left.preset:SetPoint("TOP", left.price, "BOTTOM", 0, -6)
+    -- With the mouse: the price typed (gold, silver, copper), the
+    -- suggestion picked from its list, the wheel over it
     left.money = ST.MoneyBox(left.group)
     left.money:SetPoint("CENTER", left.price, "CENTER", 0, 0)
     left.leftButton = BY.ArrowButton(left.group, left.leftArrow, function(fast) ST.Press("LEFT", fast) end)
     left.rightButton = BY.ArrowButton(left.group, left.rightArrow, function(fast) ST.Press("RIGHT", fast) end)
-    -- (the suggestions a dropdown, its list under it)
     left.presetButton = ST.PresetPicker(left.group, function(p) ST.PickPreset(p) end)
     left.presetButton:SetPoint("TOP", left.price, "BOTTOM", 0, -4)
     left.presetButton:SetWidth(240)
     BY.Wheel({ left.group }, function(dir) ST.Press(dir < 0 and "RIGHT" or "LEFT", IsShiftKeyDown()) end)
-    left.warn = K.ChatText(left.group, 14, KC.warn)
-    left.warn:SetPoint("TOP", left.preset, "BOTTOM", 0, -10)
+    left.warn = SC.Text(left.group, 12, { 1, 0.72, 0.45 }, SC.BODY)
+    left.warn:SetPoint("TOP", left.preset, "BOTTOM", 0, -8)
     left.warn:SetWidth(LEFT_W - 28)
-    left.warn:SetJustifyH("CENTER")
     left.warn:SetWordWrap(true)
-    left.vendorOnly = K.ChatText(left.mid, 15, KC.cream)
+    left.vendorOnly = SC.Text(left.mid, 14, SC.CREAM, SC.BODY)
     left.vendorOnly:SetPoint("CENTER")
     left.vendorOnly:SetWidth(LEFT_W - 40)
-    left.vendorOnly:SetJustifyH("CENTER")
-    -- The receipt
-    -- The hold status, at the bottom (AuctionBuy.lua's hold box)
-    local hold = BY.HoldBox(left)
-    hold:SetPoint("BOTTOMLEFT", 14, 12)
-    hold:SetPoint("BOTTOMRIGHT", -14, 12)
+    left.vendorOnly:SetWordWrap(true)
+    -- "Hold to Sell", along the bottom (AuctionScene.lua's hold line; held
+    -- down with the mouse as Cross held)
+    local hold = SC.HoldLine(left)
+    hold:SetPoint("BOTTOMLEFT", 10, 6)
+    hold:SetPoint("BOTTOMRIGHT", -10, 6)
     left.hold = hold
-    -- (held down with the mouse: as Cross held)
     hold.onDown = function() BY.MouseDown("A") end
     hold.onUp = function() BY.MouseUp("A") end
+    -- The receipt: each line's name in grey on the left, its value on the
+    -- right in Morpheus; the profit last, under a faint rule, in gold
     local receipt = K.NewFrame("Frame", nil, left)
-    receipt:SetPoint("BOTTOMLEFT", hold, "TOPLEFT", 8, 10)
-    receipt:SetPoint("BOTTOMRIGHT", hold, "TOPRIGHT", -8, 10)
-    receipt:SetHeight(18 * 3 + 7)
+    receipt:SetPoint("BOTTOMLEFT", hold, "TOPLEFT", 8, 12)
+    receipt:SetPoint("BOTTOMRIGHT", hold, "TOPRIGHT", -8, 12)
+    receipt:SetHeight(20 * 3 + 9)
     left.receipt = receipt
     left.mid:SetPoint("BOTTOM", receipt, "TOP", 0, 6)
     left.lines = {}
     for i = 1, 3 do
-        local y = -(i - 1) * 18 - (i == 3 and 7 or 0)
+        local y = -(i - 1) * 20 - (i == 3 and 9 or 0)
         local big = i == 3
-        local label = K.ChatText(receipt, big and 13 or 12, big and KC.cream or KC.help)
+        local label = SC.Text(receipt, 11, big and SC.CREAM or SC.GREY, SC.BODY)
         label:SetPoint("TOPLEFT", 0, y)
-        local value = K.ChatText(receipt, big and 13 or 12, big and KC.title or KC.cream)
-        value:SetPoint("TOPRIGHT", 0, y)
+        local value = SC.Text(receipt, big and 16 or 14, big and SC.GOLD or SC.PRICE)
+        value:SetPoint("TOPRIGHT", 0, y + (big and 2 or 1))
         left.lines[i] = { label = label, value = value }
     end
     -- (the duration clicked: the next, a right-click the one before)
     local duration = K.NewFrame("Button", nil, receipt)
-    duration:SetPoint("TOPLEFT", 0, 2)
-    duration:SetPoint("TOPRIGHT", 0, 2)
-    duration:SetHeight(18)
+    duration:SetPoint("TOPLEFT", 0, 3)
+    duration:SetPoint("TOPRIGHT", 0, 3)
+    duration:SetHeight(20)
     duration:RegisterForClicks("LeftButtonUp", "RightButtonUp")
-    duration:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
+    local durationLit = duration:CreateTexture(nil, "HIGHLIGHT")
+    durationLit:SetAllPoints()
+    durationLit:SetColorTexture(1, 1, 1, 0.05)
     duration:SetScript("OnClick", function(_, button)
         if not (P and P.entry and P.entry.auction) then return end
         local n = #DURATIONS
@@ -507,11 +508,8 @@ function ST.Build(parent)
         BY.Render()
     end)
     left.duration = duration
-    local rule = receipt:CreateTexture(nil, "ARTWORK")
-    rule:SetHeight(1)
-    rule:SetPoint("TOPLEFT", 0, -37)
-    rule:SetPoint("TOPRIGHT", 0, -37)
-    rule:SetColorTexture(0.45, 0.38, 0.25, 0.9)
+    local rule = SC.Rule(receipt, LEFT_W - 40, false, 0.4)
+    rule:SetPoint("TOP", receipt, "TOP", 0, -44)
     return f
 end
 
@@ -678,49 +676,32 @@ local function RenderList()
     end
     top = math.max(1, math.min(top, math.max(1, #lines - shown + 1)))
     f.empty:SetShown(#lines == 0)
-    local fr, fg, fb = BY.FocusColor()
     for i, r in ipairs(rows) do
         local index = top + i - 1
         local line = lines[index]
-        r:SetShown(line ~= nil)
-        if line then
-            r.line, r.lineIndex = line, index
-            local isHeader = line.header ~= nil
-            r.header:SetShown(isHeader)
-            r.headerInfo:SetShown(isHeader)
-            r.rule:SetShown(isHeader)
-            r.icon:SetShown(not isHeader)
-            r.icon.border:SetShown(not isHeader)
-            r.count:SetShown(not isHeader)
-            r.name:SetShown(not isHeader)
-            r.value:SetShown(not isHeader)
-            if isHeader then
-                r.bg:SetColorTexture(0, 0, 0, 0)
-                r.focus:Hide()
-                r.header:SetText(line.header.color .. line.header.label:upper() .. "|r")
-                r.headerInfo:SetText(line.count .. (line.count == 1 and " item" or " items")
-                    .. (line.header.key ~= "keep" and ("  ·  " .. A.Money(line.total)) or ""))
+        r.listLine, r.lineIndex = line, index
+        r:SetShown(line ~= nil and line.entry ~= nil)
+        r.header:SetShown(line ~= nil and line.header ~= nil)
+        if line and line.header then
+            r.header:Set(line.header.label, line.header.rgb, line.count .. (line.count == 1 and " item" or " items")
+                .. (line.header.key ~= "keep" and ("  ·  " .. A.Money(line.total)) or ""))
+            r:Lit(false)
+        elseif line then
+            local e = line.entry
+            local unit = A.UnitNet(e.itemID)
+            local value, sub
+            if e.section == "profit" or (e.section == "keep" and unit) then
+                value = A.Money(unit * e.count)
+                sub = "about, after the cut"
+            elseif e.section == "unknown" then
+                value, sub = "?", "never seen here"
             else
-                local e = line.entry
-                local c = ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[e.quality or 1]
-                r.bg:SetColorTexture(0, 0, 0, 0.35)
-                r.icon:SetTexture(e.icon or 134400)
-                r.icon.border:SetVertexColor(c and c.r or 0.6, c and c.g or 0.6, c and c.b or 0.6, 0.9)
-                r.count:SetText(e.count > 1 and e.count or "")
-                r.name:SetText(e.name or ("item " .. e.itemID))
-                r.name:SetTextColor(c and c.r or 1, c and c.g or 1, c and c.b or 1)
-                local unit = A.UnitNet(e.itemID)
-                if e.section == "profit" or (e.section == "keep" and unit) then
-                    r.value:SetText("≈ " .. A.Money(unit * e.count))
-                elseif e.section == "unknown" then
-                    r.value:SetText("|cff9d917a?|r")
-                else
-                    r.value:SetText(e.vendor > 0 and ("vendor " .. A.Money(e.vendor * e.count)) or "")
-                end
-                local on = index == sel
-                r.focus:SetShown(on)
-                r.focus:SetVertexColor(fr, fg, fb)
+                value = e.vendor > 0 and A.Money(e.vendor * e.count) or ""
+                sub = e.vendor > 0 and "a vendor pays" or ""
             end
+            r:Fill({ icon = e.icon, quality = e.quality, count = e.count, name = e.name or ("item " .. e.itemID),
+                line = sub, price = value })
+            r:Lit(index == sel, true)
         end
     end
 end
@@ -730,11 +711,14 @@ local function RenderLeft()
     left:SetShown(e ~= nil)
     if not e then return end
     local c = ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[e.quality or 1]
-    left.icon:SetTexture(e.icon or 134400)
-    left.icon.border:SetVertexColor(c and c.r or 0.6, c and c.g or 0.6, c and c.b or 0.6, 0.9)
+    left.icon:SetIcon(e.icon)
     left.count:SetText(e.count > 1 and e.count or "")
     left.name:SetText(e.name or ("item " .. e.itemID))
-    left.name:SetTextColor(c and c.r or 1, c and c.g or 1, c and c.b or 1)
+    if (e.quality or 1) <= 1 or not c then
+        left.name:SetTextColor(SC.CREAM[1], SC.CREAM[2], SC.CREAM[3])
+    else
+        left.name:SetTextColor(c.r, c.g, c.b)
+    end
     local sec
     for _, s in ipairs(SECTIONS) do
         if s.key == e.section then sec = s end
@@ -742,9 +726,11 @@ local function RenderLeft()
     left.why:SetText(sec.color .. sec.label .. "|r  ·  " .. e.why)
     left.chart:Draw({ itemID = e.itemID, lowestNow = P.lowestNow, price = e.auction and P.price or nil,
         searching = P.searching })
+    local market = A.MarketPrice(e.itemID)
+    left.low:SetText(P.searching and "..." or P.lowestNow and A.Money(P.lowestNow) or (P.searched and "none" or "—"))
+    left.usual:SetText(market and A.Money(market) or "—")
     local sale = e.auction
-    for _, part in ipairs({ left.price, left.leftArrow, left.rightArrow, left.preset, left.info, left.receipt,
-        left.hold }) do
+    for _, part in ipairs({ left.price, left.leftArrow, left.rightArrow, left.preset, left.receipt, left.hold }) do
         part:SetShown(sale)
     end
     left.vendorOnly:SetShown(not sale)
@@ -758,10 +744,9 @@ local function RenderLeft()
         left.warn:SetText("")
         return
     end
-    left.price:SetText(A.Money(P.price) .. (P.qty > 1 and "|cff9d917a/each|r" or ""))
+    left.price:SetText(A.Money(P.price) .. (P.qty > 1 and "|cff9d917a each|r" or ""))
     left.preset:SetText(P.presetLabel or "Your own price")
-    -- (with the mouse: typed; the arrows, the suggestion and the
-    -- duration clicked)
+    -- (with the mouse: typed, the suggestion and the duration clicked)
     local mouse = BY.Mouse()
     left.price:SetAlpha(mouse and 0 or 1)
     left.money:SetShown(mouse)
@@ -782,30 +767,16 @@ local function RenderLeft()
     if mouse and not picker and P.qty > 1 then
         left.preset:SetText((P.presetLabel or "Your own price") .. "  |cff9d917a(each)|r")
     end
-    local fr, fg, fb = BY.FocusColor()
-    left.leftArrow:SetTextColor(fr, fg, fb)
-    left.rightArrow:SetTextColor(fr, fg, fb)
-    local market = A.MarketPrice(e.itemID)
-    local parts = {}
-    if P.searching then
-        parts[#parts + 1] = "Checking the auction house..."
-    elseif P.lowestNow then
-        parts[#parts + 1] = "Lowest now " .. A.Money(P.lowestNow)
-    elseif P.searched then
-        parts[#parts + 1] = "None listed now"
-    end
-    if market then parts[#parts + 1] = "usually " .. A.Money(market) end
-    left.info:SetText(table.concat(parts, "   ·   "))
     left.warn:SetText(P.message or P.warn or "")
     -- The group's height: what it shows, so it sits in the middle
-    local warnH = left.warn:GetText() ~= "" and (10 + left.warn:GetStringHeight()) or 0
-    left.group:SetHeight(left.price:GetStringHeight() + 8 + left.preset:GetStringHeight() + warnH)
+    local warnH = left.warn:GetText() ~= "" and (8 + left.warn:GetStringHeight()) or 0
+    left.group:SetHeight(left.price:GetStringHeight() + 6 + left.preset:GetStringHeight() + warnH)
     local total = P.price * P.qty
     local deposit = Deposit()
     local lines3 = {
         { "Duration", "|cffc9a25a‹|r " .. DURATIONS[P.duration] .. " |cffc9a25a›|r" },
-        { "Deposit |cff9d917a(back if sold)|r", deposit and A.Money(deposit) or "?" },
-        { "Profit |cff9d917a(" .. P.qty .. " × after " .. math.floor(A.Cut() * 100) .. "% cut)|r",
+        { "Deposit  |cff7d776a(back if sold)|r", deposit and A.Money(deposit) or "?" },
+        { "Profit  |cff7d776a(" .. P.qty .. " × after " .. math.floor(A.Cut() * 100) .. "% cut)|r",
             A.Money(total * (1 - A.Cut())) },
     }
     for i, l in ipairs(left.lines) do

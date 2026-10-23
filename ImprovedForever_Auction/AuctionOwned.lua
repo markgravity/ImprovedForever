@@ -13,11 +13,14 @@ local KC = K.C
 local A = IF.Auction
 local AH = C_AuctionHouse
 local BY = IF.AuctionBuy
+local SC = IF.AuctionScene
 
 local OW = { key = "auctions", label = "Auctions", icon = "Interface\\Icons\\INV_Scroll_03" }
 IF.AuctionOwned = OW
 
-local ROW_H = 44
+local ROW_H = 46
+local LIST_W = 620                 -- (the list in the page's middle)
+local CHEAP, DEAR, SOLD_C, UNDER = { 0.55, 0.85, 0.55 }, { 0.92, 0.55, 0.5 }, { 0.56, 0.85, 0.56 }, { 0.92, 0.55, 0.5 }
 local SOLD = Enum.AuctionStatus and Enum.AuctionStatus.Sold or 1
 local BANDS = { [0] = "Short", [1] = "Medium", [2] = "Long", [3] = "Very long" }
 
@@ -81,48 +84,34 @@ local function Loaded()
     sel = math.max(1, math.min(sel, #auctions))
 end
 
+-- The page, in the scene's look (AuctionScene.lua): no panels. Over the
+-- list a line of what's up, sold and undercut; the auctions down the
+-- page's middle, each a bare row (its icon in the square ring, its name,
+-- how long it has left and its price each under it, its price on the
+-- right, a capsule under that: sold, undercut, against its usual price),
+-- the picked one in a soft gold light; "Hold to Cancel" along the bottom.
 function OW.Build(parent)
     f = K.NewFrame("Frame", nil, parent)
     f:SetAllPoints(parent)
     f:Hide()
-    summary = K.ChatText(f, 12, KC.cream2)
-    summary:SetPoint("TOPLEFT", 22, -34)
-    message = K.ChatText(f, 12, KC.warn)
-    message:SetPoint("TOPRIGHT", -26, -34)
-    message:SetJustifyH("RIGHT")
-    local box = BY.Panel(f, 0.4)
-    box:SetPoint("TOPLEFT", 14, -54)
-    box:SetPoint("BOTTOMRIGHT", -16, 36)
-    f.empty = K.ChatText(box, 13, KC.grey)
+    summary = SC.Text(f, 12, SC.CREAM, SC.BODY)
+    summary:SetPoint("TOP", 0, -14)
+    message = SC.Text(f, 12, { 1, 0.72, 0.45 }, SC.BODY)
+    message:SetPoint("TOP", summary, "BOTTOM", 0, -4)
+    local rule = SC.Rule(f, LIST_W, false, 0.5)
+    rule:SetPoint("TOP", 0, -50)
+    local box = K.NewFrame("Frame", nil, f)
+    box:SetPoint("TOP", rule, "BOTTOM", 0, -6)
+    box:SetPoint("BOTTOM", 0, 36)
+    box:SetWidth(LIST_W)
+    f.empty = SC.Text(box, 13, SC.GREY, SC.BODY)
     f.empty:SetPoint("CENTER")
     rows = {}
-    local width = BY.W - 30 - 12
-    -- (room under the rows for the hold box)
-    for i = 1, math.floor((BY.H - 54 - 36 - 12 - 44) / ROW_H) do
-        local r = K.NewFrame("Button", nil, box)
-        r:SetSize(width, ROW_H - 4)
-        r:SetPoint("TOPLEFT", 6, -6 - (i - 1) * ROW_H)
-        r.bg = r:CreateTexture(nil, "BACKGROUND")
-        r.bg:SetAllPoints()
-        if not BY.Atlas(r.bg, "Looting_ItemCard_BG") then r.bg:SetColorTexture(0.1, 0.1, 0.1, 0.8) end
-        r.focus = BY.FocusStroke(r)
-        r.icon = BY.ItemIcon(r, 34)
-        r.icon:SetPoint("LEFT", 6, 0)
-        r.count = r:CreateFontString(nil, "OVERLAY", "NumberFontNormal")
-        r.count:SetPoint("BOTTOMRIGHT", r.icon, "BOTTOMRIGHT", -1, 1)
-        r.name = r:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-        r.name:SetPoint("TOPLEFT", r.icon, "TOPRIGHT", 10, -2)
-        r.name:SetWidth(330)
-        r.name:SetJustifyH("LEFT")
-        r.name:SetWordWrap(false)
-        r.sub = K.ChatText(r, 11, KC.help)
-        r.sub:SetPoint("BOTTOMLEFT", r.icon, "BOTTOMRIGHT", 10, 2)
-        r.time = K.ChatText(r, 12, KC.cream2)
-        r.time:SetPoint("LEFT", r, "LEFT", 400, 0)
-        r.price = r:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-        r.price:SetPoint("TOPRIGHT", -12, -6)
-        r.state = K.ChatText(r, 11, KC.help)
-        r.state:SetPoint("BOTTOMRIGHT", -12, 5)
+    -- (room under the rows for the hold line)
+    for i = 1, math.floor((BY.H - 56 - 36 - 56) / ROW_H) do
+        local r = SC.Row(box, ROW_H - 4, 30)
+        r:SetPoint("TOPLEFT", 0, -(i - 1) * ROW_H)
+        r:SetPoint("RIGHT", box, "RIGHT", 0, 0)
         r:SetScript("OnClick", function(self)
             if self.index then
                 sel = self.index
@@ -145,14 +134,29 @@ function OW.Build(parent)
         top = math.max(1, math.min(math.max(1, #auctions - #rows + 1), top + dir))
         BY.Render()
     end)
-    -- "Hold to Cancel", at the bottom (AuctionBuy.lua's hold box; held
-    -- down with the mouse too)
-    f.hold = BY.HoldBox(box)
-    f.hold:SetPoint("BOTTOMLEFT", 8, 8)
-    f.hold:SetPoint("BOTTOMRIGHT", -8, 8)
+    -- "Hold to Cancel", along the bottom (AuctionScene.lua's hold line;
+    -- held down with the mouse too)
+    f.hold = SC.HoldLine(box)
+    f.hold:SetPoint("BOTTOMLEFT", 60, 6)
+    f.hold:SetPoint("BOTTOMRIGHT", -60, 6)
     f.hold.onDown = function() BY.MouseDown("X") end
     f.hold.onUp = function() BY.MouseUp("X") end
     return f
+end
+
+-- An auction's capsule: sold, undercut (and by how much), cancelling's
+-- cost while held, else its price against its usual one
+local function Tag(a, unit)
+    if a.status == SOLD then return { "SOLD", SOLD_C } end
+    if holding and holding.id == a.auctionID then
+        return { "CANCELLING COSTS " .. A.Money(holding.cost), UNDER }
+    end
+    local lower = Undercut(a)
+    if lower then return { "UNDERCUT  " .. A.Money(lower), UNDER } end
+    local usual = A.MarketPrice(a.itemKey.itemID)
+    local pct = usual and usual > 0 and unit and math.floor((unit / usual - 1) * 100 + 0.5)
+    if pct and pct <= -5 then return { -pct .. "% BELOW USUAL", CHEAP } end
+    if pct and pct >= 5 then return { pct .. "% ABOVE USUAL", DEAR } end
 end
 
 function OW.Render()
@@ -171,13 +175,13 @@ function OW.Render()
         worth = worth + (a.buyoutAmount or a.bidAmount or 0)
         if Undercut(a) then undercut = undercut + 1 end
     end
-    summary:SetText(active .. " up  ·  " .. sold .. " sold" .. (sold > 0 and " |cff9d917a(money in the mail)|r" or "")
-        .. "  ·  worth " .. A.Money(worth)
-        .. (undercut > 0 and ("  ·  |cffff7a5c" .. undercut .. " undercut|r") or ""))
+    summary:SetText(active .. " up  |cff7d776a·|r  " .. sold .. " sold"
+        .. (sold > 0 and " |cff9d917a(money in the mail)|r" or "")
+        .. "  |cff7d776a·|r  worth " .. A.Money(worth)
+        .. (undercut > 0 and ("  |cff7d776a·|r  |cffeb8c80" .. undercut .. " undercut|r") or ""))
     message:SetText(OW.message or "")
     f.empty:SetShown(n == 0)
     f.empty:SetText(loading and "Loading..." or "No auctions of yours")
-    local fr, fg, fb = BY.FocusColor()
     for i, r in ipairs(rows) do
         local index = top + i - 1
         local a = auctions[index]
@@ -185,32 +189,21 @@ function OW.Render()
         if a then
             r.index = index
             local info = AH.GetItemKeyInfo(a.itemKey)
-            local c = info and ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[info.quality]
-            r.icon:SetTexture(info and info.iconFileID or 134400)
-            r.icon.border:SetVertexColor(c and c.r or 0.6, c and c.g or 0.6, c and c.b or 0.6, 0.9)
-            r.count:SetText(a.quantity > 1 and a.quantity or "")
-            r.name:SetText(info and info.itemName or "...")
-            r.name:SetTextColor(c and c.r or 1, c and c.g or 1, c and c.b or 1)
             local unit = Unit(a)
-            r.sub:SetText(a.quantity > 1 and unit and (A.Money(unit) .. " each") or "")
             local isSold = a.status == SOLD
-            r.time:SetText(isSold and "" or TimeLeft(a))
-            r.price:SetText(A.Money(a.buyoutAmount or a.bidAmount or 0))
-            local lower = Undercut(a)
-            if isSold then
-                r.state:SetText("|cff5fd35fSold|r")
-            elseif lower then
-                r.state:SetText("|cffff7a5cUndercut: " .. A.Money(lower) .. " each|r")
-            else
-                r.state:SetText(BY.Deal(a.itemKey.itemID, unit))
-            end
-            local on = index == sel
-            r.focus:SetShown(on)
-            r.focus:SetVertexColor(fr, fg, fb)
+            local parts = {}
+            if not isSold then parts[#parts + 1] = TimeLeft(a) .. " left" end
+            if a.quantity > 1 and unit then parts[#parts + 1] = a.quantity .. " × " .. A.Money(unit) end
+            r:Fill({
+                icon = info and info.iconFileID, quality = info and info.quality, count = a.quantity,
+                name = info and info.itemName or "...", line = table.concat(parts, "  ·  "),
+                price = A.Money(a.buyoutAmount or a.bidAmount or 0), tag = Tag(a, unit),
+            })
+            r:Lit(index == sel, true)
         end
     end
     OW.RenderHold()
-    -- The picked one's tooltip, under the tabs
+    -- The picked one's tooltip, beside the window
     local a = not BY.TipsOff() and auctions[sel]
     if BY.Hovering() then
         return
@@ -225,20 +218,13 @@ function OW.Render()
     end
 end
 
--- The hold box (as far as the hold has come); the held row: what
--- cancelling costs
+-- The hold line (as far as the hold has come; the held row's capsule
+-- says what cancelling costs: Tag)
 function OW.RenderHold()
     if not rows then return end
     local a = auctions[sel]
     f.hold:SetShown(a ~= nil and a.status ~= SOLD)
     f.hold:SetHold(BY.HoldProgress(holding and holding.start), "X", "Cancel")
-    if not holding then return end
-    for _, r in ipairs(rows) do
-        local a = r:IsShown() and auctions[r.index]
-        if a and a.auctionID == holding.id then
-            r.state:SetText("|cffff7a5cCancelling costs " .. A.Money(holding.cost) .. "|r")
-        end
-    end
 end
 
 -- The picked auction's item (R3 held: its Wiki page)
