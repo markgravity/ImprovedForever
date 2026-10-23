@@ -555,8 +555,8 @@ HS.Add("target", 2, { wants = Wants, rule = function() return false end })
 
 local Ease, Pop = HS.Ease, HS.Pop
 local drawn, drawnCalm
--- (in a fight the words kept to the fight's: the name smaller, the quests
--- and the rest gone (the casts stay), eased)
+-- (the name always at the size it has in a fight; in a fight the quests
+-- and the rest go too (the casts stay), eased)
 local CALM_NAME, CALM_SPEED = 0.6, 4
 local calm = 0
 
@@ -592,7 +592,7 @@ local function Draw(elapsed)
     local words = Ease(p, 0.4, 1)
     name:ClearAllPoints()
     name:SetPoint("TOP", look, "CENTER", 0, -NAME_GAP - SLIDE * (1 - words))
-    NameScale(1 + (CALM_NAME - 1) * calm)
+    NameScale(CALM_NAME)
     name:SetAlpha(words)
     castBox:SetAlpha(words)
     quest:SetAlpha(words * (1 - calm))
