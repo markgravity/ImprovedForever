@@ -161,7 +161,7 @@ local world, screen = {}, {}
 for i = 1, 6 do world[i], screen[i] = {}, {} end
 
 -- (its middle on the rule)
-frame:SetPoint("CENTER", UIParent, "TOP", 0, -RULE_Y)
+frame:SetPoint("CENTER", HS.Origin, "CENTER")
 
 -- The diamond turned `angle` (clockwise from straight ahead), `bob` up
 -- (screen), `bright` 0 to 1 (headed its way), in `color`, `size` times as
@@ -407,8 +407,20 @@ end
 -- (the angle to turn to: clockwise from straight ahead, in radians)
 local goalAngle, yards
 
+-- The tour's stand-in way (QA.Demo): a quest name, the yards left, an
+-- angle off to the side
+local demoWay
+
 local function Read()
     goalAngle, yards = nil, nil
+    if demoWay then
+        goalAngle, yards = demoWay.angle, demoWay.yards
+        title:SetText(demoWay.name)
+        words:SetText(demoWay.text)
+        distance:SetText(IN_GAME_NAVIGATION_RANGE and IN_GAME_NAVIGATION_RANGE:format(tostring(demoWay.yards))
+            or (demoWay.yards .. " yds"))
+        return
+    end
     if not IN.Settings().questArrow or Quiet() then return end
     local t = Target()
     if not t then return end
@@ -519,6 +531,14 @@ frame:SetScript("OnUpdate", function(_, elapsed)
         shown.angle = nil
     end
 end)
+
+-- The tour's stand-in way on or off (Onboarding.lua)
+function QA.Demo(on)
+    demoWay = on and { name = "A Threat Within", text = "Speak with Marshal McBride", yards = 142, angle = 0.5 } or nil
+    frame:SetShown(on or IN.Settings().questArrow and true or false)
+    since = POLL
+    dirty = true
+end
 
 -- (the header's place: wanted while there's a way to show, its rule while
 -- not plain)

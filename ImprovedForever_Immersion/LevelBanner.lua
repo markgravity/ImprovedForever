@@ -35,7 +35,7 @@ local banner = CreateFrame("Frame", "ImprovedForeverLevelBanner", UIParent)
 banner:SetSize(2 * HS.RULE_W, 140)
 banner:SetFrameStrata("LOW")
 banner:EnableMouse(false)
-banner:SetPoint("CENTER", UIParent, "TOP", 0, -HS.RULE_Y)
+banner:SetPoint("CENTER", HS.Origin, "CENTER")
 banner:Hide()
 
 -- (the diamond, the game's level up arrow in it upright (else the level

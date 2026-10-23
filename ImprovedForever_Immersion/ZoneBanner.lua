@@ -42,7 +42,7 @@ local banner = CreateFrame("Frame", "ImprovedForeverZoneBanner", UIParent)
 banner:SetSize(260, 120)
 banner:SetFrameStrata("LOW")
 banner:EnableMouse(false)
-banner:SetPoint("CENTER", UIParent, "TOP", 0, -HS.RULE_Y)
+banner:SetPoint("CENTER", HS.Origin, "CENTER")
 banner:Hide()
 
 local name = HS.Text(banner, HS.FONT, HS.NAME_SIZE, HS.GOLD[1], HS.GOLD[2], HS.GOLD[3])
@@ -237,7 +237,9 @@ function ZB.Test()
     if not zone then return end
     name:SetText(zone)
     sub:SetText(subzone ~= zone and subzone or "")
-    local pvpType, _, faction = GetZonePVPInfo()
+    -- (the client may lack it, as in SetKind's)
+    local pvpType, faction
+    if GetZonePVPInfo then pvpType, _, faction = GetZonePVPInfo() end
     pvp:SetText("")
     SetKind()
     goal, holdUntil = 1, GetTime() + HOLD + SWAP

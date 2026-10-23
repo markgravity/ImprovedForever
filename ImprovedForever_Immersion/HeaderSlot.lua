@@ -88,11 +88,28 @@ end
 ---------------------------------------------------------------------------
 -- The gold rule: two halves out from the middle, fading out
 ---------------------------------------------------------------------------
+-- Where the header is: one anchor the rule and every owner's frame hang on
+-- (the screen's top, RULE_Y down), moved only while the first-time tour shows
+-- the header in its page (Onboarding.lua)
+HS.Origin = CreateFrame("Frame", nil, UIParent)
+HS.Origin:SetSize(1, 1)
+HS.Origin:SetPoint("CENTER", UIParent, "TOP", 0, -HS.RULE_Y)
+
+function HS.MoveOrigin(frame, x, y)
+    HS.Origin:ClearAllPoints()
+    HS.Origin:SetPoint("CENTER", frame, "TOP", x or 0, y or 0)
+end
+
+function HS.ResetOrigin()
+    HS.Origin:ClearAllPoints()
+    HS.Origin:SetPoint("CENTER", UIParent, "TOP", 0, -HS.RULE_Y)
+end
+
 local ruleFrame = CreateFrame("Frame", "ImprovedForeverHeaderRule", UIParent)
 ruleFrame:SetSize(2 * HS.RULE_W, 1)
 ruleFrame:SetFrameStrata("LOW")
 ruleFrame:EnableMouse(false)
-ruleFrame:SetPoint("CENTER", UIParent, "TOP", 0, -HS.RULE_Y)
+ruleFrame:SetPoint("CENTER", HS.Origin, "CENTER")
 ruleFrame:SetAlpha(0)
 
 local G = HS.GOLD

@@ -1,14 +1,17 @@
--- The auction house window: over the game's own as it opens (where it
--- is; the game's window hidden behind it), used with the pad. Its pages
--- are tabs down its right, as the character window's (the right stick
--- up / down):
+-- The auction house window: over the game's own as it opens (the game's
+-- window hidden behind it), used with the pad. It is a scene, in
+-- Immersion's look (AuctionScene.lua): no frame of its own, in the
+-- screen's middle under the header (the auctioneer's), the world dimmed,
+-- black bars at the top and bottom (the legend in the bottom one), the HUD
+-- faded. Its pages' names in a row along its top, in Morpheus (the right
+-- stick up / down moves through them):
 -- Buy (this file), Sell (AuctionSellTab.lua), Auctions (AuctionOwned.lua).
 -- Buy: three levels of category (the game's own, AuctionCategories): the
 -- main ones down the left (the left stick up / down), the second along
 -- the top (L1 / R1), the third under it (L2 / R2), "All" first in each.
--- Under them what is listed, as a list (the D-pad moves), each
--- with its lowest price and how it compares to its usual one
--- (Auction.lua); the picked one's tooltip beside the window, with the
+-- What is listed is a grid of big
+-- tiles (the D-pad moves), each with its name, lowest price and tags: how it
+-- compares to its usual one (Auction.lua), its upgrade; the picked one's tooltip beside the window, with the
 -- versions listed under it (gear with random stats: each one's stats and
 -- lowest price). L3 opens the filters (usable only, up to my level,
 -- lowest quality, upgrades: marked with the game's green arrow or only
@@ -26,25 +29,36 @@ local K = IF.ConfigKit
 local KC = K.C
 local A = IF.Auction
 local AH = C_AuctionHouse
+local SC = IF.AuctionScene
 
 local BY = {}
 IF.AuctionBuy = BY
 
-local W, H = 920, 600
-local SIDE_W = 190
-local MAIN_X = SIDE_W + 28            -- the main area's left
-local MAIN_W = W - MAIN_X - 16
-local CONTENT_TOP = -116
-local CONTENT_H = H - 116 - 36
-local LIST_H = 50                  -- a row: its name, a line of badges under it, inside the ring
-local LIST_ROWS = math.floor(CONTENT_H / LIST_H)
-local NAME_ROOM = MAIN_W - 50 - 200     -- a list row's name (the price on the right)
--- The list view: the item's screen beside the list (a preview of the
--- picked one; Cross goes into it), the list the rest
-local PREVIEW_W = 360
-local SIDE_LIST_W = MAIN_W - PREVIEW_W - 10
+local W, H = 920, 600                -- the other pages'
+local TAB_H = 56                       -- the pages' names along the top, over every page
+-- The Buy page: the main categories down the left, what is for sale as a
+-- grid of big tiles (name, price, tags) in the middle, the item's screen
+-- beside it (under the pages' names: BUY_H is the page's, not the window's)
+local COLS, GRID_X, GRID_Y = 4, 150, 156 -- the grid's columns and its tiles' pitch
+local GRID_LEFT = 14                   -- (room for the cursor at the first column's left)
+local CELL_W, CELL_H = 128, 152
+-- Three columns, apart as the first-time tour's: the categories, the grid,
+-- the picked item's screen (a preview of it; Cross goes into it)
+local RULE_X = 230                     -- the standing gold rule, from the window's left
+local SIDE_W = RULE_X - 40             -- the names left of it, right-aligned
+local MAIN_X = RULE_X + 40             -- the grid column's left
+local MAIN_W = GRID_LEFT + COLS * GRID_X
+local PREVIEW_GAP, PREVIEW_W = 30, 340
+local PREVIEW_X = MAIN_X + MAIN_W + PREVIEW_GAP
+local BUY_W, BUY_H = PREVIEW_X + PREVIEW_W + 16, 612
+local CONTENT_TOP = -108
+local CONTENT_H = BUY_H - 108 - 36
+local GRID_ROWS = math.floor(CONTENT_H / GRID_Y)
+local PER = COLS * GRID_ROWS           -- tiles shown
+local SIDE_TOP = 70                    -- the main categories (the names' first row)
+local SIDE_PITCH = 30
 local PREVIEW_AFTER = 0.3          -- resting on an item this long: its screen beside the list
-local SIDE_ROWS = 16
+local SIDE_ROWS = 12
 local STICK_ON, STICK_OFF = 0.6, 0.3
 local REPEAT_DELAY, REPEAT_EVERY, FAST_AFTER = 0.35, 0.1, 1.5
 local QUERY_DELAY = 0.3               -- categories moved through quickly: one query at the end
@@ -89,14 +103,19 @@ IF.Focus.AlongTop(win)
 BY.window = win
 local titleText = win.titleText
 
--- The pages, one at a time, picked with the tabs down the window's right
--- (the right stick up / down): Buy (this file's), Sell (AuctionSellTab.lua), Auctions
--- (AuctionOwned.lua). A page of another file: BY.AddPage(page), page = {
--- key, label, icon, Build(parent) -> frame, Show(), Hide(), Render(),
--- Press(name, fast) -> handled (Circle unhandled: the auction house
--- closes), Hints() -> the legend's text }.
+-- The pages, one at a time, picked with their names along the window's
+-- top (the right stick up / down): Buy (this file's), Sell
+-- (AuctionSellTab.lua), Auctions (AuctionOwned.lua). A page of another
+-- file: BY.AddPage(page), page = { key, label, icon, Build(parent) ->
+-- frame, Show(), Hide(), Render(), Press(name, fast) -> handled (Circle
+-- unhandled: the auction house closes), Hints() -> the legend's text }.
+-- Each is under the names (the other pages' in pageHost, W x H).
 local buyPage = K.NewFrame("Frame", nil, win)
-buyPage:SetAllPoints(win)
+buyPage:SetPoint("TOPLEFT", 0, -TAB_H)
+buyPage:SetPoint("BOTTOMRIGHT")
+local pageHost = K.NewFrame("Frame", nil, win)
+pageHost:SetPoint("TOPLEFT", 0, -TAB_H)
+pageHost:SetPoint("BOTTOMRIGHT")
 BY.tab = "buy"
 BY.TABS = { { key = "buy", label = "Buy", icon = "Interface\\Icons\\INV_Misc_Bag_10" } }
 
@@ -251,50 +270,72 @@ end
 ---------------------------------------------------------------------------
 -- The main categories, down the left
 ---------------------------------------------------------------------------
-local side = Panel(buyPage, 0.4)
-side:SetPoint("TOPLEFT", 14, -30)
-side:SetPoint("BOTTOMLEFT", 14, 36)
-side:SetWidth(SIDE_W)
-local sideTitle = K.ChatText(side, 12, KC.dimGold)
-sideTitle:SetPoint("TOP", 0, -10)
+-- As the first-time tour's list (Immersion's Onboarding.lua): no panel, a
+-- gold rule standing, fading out at both ends, the names right-aligned left
+-- of it (the chosen one gold), a small diamond on the rule above them with
+-- the chosen one's picture
+local SCENE = { gold = SC.GOLD }
+do
+local RULE_TOP, RULE_BOTTOM = 20, BUY_H - 50
+local sideRule = SC.Rule(buyPage, RULE_BOTTOM - RULE_TOP, true)
+sideRule:SetPoint("TOP", buyPage, "TOPLEFT", RULE_X, -RULE_TOP)
+local sideMark = SC.Diamond(buyPage, 26)
+-- (fixed, above the first name, as the tour's: only its picture changes)
+sideMark:SetPoint("CENTER", buyPage, "TOPLEFT", RULE_X, -(SIDE_TOP - 30))
+sideMark:Hide()
+SCENE.mark, SCENE.icon = sideMark, sideMark.icon
+end
+
+local side = K.NewFrame("Frame", nil, buyPage)
+side:SetPoint("TOPLEFT", 0, -SIDE_TOP + 30)
+side:SetSize(SIDE_W, SIDE_ROWS * SIDE_PITCH + 30)
+-- Each main category's picture, for the diamond (by its name)
+local CATEGORY_ICONS = {
+    Weapons = "INV_Sword_04", Armor = "INV_Chest_Chain_03", Containers = "INV_Misc_Bag_08",
+    Consumables = "INV_Potion_54", ["Trade Goods"] = "INV_Fabric_Wool_01", Ammo = "INV_Ammo_Arrow_02",
+    Recipes = "INV_Misc_Book_09", ["Quest Items"] = "INV_Misc_Note_01", Miscellaneous = "INV_Misc_Gem_Variety_01",
+}
 local sideRows = {}
 for i = 1, SIDE_ROWS do
     local r = K.NewFrame("Button", nil, side)
-    r:SetSize(SIDE_W - 16, 28)
-    r:SetPoint("TOPLEFT", 8, -30 - (i - 1) * 30)
-    r.focus = FocusStroke(r)
-    r.text = r:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    r.text:SetPoint("LEFT", 10, 0)
-    r.text:SetPoint("RIGHT", -6, 0)
-    r.text:SetJustifyH("LEFT")
+    r:SetSize(SIDE_W - 12, 28)
+    r:SetPoint("TOPRIGHT", -12, -30 - (i - 1) * SIDE_PITCH)
+    r.text = SC.Text(r, 16, SC.GREY, SC.BODY)
+    r.text:SetAllPoints()
+    r.text:SetJustifyH("RIGHT")
     r.text:SetWordWrap(false)
     r:SetScript("OnClick", function(self)
         if self.index then BY.SetMain(self.index) end
     end)
+    local hover = r:CreateTexture(nil, "HIGHLIGHT")
+    hover:SetPoint("TOPLEFT", -20, 0)
+    hover:SetPoint("BOTTOMRIGHT", 6, 0)
+    hover:SetColorTexture(1, 1, 1, 1)
+    if not pcall(hover.SetGradient, hover, "HORIZONTAL", CreateColor(1, 1, 1, 0), CreateColor(1, 1, 1, 0.08)) then
+        hover:SetAlpha(0.05)
+    end
     sideRows[i] = r
 end
 
 ---------------------------------------------------------------------------
--- The second and third levels, along the top: a bar each, its bumper /
--- trigger glyphs at the ends, the chosen one lit and kept in view
+-- The second and third levels, along the top: a row of chips each, its
+-- bumper / trigger glyphs at the ends, the chosen one lit and kept in view
 ---------------------------------------------------------------------------
-local function TopBar(y, leftKey, rightKey, onClick)
-    local bar = IF.UI.ChipBar(buyPage, leftKey, rightKey, onClick)
-    bar:SetPoint("TOPLEFT", MAIN_X, y)
-    bar:SetWidth(MAIN_W)
+-- (inset: as much off each end, its middle the grid's)
+local function TopBar(y, leftKey, rightKey, onClick, inset)
+    local bar = SC.Chips(buyPage, leftKey, rightKey, onClick)
+    bar:SetPoint("TOPLEFT", MAIN_X + (inset or 0), y)
+    bar:SetWidth(MAIN_W - 2 * (inset or 0))
     return bar
 end
 
-local bar2 = TopBar(-30, "LB", "RB", function(i) BY.SetSub(i) end)
-local bar3 = TopBar(-68, "LT", "RT", function(i) BY.SetSubSub(i) end)
+-- (the second's: room at its right end for the filter and refresh icons)
+local bar2 = TopBar(-20, "LB", "RB", function(i) BY.SetSub(i) end, 56)
+local bar3 = TopBar(-58, "LT", "RT", function(i) BY.SetSubSub(i) end)
 
 ---------------------------------------------------------------------------
--- The status line, the content (the list), the legend
+-- The content (the list), the legend
 ---------------------------------------------------------------------------
-local status = K.ChatText(buyPage, 11, KC.help)
-status:SetPoint("TOPLEFT", MAIN_X + 4, -106 + 6)
-status:SetPoint("RIGHT", win, "RIGHT", -20, 0)
-status:SetJustifyH("LEFT")
 
 local content = K.NewFrame("Frame", nil, buyPage)
 content:SetPoint("TOPLEFT", MAIN_X, CONTENT_TOP)
@@ -370,11 +411,224 @@ local function ItemRow(parent, width, height, nameW)
     return r
 end
 
--- The browse list's rows
+-- One tile of the grid, the scene's own: no card, no frame, nothing behind
+-- it but the dimmed world. The item's icon in the spell diamonds' ring
+-- (Immersion's gamepad bar) turned upright to a square, cut to its rounded
+-- opening, on a soft shadow; its name
+-- under it in its quality's colour; its lowest price under that in
+-- Morpheus (the coins' pictures); then what sets it apart on a small
+-- capsule of its colour: an upgrade and its gain, else how far from its
+-- usual price. How many are up in small at the icon's corner, the game's
+-- upgrade arrow at the other. The one the pad is on: its icon grows and a
+-- soft gold light comes up behind it, the game's cursor at its left
+-- (Focus.lua); the others step back a little.
+-- cell:Fill({ icon, quality, name, itemID, price, count, upgrade, gain,
+-- needLevel }), cell:Lit(on, dim) (dim: picked, the pad elsewhere)
+local GridCell
+do
+    local ICON, GROW, HOVER, EASE = 54, 1.2, 1.07, 0.1
+    local STEP_BACK = 0.78                 -- (the others' alpha while one is lit)
+    -- (the gamepad bar's square slot ring, its opening about 0.88 of it
+    -- across: a little over the icon's edge, hugging it)
+    local RING, RING_SCALE = "gamepad-actionbar-squareslot-border-normal", 1.12
+    local GOLD = SC.GOLD
+    local COINS = { "Interface\\MoneyFrame\\UI-GoldIcon", "Interface\\MoneyFrame\\UI-SilverIcon",
+        "Interface\\MoneyFrame\\UI-CopperIcon" }
+    -- (soft, as the header's lines: the price cream, the tags muted)
+    local PRICE = { 1, 0.94, 0.82 }
+    local CHEAP, DEAR = { 0.55, 0.85, 0.55 }, { 0.92, 0.55, 0.5 }
+    local UPGRADE, LATER = { 0.5, 0.75, 1 }, { 0.78, 0.62, 1 }
+
+    -- A price in short: its two largest coins (from 100 gold, the gold alone)
+    local function Price(copper)
+        local coins = { math.floor(copper / 10000), math.floor(copper / 100) % 100, copper % 100 }
+        local parts = {}
+        for i, n in ipairs(coins) do
+            if n > 0 or (i == 3 and #parts == 0) then
+                parts[#parts + 1] = n .. "|T" .. COINS[i] .. ":13:13:2:0|t"
+                if #parts == 2 or (i == 1 and n >= 100) then break end
+            elseif #parts > 0 then
+                break
+            end
+        end
+        return table.concat(parts, " ")
+    end
+
+    -- A soft round light (or shadow): circles one in another, each faint,
+    -- so it is brightest in its middle and fades to nothing at its edge.
+    -- light:SetLight(r, g, b, a), light:SetSize(n)
+    local RINGS = 7
+    local function Soft(parent, layer, sublevel)
+        local light = { parts = {} }
+        for i = 1, RINGS do
+            local t = parent:CreateTexture(nil, layer, nil, sublevel)
+            t:SetTexture(K.TEX .. "ic_dot")
+            light.parts[i] = t
+        end
+        function light:SetPoint(...)
+            for _, t in ipairs(self.parts) do t:SetPoint(...) end
+        end
+        function light:SetSize(n)
+            for i, t in ipairs(self.parts) do t:SetSize(n * i / RINGS, n * i / RINGS) end
+        end
+        function light:SetLight(r, g, b, a)
+            for _, t in ipairs(self.parts) do t:SetVertexColor(r, g, b, a / RINGS) end
+        end
+        return light
+    end
+
+    -- What sets it apart, a word or two and its colour: its upgrade and the
+    -- gain (one of a higher level: for later), else how far from its usual
+    -- price (about usual: nothing)
+    local function Words(o)
+        if o.upgrade then
+            local gain = o.gain and ("+" .. math.max(1, math.floor(o.gain + 0.5)) .. "%") or "new"
+            return "UPGRADE " .. gain .. (o.needLevel and " LATER" or ""), o.needLevel and LATER or UPGRADE
+        end
+        local usual = o.itemID and A.MarketPrice(o.itemID)
+        local pct = usual and usual > 0 and o.price and o.price > 0
+            and math.floor((o.price / usual - 1) * 100 + 0.5) or nil
+        if pct and pct <= -5 then return -pct .. "% BELOW USUAL", CHEAP end
+        if pct and pct >= 5 then return pct .. "% ABOVE USUAL", DEAR end
+    end
+
+    function GridCell(parent)
+        local cell = K.NewFrame("Button", nil, parent)
+        cell:SetSize(CELL_W, CELL_H)
+        -- (all of it in the body: its alpha steps back, the cell's own fades in)
+        local body = K.NewFrame("Frame", nil, cell)
+        body:SetAllPoints()
+        cell.body = body
+        cell.light = Soft(body, "BACKGROUND", 0)
+        cell.light:SetPoint("CENTER", cell, "TOP", 0, -42)
+        cell.shadow = Soft(body, "BACKGROUND", 1)
+        cell.shadow:SetPoint("CENTER", cell, "TOP", 0, -46)
+        cell.shadow:SetLight(0, 0, 0, 0.7)
+        cell.icon = body:CreateTexture(nil, "ARTWORK")
+        cell.icon:SetPoint("CENTER", cell, "TOP", 0, -42)
+        cell.icon:SetTexCoord(0.07, 0.93, 0.07, 0.93)
+        -- (cut to the ring's rounded opening, the gamepad bar's square mask)
+        cell.mask = body:CreateMaskTexture()
+        cell.mask:SetAtlas("SquareMask")
+        cell.mask:SetPoint("CENTER", cell.icon, "CENTER")
+        cell.icon:AddMaskTexture(cell.mask)
+        cell.ring = body:CreateTexture(nil, "OVERLAY", nil, -1)
+        cell.ring:SetPoint("CENTER", cell.icon, "CENTER")
+        if not Atlas(cell.ring, RING) then cell.ring:Hide() end
+        cell.upgrade = IF.Upgrades.Arrow(body, "TOPLEFT", cell.icon, "TOPLEFT", -6, 6)
+        cell.count = body:CreateFontString(nil, "OVERLAY", "NumberFontNormal")
+        cell.count:SetPoint("BOTTOMRIGHT", cell.icon, "BOTTOMRIGHT", 6, -4)
+        cell.name = SC.Text(body, 12, nil, SC.BODY)
+        cell.name:SetPoint("TOP", cell, "TOP", 0, -80)
+        cell.name:SetSize(CELL_W - 8, 28)
+        cell.name:SetWordWrap(true)
+        cell.name:SetJustifyV("TOP")
+        cell.price = SC.Text(body, 17, PRICE)
+        cell.price:SetPoint("TOP", cell, "TOP", 0, -108)
+        -- (the tag: small capitals on a capsule of its colour, its round ends
+        -- the halves of a disc)
+        cell.badge = K.NewFrame("Frame", nil, body)
+        cell.badge:SetHeight(16)
+        cell.badge:SetPoint("TOP", cell.price, "BOTTOM", 0, -5)
+        cell.badge.parts = {}
+        for i, coords in ipairs({ { 0, 0.5 }, false, { 0.5, 1 } }) do
+            local t = cell.badge:CreateTexture(nil, "BACKGROUND")
+            if coords then
+                t:SetTexture(K.TEX .. "ic_dot")
+                t:SetTexCoord(coords[1], coords[2], 0, 1)
+                t:SetSize(8, 16)
+                t:SetPoint(i == 1 and "LEFT" or "RIGHT")
+            else
+                t:SetColorTexture(1, 1, 1, 1)
+                t:SetPoint("TOPLEFT", 8, 0)
+                t:SetPoint("BOTTOMRIGHT", -8, 0)
+            end
+            cell.badge.parts[i] = t
+        end
+        cell.tag = SC.Text(cell.badge, 9, nil, SC.BODY)
+        cell.tag:SetPoint("CENTER", 0, 0)
+
+        -- The icon's size, its light and the step back, eased toward where
+        -- they're going (lit, hovered, neither)
+        cell.size, cell.goal, cell.alpha, cell.alphaGoal = 1, 1, 1, 1
+        local function Apply(self)
+            local n = ICON * self.size
+            self.icon:SetSize(n, n)
+            self.mask:SetSize(n, n)
+            self.ring:SetSize(n * RING_SCALE, n * RING_SCALE)
+            self.shadow:SetSize(n * 1.9)
+            local glow = math.max(0, (self.size - 1) / (GROW - 1))
+            self.light:SetSize(n * 2.6)
+            self.light:SetLight(GOLD[1], GOLD[2], GOLD[3], 0.55 * glow)
+            body:SetAlpha(self.alpha)
+        end
+        Apply(cell)
+        cell:SetScript("OnUpdate", function(self, dt)
+            if self.size == self.goal and self.alpha == self.alphaGoal then return end
+            local k = math.min(1, dt / EASE)
+            self.size = self.size + (self.goal - self.size) * k
+            self.alpha = self.alpha + (self.alphaGoal - self.alpha) * k
+            if math.abs(self.goal - self.size) < 0.003 then self.size = self.goal end
+            if math.abs(self.alphaGoal - self.alpha) < 0.01 then self.alpha = self.alphaGoal end
+            Apply(self)
+        end)
+        local function Goal(self)
+            self.goal = self.lit and (self.dim and HOVER or GROW) or (self.hovered and HOVER or 1)
+            self.alphaGoal = (self.lit or self.hovered or not self.others) and 1 or STEP_BACK
+        end
+        cell:SetScript("OnEnter", function(self)
+            self.hovered = Mouse()
+            Goal(self)
+        end)
+        cell:SetScript("OnLeave", function(self)
+            self.hovered = false
+            Goal(self)
+        end)
+
+        function cell:Fill(o)
+            local c = ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[o.quality or 1]
+            local r, g, b = c and c.r or 0.6, c and c.g or 0.6, c and c.b or 0.6
+            self.icon:SetTexture(o.icon or 134400)
+            self.upgrade:SetShown(o.upgrade and true or false)
+            local n = o.count or 0
+            self.count:SetText(n > 1 and (n >= 1000 and (math.floor(n / 100) / 10 .. "k") or n) or "")
+            self.name:SetText(o.name or "...")
+            -- (poor and common names in a light grey: their own is too dark to read)
+            if (o.quality or 1) <= 1 then self.name:SetTextColor(0.9, 0.9, 0.9) else self.name:SetTextColor(r, g, b) end
+            self.price:SetText(o.price and o.price > 0 and Price(o.price) or "bid only")
+            local word, color = Words(o)
+            self.badge:SetShown(word ~= nil)
+            if word then
+                self.tag:SetText(word)
+                self.tag:SetTextColor(color[1], color[2], color[3])
+                for _, t in ipairs(self.badge.parts) do t:SetVertexColor(color[1] * 0.35, color[2] * 0.35, color[3] * 0.35, 0.75) end
+                self.badge:SetWidth(self.tag:GetStringWidth() + 16)
+            end
+        end
+
+        -- on: the one picked; dim: picked, the pad elsewhere (the filters
+        -- open); others: one of the grid is lit, this one steps back
+        function cell:Lit(on, dim, others)
+            self.lit, self.dim, self.others = on, dim, others
+            Goal(self)
+            local cursorOn = on and not dim and IF.Input.Pad()
+            if cursorOn and not self.cursor then self.cursor = IF.Focus.Cursor(body) end
+            if self.cursor then
+                if cursorOn then self.cursor:Point(self.icon) else self.cursor:Hide() end
+            end
+        end
+        return cell
+    end
+end
+
+-- The browse results, as a grid: COLS across, GRID_ROWS down (the pick
+-- kept in view; BY.top is the first shown, always the start of a row)
 local listRows = {}
-for i = 1, LIST_ROWS do
-    local r = ItemRow(content, SIDE_LIST_W, LIST_H - 4, NAME_ROOM)
-    r:SetPoint("TOPLEFT", 0, -(i - 1) * LIST_H)
+for i = 1, PER do
+    local r = GridCell(content)
+    -- (the grid centred in its column, under the pages' names)
+    r:SetPoint("TOPLEFT", (MAIN_W - (COLS - 1) * GRID_X - CELL_W) / 2 + ((i - 1) % COLS) * GRID_X,
+        -math.floor((i - 1) / COLS) * GRID_Y - 4)
     r:SetScript("OnClick", function(self)
         if self.index then
             BY.index = self.index
@@ -384,7 +638,8 @@ for i = 1, LIST_ROWS do
     listRows[i] = r
 end
 
-local legend = IF.UI.Legend(win)
+-- (in the bottom bar: AuctionScene.lua)
+local legend = SC.Legend()
 
 ---------------------------------------------------------------------------
 -- The filters (L3): a dropdown as Improved Quest Tracker's (styled as the
@@ -436,7 +691,44 @@ end
 
 local filterBox = K.NewFrame("Frame", nil, buyPage)
 filterBox:SetFrameLevel(win:GetFrameLevel() + 30)
-filterBox:SetPoint("TOPRIGHT", content, "TOPRIGHT", -10, -4)
+-- Two icons at the right end of the second categories' row: the game's
+-- filter icon (the menu under it) and refresh (what is listed looked up
+-- again, in place, then the open item's auctions); grey, cream under the
+-- mouse, the filters' gold while open (Render)
+local function IconButton(atlases, tip, fn, lit)
+    local b = K.NewFrame("Button", nil, buyPage)
+    b:SetSize(24, 26)
+    b.icon = b:CreateTexture(nil, "ARTWORK")
+    b.icon:SetPoint("CENTER")
+    b.icon:SetSize(18, 18)
+    for _, name in ipairs(atlases) do
+        if Atlas(b.icon, name) then break end
+    end
+    b:SetScript("OnClick", fn)
+    function b:Tint(hover)
+        local c = (lit and lit()) and SC.GOLD or hover and SC.CREAM or SC.GREY
+        self.icon:SetVertexColor(c[1], c[2], c[3])
+    end
+    b:SetScript("OnEnter", function(self)
+        self:Tint(true)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText(tip)
+        GameTooltip:Show()
+    end)
+    b:SetScript("OnLeave", function(self)
+        self:Tint(false)
+        if GameTooltip:GetOwner() == self then GameTooltip:Hide() end
+    end)
+    b:Tint(false)
+    return b
+end
+local filterWord = IconButton({ "gamepad-hud-icon-filter", "UI-QuestTrackerButton-Filter" }, "Filters",
+    function() BY.Press("LS") end, function() return filterBox:IsShown() end)
+filterWord:SetPoint("LEFT", bar2, "RIGHT", 4, 0)
+filterWord.refresh = IconButton({ "UI-RefreshButton", "common-icon-rotateright" }, "Refresh",
+    function() BY.Refresh() end)
+filterWord.refresh:SetPoint("LEFT", filterWord, "RIGHT", 2, 0)
+filterBox:SetPoint("TOPRIGHT", filterWord, "BOTTOMRIGHT", 0, -6)
 filterBox:EnableMouse(true)
 filterBox:Hide()
 do
@@ -639,123 +931,154 @@ function BY.HoldFeel(p)
     end
 end
 
-local detail = Panel(buyPage, 0.97)
+-- The item's screen, in the scene's look (no panel behind it): its icon
+-- in the square ring at the top, its name in Morpheus under it, how many
+-- are for sale; under a gold rule the lowest price now and the usual one,
+-- the price chart (AuctionChart.lua); then the quantity (commodities) or
+-- the auctions one by one (items), the picked one in a soft gold light;
+-- "Hold to Buy" and what it costs along the bottom. Every part spans the
+-- screen, so it fits any width (the Buy tab's column, the Tasks tab's).
+-- Its parts in V.
+local detail = K.NewFrame("Frame", nil, buyPage)
 detail:SetFrameLevel(win:GetFrameLevel() + 20)
 detail:SetAllPoints(content)
 detail:Hide()
 
--- Gone into (beside the list): the rows' focus ring round it, faint
-local dGlow = FocusStroke(detail)
+local V = {}
+local AUCTION_ROWS, AUCTION_H = 8, 46     -- (made; as many shown as fit)
+local D, DetailPress, HoldPrice
+do
+    V.icon = SC.RingIcon(detail, 50)
+    V.icon:SetPoint("TOP", 0, -10)
+    V.upgrade = IF.Upgrades.Arrow(detail, "TOPLEFT", V.icon, "TOPLEFT", -6, 6)
+    V.name = SC.Text(detail, 20)
+    V.name:SetPoint("TOP", V.icon, "BOTTOM", 0, -12)
+    V.name:SetPoint("LEFT", 10, 0)
+    V.name:SetPoint("RIGHT", -10, 0)
+    V.name:SetWordWrap(true)
+    V.name:SetJustifyH("CENTER")
+    V.sub = SC.Text(detail, 11, SC.GREY, SC.BODY)
+    V.sub:SetPoint("TOP", V.name, "BOTTOM", 0, -4)
+    V.rule = SC.Rule(detail, 300, false, 0.6)
+    V.rule:SetPoint("TOP", V.sub, "BOTTOM", 0, -10)
 
-local dIcon = ItemIcon(detail, 40)
-dIcon:SetPoint("TOPLEFT", 16, -14)
-local dUpgrade = IF.Upgrades.Arrow(detail, "BOTTOMRIGHT", dIcon, "BOTTOMRIGHT", 2, -2)
-local dName = detail:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-dName:SetPoint("TOPLEFT", dIcon, "TOPRIGHT", 10, -2)
-dName:SetPoint("RIGHT", detail, "RIGHT", -16, 0)
-dName:SetJustifyH("LEFT")
-dName:SetWordWrap(false)
-local dSub = K.ChatText(detail, 11, KC.help)
-dSub:SetPoint("BOTTOMLEFT", dIcon, "BOTTOMRIGHT", 10, 2)
+    -- The lowest price now and the usual one, side by side: a small grey
+    -- label over each, the price in Morpheus
+    local function Price()
+        local label = SC.Text(detail, 9, SC.GREY, SC.BODY)
+        label:SetPoint("TOP", V.rule, "BOTTOM", 0, -10)
+        local value = SC.Text(detail, 17, { 1, 0.94, 0.82 })
+        value:SetPoint("TOP", label, "BOTTOM", 0, -3)
+        return label, value
+    end
+    V.lowLabel, V.low = Price()
+    V.usualLabel, V.usual = Price()
+    V.lowLabel:SetText("LOWEST NOW")
+    V.usualLabel:SetText("USUALLY")
+    -- (each in the middle of its half: RenderDetail, as wide as the screen
+    -- is; how far the lowest is from the usual under it)
+    V.deal = SC.Capsule(detail)
+    V.deal:SetPoint("TOP", V.low, "BOTTOM", 0, -4)
 
--- One column, as the Sell tab's: the chart across, the lowest and usual
--- prices under it; then the quantity (commodities) or the auctions one by
--- one (items); "Hold to Buy" with what it costs. Every part spans the screen, so
--- it fits any width (the Buy tab's main area, the Tasks tab's column).
-local dChart = IF.AuctionChart.New(detail, "Pay")
-dChart:SetPoint("TOPLEFT", 10, -66)
-dChart:SetPoint("TOPRIGHT", -10, -66)
-dChart:SetHeight(140)
-local dInfo = K.ChatText(detail, 12, KC.cream2)
-dInfo:SetPoint("TOPLEFT", dChart, "BOTTOMLEFT", 0, -8)
-dInfo:SetPoint("TOPRIGHT", dChart, "BOTTOMRIGHT", 0, -8)
-dInfo:SetJustifyH("CENTER")
+    V.chart = IF.AuctionChart.New(detail, "Pay")
+    -- (bare, as the rest: no box round it)
+    V.chart:SetBackdropColor(0, 0, 0, 0)
+    V.chart:SetBackdropBorderColor(0, 0, 0, 0)
+    V.chart:SetPoint("TOP", V.low, "BOTTOM", 0, -24)
+    V.chart:SetPoint("LEFT", 4, 0)
+    V.chart:SetPoint("RIGHT", -4, 0)
+    V.chart:SetHeight(110)
 
--- The middle: the auctions (items), or the quantity and its cost (commodities)
-local AUCTION_ROWS = 8                 -- made; as many shown as fit
-local AUCTION_H = 44
--- (a short screen, beside the list: a shorter chart, more auctions)
-local function ChartHeight()
-    return detail:GetHeight() >= 520 and 140 or 80
+    -- The auctions: a row each, nothing behind it but a faint rule under
+    -- it; its icon in the ring, its own name (a random suffix's "of the
+    -- Owl"), its item level and stack under it, its price on the right,
+    -- what sets it apart on a capsule under that. The picked one in a soft
+    -- gold light, the game's cursor at its left while the screen has the pad
+    V.rows = {}
+    for i = 1, AUCTION_ROWS do
+        local r = K.NewFrame("Button", nil, detail)
+        r:SetHeight(AUCTION_H - 4)
+        r.band = SC.Band(r)
+        r.icon = SC.RingIcon(r, 28)
+        r.icon:SetPoint("LEFT", 12, 0)
+        r.upgrade = IF.Upgrades.Arrow(r, "TOPLEFT", r.icon, "TOPLEFT", -5, 5)
+        r.price = SC.Text(r, 15, { 1, 0.94, 0.82 })
+        r.price:SetPoint("TOPRIGHT", -10, -6)
+        r.name = SC.Text(r, 12, nil, SC.BODY)
+        r.name:SetPoint("TOPLEFT", r.icon, "TOPRIGHT", 10, 1)
+        r.name:SetPoint("RIGHT", r.price, "LEFT", -8, 0)
+        r.name:SetJustifyH("LEFT")
+        r.line = SC.Text(r, 10, SC.GREY, SC.BODY)
+        r.line:SetPoint("BOTTOMLEFT", r.icon, "BOTTOMRIGHT", 10, -1)
+        r.tag = SC.Capsule(r, 14, 8)
+        r.tag:SetPoint("BOTTOMRIGHT", -10, 4)
+        r.rule = SC.Rule(r, 300, false, 0.15)
+        r.rule:SetPoint("TOP", r, "BOTTOM", 0, -2)
+        local hover = r:CreateTexture(nil, "HIGHLIGHT")
+        hover:SetAllPoints()
+        hover:SetColorTexture(1, 1, 1, 0.04)
+        -- on: the picked one; active: the screen has the pad
+        function r:Lit(on, active)
+            self.band:SetLight(on and (active and 0.18 or 0.08) or 0)
+            local cursorOn = on and active and IF.Input.Pad()
+            if cursorOn and not self.cursor then self.cursor = IF.Focus.Cursor(self) end
+            if self.cursor then
+                if cursorOn then self.cursor:Point(self) else self.cursor:Hide() end
+            end
+        end
+        V.rows[i] = r
+    end
+    -- More auctions above / below those shown: small grey words over the
+    -- first row / under the last
+    V.moreUp = SC.Text(detail, 10, SC.GREY, SC.BODY)
+    V.moreDown = SC.Text(detail, 10, SC.GREY, SC.BODY)
+
+    -- A commodity's quantity: big in Morpheus, centred between the chart
+    -- and the hold line, gold arrows either side; its steps in the legend
+    V.qtyMid = K.NewFrame("Frame", nil, detail)
+    V.qtyMid:SetPoint("TOP", V.chart, "BOTTOM", 0, -6)
+    V.qtyMid:SetPoint("LEFT")
+    V.qtyMid:SetPoint("RIGHT")
+    V.qtyGroup = K.NewFrame("Frame", nil, V.qtyMid)
+    V.qtyGroup:SetPoint("LEFT")
+    V.qtyGroup:SetPoint("RIGHT")
+    V.qtyGroup:SetHeight(40)
+    V.qtyGroup:SetPoint("CENTER")
+    V.qty = SC.Text(V.qtyGroup, 32, { 1, 0.94, 0.82 })
+    V.qty:SetPoint("TOP", 0, 0)
+    V.qtyLeft = SC.Text(V.qtyGroup, 30, SC.GOLD)
+    V.qtyLeft:SetPoint("RIGHT", V.qty, "LEFT", -16, 0)
+    V.qtyLeft:SetText("‹")
+    V.qtyRight = SC.Text(V.qtyGroup, 30, SC.GOLD)
+    V.qtyRight:SetPoint("LEFT", V.qty, "RIGHT", 16, 0)
+    V.qtyRight:SetText("›")
+    V.qtyLabel = SC.Text(V.qtyGroup, 11, SC.GREY, SC.BODY)
+    V.qtyLabel:SetPoint("TOP", V.qty, "BOTTOM", 0, -6)
+
+    V.hold = SC.HoldLine(detail)
+    V.hold:SetPoint("BOTTOMLEFT", 10, 10)
+    V.hold:SetPoint("BOTTOMRIGHT", -10, 10)
+    V.status = SC.Text(detail, 12, { 1, 0.72, 0.45 }, SC.BODY)
+    V.status:SetPoint("BOTTOM", V.hold, "TOP", 0, 8)
+    V.status:SetPoint("LEFT", 10, 0)
+    V.status:SetPoint("RIGHT", -10, 0)
+    V.status:SetWordWrap(true)
+    V.qtyMid:SetPoint("BOTTOM", V.hold, "TOP", 0, 24)
+
+    -- With the mouse: the arrows clicked, the quantity typed, the auctions
+    -- looked up again with the refresh icon over the grid (BY.Refresh)
+    V.qtyEdit = BY.NumberBox(V.qtyGroup, 80, function(n)
+        if not D then return end
+        local avail = 0
+        for _, l in ipairs(D.listings or {}) do avail = avail + l.count - (l.own or 0) end
+        D.qty = math.max(1, math.min(math.max(1, avail), n))
+        D.state, D.quote, D.message = nil, nil, nil
+        BY.Render()
+    end)
+    V.qtyEdit:SetPoint("CENTER", V.qty, "CENTER", 0, 0)
+    V.qtyLeftButton = BY.ArrowButton(V.qtyGroup, V.qtyLeft, function(fast) DetailPress("LEFT", fast) end)
+    V.qtyRightButton = BY.ArrowButton(V.qtyGroup, V.qtyRight, function(fast) DetailPress("RIGHT", fast) end)
 end
-local ROW_NAME_W = 430 - 28 - 50 - 110
--- (as the browse list's rows: each auction its own name, stats' badges)
-local dRows = {}
-for i = 1, AUCTION_ROWS do
-    local r = ItemRow(detail, 100, AUCTION_H - 4, ROW_NAME_W)
-    -- (a line's room above the rows for the "more above" mark)
-    r:SetPoint("TOPLEFT", dInfo, "BOTTOMLEFT", 4, -22 - (i - 1) * AUCTION_H)
-    r:SetPoint("RIGHT", detail, "RIGHT", -14, 0)
-    dRows[i] = r
-end
--- More auctions above / below those shown: the game's expand arrow turned
--- up / down, above the first row / under the last, how many beside it
-local function MoreMark()
-    local m = K.NewFrame("Frame", nil, detail)
-    m:SetSize(60, 16)
-    m:SetFrameLevel(detail:GetFrameLevel() + 10)
-    m.arrow = m:CreateTexture(nil, "OVERLAY")
-    m.arrow:SetSize(16, 16)
-    m.arrow:SetPoint("LEFT")
-    m.arrow:SetTexture("Interface\\ChatFrame\\ChatFrameExpandArrow")
-    m.arrow:SetVertexColor(1, 0.82, 0)
-    m.text = K.ChatText(m, 11, KC.dimGold)
-    m.text:SetPoint("LEFT", m.arrow, "RIGHT", 2, 0)
-    m:Hide()
-    return m
-end
-local dMoreUp, dMoreDown = MoreMark(), MoreMark()
-local HoldPrice
-dMoreUp.arrow:SetRotation(math.pi / 2)
-dMoreDown.arrow:SetRotation(-math.pi / 2)
-
--- A commodity's quantity: big, centred up and down between the prices
--- and the hold box; its steps in the legend
-local dQtyMid = K.NewFrame("Frame", nil, detail)
-dQtyMid:SetPoint("TOPLEFT", dInfo, "BOTTOMLEFT", 0, 0)
-dQtyMid:SetPoint("RIGHT", detail, "RIGHT", -10, 0)
-local dQtyGroup = K.NewFrame("Frame", nil, dQtyMid)
-dQtyGroup:SetPoint("LEFT")
-dQtyGroup:SetPoint("RIGHT")
-dQtyGroup:SetHeight(30)
-local dQty = K.Text(dQtyGroup, 30, KC.title)
-dQty:SetPoint("TOP", 0, 0)
-local dQtyLeft = K.Text(dQtyGroup, 30, KC.focus)
-dQtyLeft:SetPoint("RIGHT", dQty, "LEFT", -14, 0)
-dQtyLeft:SetText("‹")
-local dQtyRight = K.Text(dQtyGroup, 30, KC.focus)
-dQtyRight:SetPoint("LEFT", dQty, "RIGHT", 14, 0)
-dQtyRight:SetText("›")
-local dQtyLabel = K.ChatText(dQtyGroup, 16, KC.dimGold)
-dQtyLabel:SetPoint("TOP", dQty, "BOTTOM", 0, -8)
-
-local dHold = BY.HoldBox(detail)
-dHold:SetPoint("BOTTOMLEFT", detail, "BOTTOMLEFT", 14, 12)
-dHold:SetPoint("BOTTOMRIGHT", detail, "BOTTOMRIGHT", -14, 12)
-local dStatus = K.ChatText(detail, 12, KC.warn)
-dStatus:SetPoint("BOTTOMLEFT", detail, "BOTTOMLEFT", 14, 52)
-dStatus:SetPoint("BOTTOMRIGHT", detail, "BOTTOMRIGHT", -14, 52)
-dStatus:SetJustifyH("CENTER")
-dQtyMid:SetPoint("BOTTOM", dHold, "TOP", 0, 24)
-dQtyGroup:SetPoint("CENTER")
-
--- With the mouse: the arrows clicked, the quantity typed, the auctions
--- looked up again with a button
-local D, DetailPress
-local dQtyEdit = BY.NumberBox(dQtyGroup, 80, function(n)
-    if not D then return end
-    local avail = 0
-    for _, l in ipairs(D.listings or {}) do avail = avail + l.count - (l.own or 0) end
-    D.qty = math.max(1, math.min(math.max(1, avail), n))
-    D.state, D.quote, D.message = nil, nil, nil
-    BY.Render()
-end)
-dQtyEdit:SetPoint("CENTER", dQty, "CENTER", 0, 0)
-local dQtyLeftButton = BY.ArrowButton(dQtyGroup, dQtyLeft, function(fast) DetailPress("LEFT", fast) end)
-local dQtyRightButton = BY.ArrowButton(dQtyGroup, dQtyRight, function(fast) DetailPress("RIGHT", fast) end)
-local dRefresh = BY.Button(detail, "Refresh", function() BY.SearchItem() end, 80)
-dRefresh:SetPoint("TOPRIGHT", -12, -12)
-dRefresh:Hide()
 
 ---------------------------------------------------------------------------
 -- Categories
@@ -830,6 +1153,8 @@ end
 -- After the categories settle; keep: the same list again (after buying), its place kept
 function BY.Query(keep)
     if not keep then BY.results, BY.allResults, BY.index, BY.top = {}, {}, 1, 1 end
+    -- (a new list: its tiles fade in as it comes)
+    BY.freshList = not keep
     BY.searching = true
     queryToken = queryToken + 1
     local token = queryToken
@@ -878,18 +1203,30 @@ function BY.FilterResults()
     BY.results = list
 end
 
+-- A new list come: its tiles fade in one after another, along the rows
+local function PlayTiles()
+    for i, r in ipairs(listRows) do
+        -- (each over a quarter second, the next a moment after)
+        if r:IsShown() then SC.FadeIn(r, 0.25, (i - 1) * 0.025) end
+    end
+end
+
 local function ResultsIn()
     BY.allResults = AH.GetBrowseResults() or {}
     BY.FilterResults()
     BY.searching = false
     -- Only upgrades, and few among what came: the rest asked for
-    if S().buyUpgrades == "only" and #BY.results < LIST_ROWS and AH.HasFullBrowseResults
+    if S().buyUpgrades == "only" and #BY.results < PER and AH.HasFullBrowseResults
         and not AH.HasFullBrowseResults() then
         AH.RequestMoreBrowseResults()
         A.lastQuery = "browse"
     end
     BY.AfterBrowse()
     BY.Render()
+    if BY.freshList and BY.tab == "buy" then
+        BY.freshList = false
+        PlayTiles()
+    end
 end
 
 -- Near the end of what has come: the next part asked for (at: the row
@@ -1096,15 +1433,17 @@ local function VersionsLoaded()
     if changed then BY.Tip() end
 end
 
--- Where tooltips go: under the tabs down the window's right
-local sideTabs                   -- (the tabs, made below)
+-- Where tooltips go: beside the window under the pages' names, on the
+-- screen's right where there's room for one, else on its left
 function BY.PlaceTip()
     GameTooltip:ClearAllPoints()
-    local last = sideTabs and sideTabs:Last(#BY.TABS)
-    if last and last:IsShown() then
-        GameTooltip:SetPoint("TOPLEFT", last, "BOTTOMLEFT", 2, -12)
+    local right = win:GetRight()
+    local scale = win:GetEffectiveScale() / UIParent:GetEffectiveScale()
+    -- (a tooltip's room: 300)
+    if right and right * scale + 300 > UIParent:GetWidth() then
+        GameTooltip:SetPoint("TOPRIGHT", win, "TOPLEFT", -16, -TAB_H)
     else
-        GameTooltip:SetPoint("TOPLEFT", win, "TOPRIGHT", 52, 0)
+        GameTooltip:SetPoint("TOPLEFT", win, "TOPRIGHT", 16, -TAB_H)
     end
 end
 
@@ -1262,6 +1601,7 @@ local function Open(result, qty)
         row = 1, qty = math.max(1, qty or 1), listings = {}, wantQty = qty,
     }
     detail:Show()
+    SC.FadeIn(detail, 0.2)
     BY.SearchItem()
     return true
 end
@@ -1274,8 +1614,9 @@ end
 local function PlaceDetail()
     if detail:GetParent() ~= buyPage then return end
     detail:ClearAllPoints()
-    detail:SetPoint("TOPLEFT", content, "TOPLEFT", SIDE_LIST_W + 10, 0)
-    detail:SetPoint("BOTTOMRIGHT", content, "BOTTOMRIGHT")
+    -- (the third column, the page's full height)
+    detail:SetPoint("TOPLEFT", buyPage, "TOPLEFT", PREVIEW_X, -20)
+    detail:SetPoint("BOTTOMRIGHT", buyPage, "BOTTOMRIGHT", -16, 36)
 end
 
 -- The list view: a moment's rest on an item, its screen beside the list
@@ -1343,6 +1684,13 @@ local AGAIN = "Looked up again: hold again"
 local function SearchedElsewhere()
     local q = A.lastQuery
     return type(q) ~= "table" or q.commodity or not q.itemKey or q.itemID ~= D.itemID
+end
+
+-- The refresh icon: what is listed looked up again in place, then the open
+-- item's auctions (after the list: its search the last one sent)
+function BY.Refresh()
+    BY.Query(true)
+    if D then D.afterBrowse = GetTime() end
 end
 
 -- After a buy: the list's refresh first, the item looked up again once it
@@ -1465,8 +1813,10 @@ do
         local n = #BY.results
         if n == 0 then return end
         BY.freeTop = true
-        BY.top = math.max(1, math.min(math.max(1, n - LIST_ROWS + 1), BY.top + dir))
-        MoreIfNeeded(BY.top + LIST_ROWS - 1)
+        -- (a row a step: the first shown stays the start of a row)
+        local lastTop = (math.max(1, math.ceil(n / COLS) - GRID_ROWS + 1) - 1) * COLS + 1
+        BY.top = math.max(1, math.min(lastTop, BY.top + dir * COLS))
+        MoreIfNeeded(BY.top + PER - 1)
         BY.Render()
     end
     local list = { content }
@@ -1479,7 +1829,7 @@ do
     BY.Wheel({ bar3 }, function(dir) BY.SetSubSub(BY.subsub + dir) end)
     -- (the item's screen: a commodity's quantity, else the auction)
     local screens = { detail }
-    for _, r in ipairs(dRows) do screens[#screens + 1] = r end
+    for _, r in ipairs(V.rows) do screens[#screens + 1] = r end
     BY.Wheel(screens, function(dir)
         if not D then return end
         if D.commodity then
@@ -1497,7 +1847,7 @@ do
             AddVersions(result.itemKey)
         end)
     end
-    for _, r in ipairs(dRows) do
+    for _, r in ipairs(V.rows) do
         r:SetScript("OnClick", function(self)
             if not (D and self.index) or D.state == "buying" then return end
             if detail:GetParent() == buyPage then BY.detailFocus = true end
@@ -1521,12 +1871,12 @@ do
     end
 
     -- (held down on: as Cross held on the item's screen)
-    dHold.onDown = function()
+    V.hold.onDown = function()
         if filterBox:IsShown() then CloseFilters() end
         if detail:GetParent() == buyPage then BY.detailFocus = true end
         BY.MouseDown("A")
     end
-    dHold.onUp = function() BY.MouseUp("A") end
+    V.hold.onUp = function() BY.MouseUp("A") end
 
     -- The search box, where the categories' title is: what's typed looked
     -- up (in the chosen category) a moment after
@@ -1552,10 +1902,10 @@ end
 local function RenderSide()
     local mains = Mains()
     -- (with the mouse: the search box in its place)
-    sideTitle:SetText(Mouse() and "" or (Glyph("LS", 18) .. " Category"))
     BY.searchBox:SetShown(Mouse())
     local top = math.max(1, math.min(BY.main - math.floor(SIDE_ROWS / 2), #mains - SIDE_ROWS + 1))
-    local fr, fg, fb = FocusColor()
+    local GOLD, sideMark = SCENE.gold, SCENE.mark
+    sideMark:Hide()
     for i, r in ipairs(sideRows) do
         local index = top + i - 1
         local cat = mains[index]
@@ -1564,9 +1914,11 @@ local function RenderSide()
             r.index = index
             local on = index == BY.main
             r.text:SetText(cat.name)
-            r.text:SetTextColor(on and 1 or 0.8, on and 0.95 or 0.74, on and 0.8 or 0.6)
-            r.focus:SetShown(on)
-            r.focus:SetVertexColor(fr, fg, fb)
+            if on then r.text:SetTextColor(GOLD[1], GOLD[2], GOLD[3]) else r.text:SetTextColor(0.62, 0.62, 0.62) end
+            if on then
+                SCENE.icon:SetTexture("Interface\\Icons\\" .. (CATEGORY_ICONS[cat.name] or "INV_Misc_QuestionMark"))
+                sideMark:Show()
+            end
         end
     end
 end
@@ -1574,17 +1926,18 @@ end
 local function RenderResults()
     local results = BY.results
     local n = #results
-    local per = LIST_ROWS
     BY.index = math.max(1, math.min(BY.index, math.max(1, n)))
-    -- Scrolled keeping the picked one in view (unless the wheel scrolled it)
+    -- Scrolled keeping the picked one in view (unless the wheel scrolled it),
+    -- by rows: the first shown is the start of one
+    local indexRow, topRow = math.ceil(BY.index / COLS), math.ceil(BY.top / COLS)
     if not BY.freeTop then
-        if BY.index < BY.top then BY.top = BY.index end
-        if BY.index > BY.top + per - 1 then BY.top = BY.index - per + 1 end
+        if indexRow < topRow then topRow = indexRow end
+        if indexRow > topRow + GRID_ROWS - 1 then topRow = indexRow - GRID_ROWS + 1 end
     end
-    BY.top = math.max(1, math.min(BY.top, math.max(1, n - per + 1)))
+    topRow = math.max(1, math.min(topRow, math.max(1, math.ceil(n / COLS) - GRID_ROWS + 1)))
+    BY.top = (topRow - 1) * COLS + 1
     emptyText:SetShown(n == 0)
     emptyText:SetText(BY.searching and "Searching..." or "Nothing listed here")
-    local fr, fg, fb = FocusColor()
     for _, r in ipairs(listRows) do r:Hide() end
     for i, f in ipairs(listRows) do
         local index = BY.top + i - 1
@@ -1594,40 +1947,15 @@ local function RenderResults()
             local info = KeyInfo(result)
             local price = result.minPrice
             local upgrade, gain, needLevel = BY.GroupUpgrade(result.itemKey)
-            local gainText, gainColor = GainBadge(upgrade, gain, needLevel)
-            local dealText, dealColor = DealBadge(result.itemKey.itemID, price)
-            local priceText = price and price > 0 and A.Money(price) or "bid only"
             f:Fill({
                 icon = info and info.iconFileID, quality = info and info.quality,
-                name = info and info.itemName or "...", price = priceText, upgrade = upgrade,
-                line = result.totalQuantity .. " available"
-                    .. (result.itemKey.itemLevel and result.itemKey.itemLevel > 0 and info and info.isEquipment
-                        and ("  ·  item level " .. result.itemKey.itemLevel) or ""),
-                gain = gainText and { gainText, gainColor }, deal = dealText and { dealText, dealColor },
+                name = info and info.itemName or "...", itemID = result.itemKey.itemID, price = price,
+                count = result.totalQuantity, upgrade = upgrade, gain = gain, needLevel = needLevel,
             })
-            -- (dimmed only under the filters: the item's screen gone into
-            -- keeps its row bright)
-            f.focus:SetShown(index == BY.index)
-            f.focus:SetVertexColor(fr, fg, fb)
-            f.focus:SetAlpha(filterBox:IsShown() and 0.4 or 1)
+            f:Lit(index == BY.index, filterBox:IsShown(), true)
             f:Show()
         end
     end
-    local main, sub, subsub = Chosen()
-    local path = (main and main.name or "") .. (sub and (" › " .. sub.name) or "") .. (subsub and (" › " .. subsub.name) or "")
-    local s = S()
-    local active = {}
-    if s.buyUsable then active[#active + 1] = "usable" end
-    local qualities = {}
-    for q = 0, 5 do
-        if s.buyQualities[q] then qualities[#qualities + 1] = QUALITY_NAMES[q]:lower() end
-    end
-    if #qualities > 0 then active[#active + 1] = table.concat(qualities, " / ") end
-    if s.buyMyLevel then active[#active + 1] = "up to my level" end
-    if s.buyUpgrades == "only" then active[#active + 1] = "upgrades only" end
-    if BY.search and BY.search ~= "" then path = path .. "   ·   |cffd8ccb0\"" .. BY.search .. "\"|r" end
-    status:SetText(path .. "   ·   " .. (BY.searching and "searching..." or (n .. " found"))
-        .. (#active > 0 and ("   ·   |cffc9a25a" .. table.concat(active, ", ") .. "|r") or ""))
 end
 
 -- What it costs, for the hold box: the picked auction; a commodity's
@@ -1648,22 +1976,44 @@ local function DetailActive()
     return BY.detailFocus or detail:GetParent() ~= buyPage
 end
 
+-- What sets an auction apart, for its capsule: its upgrade and the gain
+-- (one of a higher level: for later), else how far from the usual price
+local CHEAP, DEAR, UPGRADE, LATER = { 0.55, 0.85, 0.55 }, { 0.92, 0.55, 0.5 }, { 0.5, 0.75, 1 }, { 0.78, 0.62, 1 }
+local function Apart(itemID, unit, upgrade, gain, needLevel)
+    if upgrade then
+        return "UPGRADE " .. (gain and ("+" .. math.max(1, math.floor(gain + 0.5)) .. "%") or "NEW")
+            .. (needLevel and " LATER" or ""), needLevel and LATER or UPGRADE
+    end
+    local usual = A.MarketPrice(itemID)
+    local pct = usual and usual > 0 and unit and unit > 0 and math.floor((unit / usual - 1) * 100 + 0.5)
+    if pct and pct <= -5 then return -pct .. "% BELOW USUAL", CHEAP end
+    if pct and pct >= 5 then return pct .. "% ABOVE USUAL", DEAR end
+end
+
 local function RenderDetail()
     if not D then return end
-    dChart:SetHeight(ChartHeight())
-    -- (gone into on the Buy tab: the faint focus frame)
-    dGlow:SetShown(BY.detailFocus and detail:GetParent() == buyPage)
-    dGlow:SetVertexColor(FocusColor())
-    dGlow:SetAlpha(0.5)
+    local w = detail:GetWidth()
+    V.rule:SetLength(math.max(100, w - 40))
+    -- (the two prices each in the middle of its half)
+    V.lowLabel:ClearAllPoints()
+    V.lowLabel:SetPoint("TOP", V.rule, "BOTTOM", -w / 4, -10)
+    V.usualLabel:ClearAllPoints()
+    V.usualLabel:SetPoint("TOP", V.rule, "BOTTOM", w / 4, -10)
+    -- (a short screen, beside the list: a shorter chart, more auctions)
+    V.chart:SetHeight(detail:GetHeight() >= 520 and 110 or 70)
     local info = D.info
     local c = ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[info.quality]
-    dIcon:SetTexture(info.iconFileID or 134400)
-    dIcon.border:SetVertexColor(c and c.r or 0.6, c and c.g or 0.6, c and c.b or 0.6, 0.9)
-    dName:SetText(info.itemName)
-    dUpgrade:SetShown(BY.GroupUpgrade(D.result.itemKey) and true or false)
-    dName:SetTextColor(c and c.r or 1, c and c.g or 1, c and c.b or 1)
+    V.icon:SetIcon(info.iconFileID)
+    V.upgrade:SetShown(BY.GroupUpgrade(D.result.itemKey) and true or false)
+    V.name:SetText(info.itemName)
+    -- (poor and common names in cream: their own is too dark to read)
+    if (info.quality or 1) <= 1 or not c then
+        V.name:SetTextColor(SC.CREAM[1], SC.CREAM[2], SC.CREAM[3])
+    else
+        V.name:SetTextColor(c.r, c.g, c.b)
+    end
     local available = Available()
-    dSub:SetText(D.searching and "Searching..." or (available .. " for sale"))
+    V.sub:SetText(D.searching and "Searching..." or (available .. " for sale"))
     local lowest = D.listings[1] and D.listings[1].unit
     local pay
     if D.commodity then
@@ -1673,104 +2023,101 @@ local function RenderDetail()
         local a = Auctions()[D.row]
         pay = a and a.unit
     end
-    dChart:Draw({ itemID = D.itemID, lowestNow = lowest, price = pay, searching = D.searching })
+    V.chart:Draw({ itemID = D.itemID, lowestNow = lowest, price = pay, searching = D.searching })
     local usual = A.MarketPrice(D.itemID)
-    local parts = {}
-    if lowest then parts[#parts + 1] = "Lowest now " .. A.Money(lowest) end
-    if usual then parts[#parts + 1] = "usually " .. A.Money(usual) end
-    dInfo:SetText(table.concat(parts, "   ·   "))
+    V.low:SetText(lowest and A.Money(lowest) or "—")
+    V.usual:SetText(usual and A.Money(usual) or "—")
+    V.deal:Set(Apart(D.itemID, lowest))
 
-    local fr, fg, fb = FocusColor()
+    local active = DetailActive()
     if D.commodity then
-        for _, r in ipairs(dRows) do r:Hide() end
-        dQtyMid:Show()
-        dMoreUp:Hide()
-        dMoreDown:Hide()
-        dQty:SetText(D.qty .. "|cff9d917a/" .. available .. "|r")
-        local fr, fg, fb = FocusColor()
-        dQtyLeft:SetTextColor(fr, fg, fb)
-        dQtyRight:SetTextColor(fr, fg, fb)
-        dQtyLabel:SetText("")
+        for _, r in ipairs(V.rows) do r:Hide() end
+        V.qtyMid:Show()
+        V.moreUp:Hide()
+        V.moreDown:Hide()
+        V.qty:SetText(D.qty .. "|cff9d917a / " .. available .. "|r")
+        -- (the arrows bright while the screen has the pad)
+        V.qtyLeft:SetAlpha(active and 1 or 0.4)
+        V.qtyRight:SetAlpha(active and 1 or 0.4)
+        V.qtyLabel:SetText("")
         -- (with the mouse: typed, its arrows clicked)
         local mouse = Mouse()
-        dQty:SetAlpha(mouse and 0 or 1)
-        dQtyEdit:SetShown(mouse)
+        V.qty:SetAlpha(mouse and 0 or 1)
+        V.qtyEdit:SetShown(mouse)
         if mouse then
-            if not dQtyEdit:HasFocus() then dQtyEdit:SetText(D.qty) end
-            dQtyLabel:SetText("of " .. available .. "  |cff9d917a(Shift: by 10)|r")
+            if not V.qtyEdit:HasFocus() then V.qtyEdit:SetText(D.qty) end
+            V.qtyLabel:SetText("of " .. available .. "  ·  Shift: by 10")
         end
-        dQtyLeftButton:SetShown(mouse)
-        dQtyRightButton:SetShown(mouse)
+        V.qtyLeftButton:SetShown(mouse)
+        V.qtyRightButton:SetShown(mouse)
     else
-        dQtyMid:Hide()
-        dQtyEdit:Hide()
+        V.qtyMid:Hide()
+        V.qtyEdit:Hide()
         local auctions = Auctions()
         D.row = math.max(1, math.min(D.row, math.max(1, #auctions)))
-        -- (as many rows as fit between the prices and the hold box)
-        -- (from under the prices' line, its "more above" line kept, down to
-        -- the hold box, a message's line kept only when there is one, and
-        -- the "more below" line)
-        local bottom = 12 + 34 + 6 + ((D.message and D.message ~= "") and 16 or 0) + 16
-        local infoBottom, detailBottom = dInfo:GetBottom(), detail:GetBottom()
+        -- (as many rows as fit between the chart and the hold line, a
+        -- line's room kept over them and under them for "more", and the
+        -- message's when there is one)
+        local chartBottom, holdTop = V.chart:GetBottom(), V.hold:GetTop()
         local room
-        if infoBottom and detailBottom then
-            room = infoBottom - 22 - detailBottom - bottom
+        if chartBottom and holdTop then
+            room = chartBottom - holdTop - 16 - 16 - ((D.message and D.message ~= "") and 22 or 8)
         else
-            room = detail:GetHeight() - (66 + ChartHeight() + 30) - bottom - 22
+            room = detail:GetHeight() - 300
         end
-        -- (the last row needs no gap under it)
-        local fit = math.max(1, math.min(AUCTION_ROWS, math.floor((room + 4) / AUCTION_H)))
+        local fit = math.max(1, math.min(AUCTION_ROWS, math.floor(room / AUCTION_H)))
         local top = math.max(1, D.row - fit + 1)
-        -- (more above / below: marked above the first row / under the last)
         local shownN = math.min(fit, #auctions - top + 1)
-        dMoreUp:SetShown(top > 1)
-        if top > 1 then
-            dMoreUp:ClearAllPoints()
-            dMoreUp:SetPoint("BOTTOM", dRows[1], "TOP", 0, 1)
-            dMoreUp.text:SetText(top - 1 .. " more")
-        end
+        V.moreUp:SetShown(top > 1)
+        V.moreUp:ClearAllPoints()
+        V.moreUp:SetPoint("TOP", V.chart, "BOTTOM", 0, -2)
+        V.moreUp:SetText((top - 1) .. " more above")
         local below = #auctions - (top + shownN - 1)
-        dMoreDown:SetShown(below > 0 and shownN > 0)
+        V.moreDown:SetShown(below > 0 and shownN > 0)
         if below > 0 and shownN > 0 then
-            dMoreDown:ClearAllPoints()
-            dMoreDown:SetPoint("TOP", dRows[shownN], "BOTTOM", 0, -2)
-            dMoreDown.text:SetText(below .. " more")
+            V.moreDown:ClearAllPoints()
+            V.moreDown:SetPoint("TOP", V.rows[shownN], "BOTTOM", 0, -4)
+            V.moreDown:SetText(below .. " more below")
         end
-        for i, r in ipairs(dRows) do
+        for i, r in ipairs(V.rows) do
             local a = i <= fit and auctions[top + i - 1]
             r:SetShown(a and true or false)
             r.index = a and top + i - 1 or nil
+            r:ClearAllPoints()
+            r:SetPoint("TOPLEFT", V.chart, "BOTTOMLEFT", 0, -16 - (i - 1) * AUCTION_H)
+            r:SetPoint("RIGHT", detail, "RIGHT", -4, 0)
+            r.rule:SetLength(math.max(100, w - 40))
             if a then
                 local on = top + i - 1 == D.row
                 local upgrade = S().buyUpgrades ~= "off" and a.link and IF.Upgrades.IsUpgrade(a.link, nil, nil, true)
                     and true or false
                 local gain, needLevel
                 if upgrade then gain, needLevel = IF.Upgrades.Gain(a.link, nil, nil, true) end
-                local gainText, gainColor = GainBadge(upgrade, gain, needLevel)
-                local dealText, dealColor = DealBadge(D.itemID, a.unit)
                 local parts = {}
-                if a.count > 1 then parts[#parts + 1] = a.count .. " ×  " .. A.Money(a.unit) .. " each" end
                 if a.itemLevel and a.itemLevel > 0 and info.isEquipment then
                     parts[#parts + 1] = "item level " .. a.itemLevel
                 end
-                r:Fill({
-                    icon = info.iconFileID, quality = info.quality,
-                    -- (its own name: a random suffix's "of the Owl")
-                    name = a.link and a.link:match("%[(.-)%]") or info.itemName,
-                    line = table.concat(parts, "  ·  "), price = A.Money(a.total or a.unit * a.count),
-                    upgrade = upgrade,
-                    gain = gainText and { gainText, gainColor }, deal = dealText and { dealText, dealColor },
-                })
-                -- (beside the list, not gone into: no pick shown; with the
-                -- mouse it's clicked, always shown)
-                r.focus:SetShown(on and (DetailActive() or Mouse()))
-                r.focus:SetVertexColor(fr, fg, fb)
+                if a.count > 1 then parts[#parts + 1] = a.count .. " × " .. A.Money(a.unit) end
+                r.icon:SetIcon(info.iconFileID)
+                r.upgrade:SetShown(upgrade)
+                -- (its own name: a random suffix's "of the Owl")
+                r.name:SetText(a.link and a.link:match("%[(.-)%]") or info.itemName)
+                if (info.quality or 1) <= 1 or not c then
+                    r.name:SetTextColor(0.9, 0.9, 0.9)
+                else
+                    r.name:SetTextColor(c.r, c.g, c.b)
+                end
+                r.line:SetText(table.concat(parts, "  ·  "))
+                r.price:SetText(A.Money(a.total or a.unit * a.count))
+                r.tag:Set(Apart(D.itemID, a.unit, upgrade, gain, needLevel))
+                -- (beside the list, not gone into: lit faintly; with the
+                -- mouse it's clicked, lit as gone into)
+                r:Lit(on, active or Mouse())
             end
         end
     end
-    dStatus:SetText(D.message or "")
-    dRefresh:SetShown(Mouse())
-    dHold:SetHold(BY.HoldProgress(D.holdStart), "A", "Buy", HoldPrice())
+    V.status:SetText(D.message or "")
+    V.hold:SetHold(BY.HoldProgress(D.holdStart), "A", "Buy", HoldPrice())
 end
 
 function RenderFilters()
@@ -1794,9 +2141,8 @@ function BY.IsShown() return win:IsShown() end
 function BY.Tab() return BY.tab end
 
 ---------------------------------------------------------------------------
--- The tabs down the window's right: the game's side tabs (as the
--- character window's), the right stick's glyph above them (up / down
--- moves through them)
+-- The pages' names along the window's top, in Morpheus (AuctionScene.lua):
+-- the right stick's glyph before them (up / down moves through them)
 ---------------------------------------------------------------------------
 local function CurrentPage()
     for _, t in ipairs(BY.TABS) do
@@ -1804,41 +2150,56 @@ local function CurrentPage()
     end
 end
 
-sideTabs = IF.UI.SideTabs(win, function(key) BY.SetTab(key) end)
+local tabRow = SC.TabRow(win, function(key) BY.SetTab(key) end, function(dir) BY.StepTab(dir) end)
+-- (its middle the window's, on the Buy page the grid's: ApplyScene)
+tabRow:SetWidth(BUY_W)
 
 local function RenderTabs()
-    sideTabs:Render(BY.TABS, BY.tab)
+    tabRow:Render(BY.TABS, BY.tab)
 end
 
 -- The legend: a page's buttons, then the right stick for the tabs (with
 -- the mouse: no legend, as the game's mouse windows; the buttons, mouse,
--- in the window's bottom band instead, at its right; the Wiki by Alt +
--- click, as everywhere)
-local mouseBar = K.NewFrame("Frame", nil, win)
-mouseBar:SetPoint("BOTTOMRIGHT", win, "BOTTOMRIGHT", -16, 6)
+-- in the bottom bar instead; the Wiki by Alt + click, as everywhere)
+local mouseBar = K.NewFrame("Frame", nil, SC.footer)
+mouseBar:SetPoint("CENTER", SC.footer, "CENTER")
 mouseBar:SetSize(1, 26)
 mouseBar.buttons = {}
 
+-- (the first-time tour's buttons: words in a row, a faint bar between
+-- them, cream under the mouse; Close always last)
 local function SetMouseBar(list)
     local x = 0
+    list = { unpack(list) }
+    list[#list + 1] = { "Close", function() win.onClose() end }
     for i, def in ipairs(list) do
         local b = mouseBar.buttons[i]
         if not b then
-            b = BY.Button(mouseBar, "", function() end)
-            b:SetHeight(26)
+            b = SC.TextButton(mouseBar, "", function() end, 15)
+            b.text:SetTextColor(SC.CREAM[1], SC.CREAM[2], SC.CREAM[3])
             b:SetScript("OnClick", function(self) if self.fn then self.fn() end end)
+            b:SetScript("OnEnter", function(self) self.text:SetTextColor(SC.GOLD[1], SC.GOLD[2], SC.GOLD[3]) end)
+            b:SetScript("OnLeave", function(self) self.text:SetTextColor(SC.CREAM[1], SC.CREAM[2], SC.CREAM[3]) end)
+            b.bar = SC.Text(mouseBar, 15, SC.GREY, SC.BODY)
+            b.bar:SetText("|")
             mouseBar.buttons[i] = b
         end
         b.fn = def[2]
-        b:SetText(def[1])
-        b:SetWidth(math.max(96, b:GetFontString():GetStringWidth() + 28))
+        b.text:SetText(def[1])
+        b:SetWidth(b.text:GetStringWidth() + 16)
         b:ClearAllPoints()
         b:SetPoint("LEFT", mouseBar, "LEFT", x, 0)
         b:Show()
-        x = x + b:GetWidth() + 8
+        b.bar:SetShown(i > 1)
+        b.bar:ClearAllPoints()
+        b.bar:SetPoint("CENTER", b, "LEFT", -6, 1)
+        x = x + b:GetWidth() + 12
     end
-    for i = #list + 1, #mouseBar.buttons do mouseBar.buttons[i]:Hide() end
-    mouseBar:SetWidth(math.max(1, x - 8))
+    for i = #list + 1, #mouseBar.buttons do
+        mouseBar.buttons[i]:Hide()
+        mouseBar.buttons[i].bar:Hide()
+    end
+    mouseBar:SetWidth(math.max(1, x - 12))
 end
 
 local function SetHints(text, mouseList)
@@ -1846,14 +2207,43 @@ local function SetHints(text, mouseList)
     legend:SetShown(not mouse)
     mouseBar:SetShown(mouse)
     if mouse then return SetMouseBar(mouseList or {}) end
-    legend:SetText(text .. "   " .. Glyph("RS") .. " Tabs (tilt) / " .. (BY.TipsOff() and "Tooltip (click)" or "No tooltip (click)")
+    legend:SetText(text .. "   " .. Glyph("RS") .. " Pages (tilt) / " .. (BY.TipsOff() and "Tooltip (click)" or "No tooltip (click)")
         .. ((IF.Wiki and IF.Wiki.Settings().enabled) and " / Hold to Open Wiki" or ""))
+end
+
+-- The window's own look (its frame, background, title) never shows: only
+-- the scene's parts (AuctionScene.lua); the mouse closes it with the word
+-- along the bottom (SetMouseBar), not the corner button. Sized for the page (a page may want it wider: the Tasks tab's
+-- three columns), then placed in the room under the header
+for _, key in ipairs({ "NineSlice", "Bg", "Background", "TopTileStreaks", "TitleContainer", "TitleBg", "InsetBg",
+    "CloseButton" }) do
+    local part = win[key]
+    if part and part.Hide then part:Hide() end
+end
+-- (a plain dialog box where the client has no panel template)
+if win.SetBackdropColor and not win.NineSlice then
+    win:SetBackdropColor(1, 1, 1, 0)
+    win:SetBackdropBorderColor(1, 1, 1, 0)
+end
+local function ApplyScene()
+    local page = CurrentPage()
+    tabRow:ClearAllPoints()
+    if page then
+        win:SetSize(page.width or W, H + TAB_H)
+        tabRow:SetPoint("TOP", win, "TOP", 0, -4)
+    else
+        win:SetSize(BUY_W, BUY_H + TAB_H)
+        -- (over the grid, the categories' chips under it centred there too)
+        tabRow:SetPoint("TOP", win, "TOPLEFT", MAIN_X + MAIN_W / 2, -4)
+    end
+    SC.Place(win)
 end
 
 function BY.SetTab(key)
     if key == BY.tab then return end
     local old = CurrentPage()
     if old then old.Hide() else buyPage:Hide() end
+    local was = BY.tab
     if GameTooltip:GetOwner() == win then GameTooltip:Hide() end
     BY.tab, BY.held = key, nil
     -- (an item's screen open: closed, back home)
@@ -1866,13 +2256,15 @@ function BY.SetTab(key)
     BY.DetailHome()
     local page = CurrentPage()
     -- (a page may want the window wider: the Tasks tab's three columns)
-    win:SetWidth(page and page.width or W)
+    ApplyScene()
     if page then
-        if not page.frame then page.frame = page.Build(win) end
+        if not page.frame then page.frame = page.Build(pageHost) end
         page.Show()
     else
         buyPage:Show()
     end
+    -- (the new page fading in)
+    if was ~= key then SC.FadeIn(page and page.frame or buyPage, 0.25) end
     PlaySound(SOUNDKIT and SOUNDKIT.IG_CHARACTER_INFO_TAB or 841)
     BY.Render()
 end
@@ -1964,9 +2356,10 @@ function BY.Render()
     RenderSide()
     local main, sub = Chosen()
     bar2:Render(Names(main), BY.sub)
+    -- (the third row only where the second's pick has its own)
     local names3 = Names(sub)
-    if not sub then names3 = { "—" } end
-    bar3:Render(names3, sub and BY.subsub or 1)
+    bar3:SetShown(sub ~= nil and #names3 > 1)
+    if bar3:IsShown() then bar3:Render(names3, BY.subsub) end
     RenderResults()
     PlaceDetail()
     if D then RenderDetail() end
@@ -1980,13 +2373,8 @@ function BY.Render()
         text = Glyph("A") .. " Open   " .. Glyph("DPAD") .. " Move   " .. Glyph("LS") .. " Filters   "
             .. Glyph("B") .. " Close"
     end
-    local mouseList
-    if filterBox:IsShown() then
-        mouseList = { { "Done", function() BY.Press("LS") end } }
-    else
-        mouseList = { { "Filters", function() BY.Press("LS") end } }
-    end
-    SetHints(text, mouseList)
+    filterWord:Tint(filterWord:IsMouseOver())
+    SetHints(text, {})
     BY.Tip()
 end
 
@@ -2004,10 +2392,19 @@ local REPEATS = { UP = true, DOWN = true, LEFT = true, RIGHT = true, LB = true, 
 local function MoveResults(name, fast)
     local n = #BY.results
     if n == 0 then return end
-    local d = ({ UP = -1, DOWN = 1 })[name]
+    -- (left / right along a row, on to the next; up / down by a row)
+    local d = ({ UP = -COLS, DOWN = COLS, LEFT = -1, RIGHT = 1 })[name]
     if not d then return end
-    if fast and (name == "UP" or name == "DOWN") then d = d * 5 end
-    BY.index = math.max(1, math.min(n, BY.index + d))
+    if fast and (name == "UP" or name == "DOWN") then d = d * 3 end
+    local to = BY.index + d
+    if to < 1 then
+        -- (up from the top rows: where it is; left from the first: there)
+        to = name == "LEFT" and 1 or BY.index
+    elseif to > n then
+        -- (down into a short last row: its last one)
+        to = (name == "DOWN" and math.ceil(BY.index / COLS) < math.ceil(n / COLS)) and n or BY.index
+    end
+    BY.index = to
     BY.freeTop = false
     MoreIfNeeded()
 end
@@ -2118,8 +2515,7 @@ function BY.Press(name, fast)
             return
         end
     end
-    -- (left / right: nothing in the list)
-    if name == "UP" or name == "DOWN" then
+    if name == "UP" or name == "DOWN" or name == "LEFT" or name == "RIGHT" then
         MoveResults(name, fast)
     elseif name == "LB" or name == "RB" then
         BY.SetSub(BY.sub + (name == "RB" and 1 or -1))
@@ -2274,7 +2670,8 @@ win:SetScript("OnUpdate", function()
     -- (its own focus glow while it has the pad, as the game's windows: not
     -- while the Wiki or the confirmation over it has it)
     local wiki = IF.Wiki and IF.Wiki.HasFocus and IF.Wiki.HasFocus()
-    IF.Focus.Glow(win, not (wiki or IF.AuctionConfirm.IsShown()))
+    -- (a scene has no window to outline: the cursor shows where the pad is)
+    IF.Focus.Glow(win, false)
     WikiHold(now)
     -- (the Wiki with the pad: its sticks too)
     if IF.Wiki and IF.Wiki.HasFocus and IF.Wiki.HasFocus() then return end
@@ -2337,7 +2734,7 @@ win:SetScript("OnUpdate", function()
     local progress
     if D and D.holdStart then
         progress = BY.HoldProgress(D.holdStart)
-        dHold:SetHold(progress, "A", "Buy", HoldPrice())
+        V.hold:SetHold(progress, "A", "Buy", HoldPrice())
     else
         local page = CurrentPage()
         if page and page.HoldProgress then progress = page.HoldProgress() end
@@ -2376,21 +2773,17 @@ end
 function BY.Show()
     if IF.InCombat() or not A.Available() or not A.IsOpen() then return end
     if #Mains() == 0 then return end
-    -- Where the game's own window is
-    local native = _G.AuctionHouseFrame
-    win:ClearAllPoints()
-    if native and native:GetLeft() then
-        win:SetPoint("TOPLEFT", native, "TOPLEFT")
-    else
-        win:SetPoint("CENTER", UIParent, "CENTER", 0, 20)
-    end
-    win:SetWidth(CurrentPage() and CurrentPage().width or W)
+    -- The scene in (the bars, the HUD out), the window in the screen's
+    -- middle under the header (the auctioneer's), fading in
+    SC.Enter()
+    ApplyScene()
     win:Show()
+    SC.FadeIn(win, 0.4, 0.15)
     TakePad(true)
     SyncNative()
     local page = CurrentPage()
     if page then
-        if not page.frame then page.frame = page.Build(win) end
+        if not page.frame then page.frame = page.Build(pageHost) end
         page.Show()
     end
     if #BY.results == 0 and not BY.searching then BY.Query() end
@@ -2402,6 +2795,8 @@ function BY.Hide()
 end
 
 win:SetScript("OnHide", function()
+    -- (the scene out: at once in a fight)
+    SC.Leave(IF.InCombat())
     TakePad(false)
     BY.HoldFeel(nil)
     BY.held, stickY, stickNext, rightY, rightHeld = nil, 0, nil, 0, false
@@ -2511,6 +2906,7 @@ events:SetScript("OnEvent", function(_, event, ...)
             BY.Render()
         end
     elseif event == "PLAYER_REGEN_DISABLED" then
+        SC.Leave(true)
         win:Hide()
     end
 end)

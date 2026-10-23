@@ -16,6 +16,7 @@ Module.lua
 Auction.lua
 AuctionChart.lua
 AuctionConfirm.lua
+AuctionScene.lua
 AuctionBuy.lua
 AuctionSellTab.lua
 AuctionOwned.lua

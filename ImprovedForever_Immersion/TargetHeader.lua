@@ -45,7 +45,7 @@ local look = CreateFrame("Frame", "ImprovedForeverTargetHeader", UIParent)
 look:SetSize(2 * HS.RULE_W, 140)
 look:SetFrameStrata("LOW")
 look:EnableMouse(false)
-look:SetPoint("CENTER", UIParent, "TOP", 0, -HS.RULE_Y)
+look:SetPoint("CENTER", HS.Origin, "CENTER")
 look:Hide()
 
 -- (the health: two halves filling out from the diamond's sides, each over
@@ -254,8 +254,12 @@ local function FillHealth(unit)
     end
 end
 
+-- (the tour's stand-in, TH.Demo: the header drawn for you with another's
+-- name, colour, level, health and quest, in the header's place as a target)
+local demo
+
 local function Refresh(button)
-    local unit = button.unit
+    local unit = demo and "player" or button.unit
     if not UnitExists(unit) then return end
     Try(name.SetText, name, UnitName(unit))
     local dead = Flag(UnitIsDeadOrGhost, unit)
@@ -268,6 +272,23 @@ local function Refresh(button)
     quest:SetText(quests ~= "" and quests or Extras(unit))
     SetPortraitTexture(tile.icon, unit)
     tile.icon:SetSize(tile.across * 0.94, tile.across * 0.94)
+    if demo then
+        name:SetText(demo.name)
+        for _, h in ipairs(halves) do
+            h.bar:SetMinMaxValues(0, 1)
+            h.bar:SetValue(demo.health)
+            h.bar:SetStatusBarColor(demo.color[1], demo.color[2], demo.color[3])
+        end
+        skull:Hide()
+        local lv = UnitLevel("player") + (demo.levelGap or 0)
+        local color = (GetCreatureDifficultyColor or GetQuestDifficultyColor)(lv)
+        level:SetText(lv)
+        level:SetTextColor(color.r, color.g, color.b)
+        quest:SetText(demo.quest)
+        classIcon:Hide()
+        tile.border:SetVertexColor(1, 1, 1)
+        return
+    end
     local c = Classification(unit)
     if c then
         classIcon:SetAtlas(c.icon)
@@ -514,6 +535,10 @@ end
 local lostAt
 
 local function Wants()
+    if demo then
+        lostAt = nil
+        return true
+    end
     local s = IN.Settings()
     if not s.target or UF.EditMode() then return false end
     if UnitExists("target") then
@@ -573,6 +598,20 @@ local function Draw(elapsed)
     -- (the casts up under the name once the quests are gone)
     castBox:ClearAllPoints()
     castBox:SetPoint("TOP", calm < 0.5 and quest or name, "BOTTOM", 0, -CAST_GAP)
+end
+
+-- The tour's stand-in target (Onboarding.lua): "friend", "enemy" or nil to
+-- end it
+local DEMOS = {
+    friend = { name = "Stormwind Guard", color = { 0.1, 0.9, 0.1 }, health = 1, levelGap = 0,
+        quest = "<Guard>  |cff808080\194\183|r  Human" },
+    enemy = { name = "Defias Bandit", color = { 1, 0.1, 0.1 }, health = 0.6, levelGap = 1,
+        quest = "|cffffd100The Defias Brotherhood:|r |cffffffff4/8 Defias Bandit slain|r" },
+}
+
+function TH.Demo(kind)
+    demo = kind and DEMOS[kind] or nil
+    if look:IsShown() then Refresh(UF.target) end
 end
 
 -- (drawn each frame; one error said once, then no more)

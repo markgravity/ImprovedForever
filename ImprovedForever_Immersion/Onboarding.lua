@@ -1,16 +1,16 @@
 -- The first-time tour: the first time Immersion is in, "Immersion" near the
--- top (no rule, no diamond), and in the middle of the
--- screen with no ground of its own, in the header's look (HeaderSlot.lua): a
--- gold rule standing, one small diamond on it with the page's picture, the
--- pages' names left of it; to its right the page's name big in Morpheus, its
--- example in the middle of the screen made of the real thing (the party
--- cards PartyCards.lua draws for /if cards, the spell diamonds' tiles
--- GamepadBar.lua draws, made-up numbers) and what it is under it. The names
--- show one by one as the tour reaches them, then each can be picked. Click
--- the right side or press A (next), B or Esc (skip), or the buttons at the
--- bottom. It is shown once (IN.Settings().tourDone); /if tour plays it
--- again. The pad is taken by a catcher frame only while it is up (not in a
--- fight).
+-- top (no rule, no diamond), and in the middle of the screen, with no ground
+-- of its own, in the header's look (HeaderSlot.lua): a gold rule standing,
+-- one small diamond on it with the page's picture, the pages' names left of
+-- it, and under the last one a diamond button that reveals the next (bobbing
+-- and pulsing so it is seen); in the middle of the screen the page's example
+-- made of the real thing (the party cards PartyCards.lua draws for /if
+-- cards, the spell diamonds' tiles GamepadBar.lua draws, made-up numbers)
+-- and what it is under it. Revealed, a name can be picked. Click the right
+-- side or the diamond, or A, to reveal more; up / down (the D-pad) pick; Close
+-- under the words, B or Esc end it. It is shown once
+-- (IN.Settings().tourDone); /if tour plays it again. The pad is taken by a
+-- catcher frame only while it is up (not in a fight).
 local IF = ImprovedForever
 local IN = IF.Interface
 local HS = IN.HeaderSlot
@@ -18,20 +18,18 @@ local HS = IN.HeaderSlot
 local OB = {}
 IN.Onboarding = OB
 
-local SLIDE = 10
 local START_DELAY = 6                   -- (seconds after login, then once out of a fight)
 local FADE = 0.35
 
 -- (the panel, and in it: the list's rule, the right side)
-local W, H = 860, 540
-local RULE_X = 300                      -- (the standing rule, from the panel's left)
+local W, H = 1200, 540
+local RIGHT_W = 500                     -- (the right side: in the middle of the screen)
+local RULE_X = W / 2 - RIGHT_W / 2 - 70  -- (the standing rule, from the panel's left: left of it)
 local TOP_RULE_Y = 92
 local RULE_TOP, RULE_BOTTOM = 90, 470   -- (the standing rule's ends)
 local LIST_TOP, LIST_BOTTOM = 190, 440  -- (the names' span)
-local RIGHT_X, RIGHT_W = 330, 500
 local STAGE_W, STAGE_H = RIGHT_W, 240   -- (the example: its middle the screen's middle)
 local STAGE_Y = H / 2 - STAGE_H / 2
-local NAME_Y = STAGE_Y - 46
 local WORDS_Y = STAGE_Y + STAGE_H + 12
 local TILE = 30
 
@@ -150,15 +148,59 @@ local TILE_Y = LIST_TOP + (LIST_BOTTOM - LIST_TOP) / (2 * #PAGES) - 44
 local mark = HS.Tile(root, TILE)
 mark:ClearAllPoints()
 mark:SetPoint("CENTER", root, "TOPLEFT", RULE_X, -TILE_Y)
+mark:SetFrameLevel(sideRule:GetFrameLevel() + 5)
 mark.border:SetVertexColor(GOLD[1], GOLD[2], GOLD[3])
 mark.icon:SetSize(mark.across, mark.across)
+-- (the reveal button: a diamond on the rule where the next name will be, bobbing
+-- and pulsing so it is seen; the pad's A beside it, the D-pad's up / down
+-- under the list)
+local more = CreateFrame("Button", nil, root)
+more:SetSize(TILE, TILE)
+more:SetFrameLevel(sideRule:GetFrameLevel() + 5)
+local moreTile = HS.Tile(more, TILE - 6)
+moreTile.border:SetVertexColor(GOLD[1], GOLD[2], GOLD[3])
+moreTile.icon:SetColorTexture(0.6, 0.38, 0.05, 1)
+moreTile.icon:SetSize(moreTile.across, moreTile.across)
+-- (a down arrow: the game's level up arrow turned over, pure white: white cut
+-- to its shape, as the level up banner draws it; else a "v")
+local ARROW = "LevelUp-Icon-Arrow"
+if IF.HasAtlas and IF.HasAtlas(ARROW) then
+    local arrow = moreTile:CreateTexture(nil, "OVERLAY", nil, 2)
+    arrow:SetSize(moreTile.across * 0.5 * 30 / 34, moreTile.across * 0.5)
+    arrow:SetPoint("CENTER", moreTile, "CENTER", 0, -1)
+    arrow:SetColorTexture(1, 1, 1, 1)
+    local cut = moreTile:CreateMaskTexture()
+    cut:SetAtlas(ARROW)
+    cut:SetAllPoints(arrow)
+    cut:SetRotation(math.pi)
+    arrow:AddMaskTexture(cut)
+else
+    local v = HS.Text(moreTile, HS.FONT, 18, 1, 1, 1)
+    v:SetDrawLayer("OVERLAY", 2)
+    v:SetPoint("CENTER", moreTile, "CENTER", 0, 1)
+    v:SetText("v")
+end
+local moreGlow = moreTile:CreateTexture(nil, "OVERLAY", nil, 3)
+moreGlow:SetAtlas("gamepad-actionbar-squareslot-border-normal")
+moreGlow:SetPoint("CENTER")
+moreGlow:SetRotation(HS.TILE_TURN)
+moreGlow:SetBlendMode("ADD")
+moreGlow:SetVertexColor(GOLD[1], GOLD[2], GOLD[3])
+more:SetScript("OnClick", function() OB.Press("PAD1") end)
+more:SetScript("OnEnter", function() moreTile.border:SetVertexColor(1, 1, 1) end)
+more:SetScript("OnLeave", function() moreTile.border:SetVertexColor(GOLD[1], GOLD[2], GOLD[3]) end)
+local moreKey = HS.Text(root, bodyFont, 14, 1, 1, 1)
+local browse = HS.Text(root, bodyFont, 14, 1, 1, 1)
+browse:SetPoint("TOPRIGHT", root, "TOPLEFT", RULE_X - 52, -(LIST_BOTTOM + 24))
+browse:SetJustifyH("RIGHT")
+
 ---------------------------------------------------------------------------
 -- The right side: the page's name, the example (the middle of the screen),
 -- what it is, the buttons
 ---------------------------------------------------------------------------
 local right = CreateFrame("Frame", nil, root)
 right:SetSize(RIGHT_W, H)
-right:SetPoint("TOPLEFT", RIGHT_X, 0)
+right:SetPoint("TOP", root, "TOP", 0, 0)
 
 -- (no buttons: A next, B skip, Esc skips, a click on this side goes on)
 right:EnableMouse(true)
@@ -166,8 +208,6 @@ right:SetScript("OnMouseUp", function(_, button)
     if button == "LeftButton" then OB.Press("PAD1") end
 end)
 
-local title = HS.Text(right, HS.FONT, 26, GOLD[1], GOLD[2], GOLD[3])
-title:SetWidth(RIGHT_W)
 local line1 = HS.Text(right, bodyFont, HS.SMALL_SIZE, 1, 1, 1)
 line1:SetWidth(RIGHT_W + 60)
 line1:SetPoint("TOP", right, "TOP", 0, -WORDS_Y)
@@ -265,79 +305,65 @@ Example("cards", function(f)
     t:SetPoint("BOTTOM", 0, 10)
 end)
 
--- The header: everything that takes its place, one after the other (the
--- target as a friend, as an enemy, the zone's name, the way to a quest, a
--- level up, quest progress), as each looks: the rule (a target's its health),
--- a diamond on it, the name big, small lines under it
-Example("header", function(f)
-    local zone, sub = GetZoneText and GetZoneText() or "", GetSubZoneText and GetSubZoneText() or ""
-    local ARROW = "LevelUp-Icon-Arrow"
-    local ENTRIES = {
-        { label = "Friendly target", name = "Stormwind Guard", color = { 0.35, 0.9, 0.35 }, level = "60",
-            small = "Level 60  |cff808080\194\183|r  Human", health = 1 },
-        { label = "Enemy target", name = "Defias Bandit", color = { 1, 0.3, 0.3 }, level = "12",
-            small = "Level 12  |cff808080\194\183|r  Humanoid", health = 0.6 },
-        { label = "Zone name", name = zone ~= "" and zone or "Elwynn Forest", color = GOLD,
-            small = sub ~= "" and sub or "Goldshire" },
-        { label = "Quest guide", name = "A Threat Within", color = GOLD, arrow = true,
-            small = "142 yards" },
-        { label = "Level up", name = "Level 12", color = GOLD, arrow = true,
-            small = "+18 Health  |cff808080\194\183|r  +25 Mana" },
-        { label = "Quest progress", name = "Crystal Fragment: 6/12", color = GOLD,
-            small = "Objective updated" },
-    }
-    local HOLD = 2.6
-    local rule = Rule(f, 360)
-    rule:SetPoint("TOP", 0, -64)
-    local bar = f:CreateTexture(nil, "ARTWORK", nil, 2)
-    bar:SetHeight(3)
-    bar:SetPoint("LEFT", rule, "LEFT", 0, 0)
-    local tile = HS.Tile(f, 26)
-    tile.icon:Hide()
-    tile.border:SetVertexColor(GOLD[1], GOLD[2], GOLD[3])
-    tile:ClearAllPoints()
-    tile:SetPoint("CENTER", rule, "CENTER")
-    local level = HS.Text(tile, HS.FONT, 16, 1, 1, 1)
-    level:SetDrawLayer("OVERLAY", 2)
-    level:SetPoint("CENTER", tile, "CENTER", 0, 1)
-    local arrow = tile:CreateTexture(nil, "OVERLAY", nil, 2)
-    arrow:SetSize(tile.across * 0.45, tile.across * 0.45)
-    arrow:SetPoint("CENTER")
-    if IF.HasAtlas and IF.HasAtlas(ARROW) then arrow:SetAtlas(ARROW) else arrow:SetColorTexture(1, 1, 1, 1) end
-    local name = HS.Text(f, HS.FONT, HS.NAME_SIZE - 4, GOLD[1], GOLD[2], GOLD[3])
-    name:SetWidth(STAGE_W - 20)
-    name:SetPoint("TOP", rule, "BOTTOM", 0, -HS.NAME_GAP + 8)
-    local small = HS.Text(f, bodyFont, HS.SMALL_SIZE, 1, 1, 1)
-    small:SetPoint("TOP", name, "BOTTOM", 0, -6)
-    local tag = HS.Text(f, bodyFont, 11, 0.6, 0.6, 0.6)
-    tag:SetPoint("BOTTOM", 0, 14)
+-- The header: the real one, moved into the example (HS.MoveOrigin: every
+-- owner of its place hangs on one anchor), taking turns as it does: your
+-- target as a friend and as an enemy (a stand-in, TH.Demo), the way to a
+-- quest (QA.Demo), the zone's name, quest progress and a level up (their own
+-- tests). Under it, the name of what is showing.
+local STEPS = {
+    { label = "Friendly target", run = function() IN.TargetHeader.Demo("friend") end },
+    { label = "Enemy target", run = function() IN.TargetHeader.Demo("enemy") end },
+    { label = "Quest guide", run = function() IN.QuestArrow.Demo(true) end },
+    { label = "Zone name", run = function() IN.ZoneBanner.Test() end },
+    { label = "Quest progress", run = function() IN.QuestProgress.Test() end },
+    { label = "Level up", run = function() IN.LevelBanner.Test() end },
+}
+local STEP_HOLD = 6.5
 
-    local function Apply(e)
-        name:SetText(e.name)
-        name:SetTextColor(e.color[1], e.color[2], e.color[3])
-        small:SetText(e.small)
-        tag:SetText(e.label)
-        level:SetText(e.level or "")
-        arrow:SetShown(e.arrow and true or false)
-        bar:SetShown(e.health and true or false)
-        if e.health then
-            bar:SetWidth(math.max(1, 360 * e.health))
-            bar:SetColorTexture(e.color[1], e.color[2], e.color[3], 1)
-        end
+-- (the tests say what they did in chat: not here)
+local function Quietly(fn)
+    local print = IF.Print
+    IF.Print = function() end
+    local ok, err = pcall(fn)
+    IF.Print = print
+    return ok, err
+end
+
+local demoOn
+function OB.StopDemos()
+    if not demoOn then return end
+    demoOn = nil
+    pcall(IN.TargetHeader.Demo, nil)
+    pcall(IN.QuestArrow.Demo, false)
+    HS.ResetOrigin()
+end
+
+Example("header", function(f)
+    local label = HS.Text(f, HS.FONT, 18, GOLD[1], GOLD[2], GOLD[3])
+    label:SetPoint("BOTTOM", 0, 28)
+    local count = Label(f, "", 11, 0.55, 0.55, 0.55)
+    count:SetPoint("BOTTOM", 0, 12)
+    local index, t = 0, STEP_HOLD
+    local function Run(n)
+        index = n
+        OB.StopDemos()
+        local step = STEPS[n]
+        label:SetText(step.label)
+        count:SetText(n .. " / " .. #STEPS)
+        HS.MoveOrigin(f, 0, -56)
+        demoOn = true
+        local ok, err = Quietly(step.run)
+        if not ok then count:SetText("(not shown: " .. tostring(err):sub(1, 70) .. ")") end
     end
-    local index, t = 1, 0
-    Apply(ENTRIES[1])
-    f:SetScript("OnShow", function() index, t = 1, 0 Apply(ENTRIES[1]) end)
+    f:SetScript("OnShow", function() index, t = 0, STEP_HOLD end)
+    f:SetScript("OnHide", function() OB.StopDemos() end)
     f:SetScript("OnUpdate", function(_, elapsed)
+        if goal ~= 1 or not root:IsShown() then return end
         t = t + elapsed
-        if t >= HOLD then
-            t = t - HOLD
-            index = index % #ENTRIES + 1
-            Apply(ENTRIES[index])
+        if t >= STEP_HOLD then
+            t = 0
+            Run(index % #STEPS + 1)
         end
-        -- (in, held, out)
-        local a = math.min(Ease(t, 0, 0.3), 1 - Ease(t, HOLD - 0.3, HOLD))
-        for _, r in ipairs({ name, small, tag, tile, bar }) do r:SetAlpha(a) end
     end)
 end)
 
@@ -360,7 +386,7 @@ Example("switches", function(f)
 end)
 
 ---------------------------------------------------------------------------
--- The buttons, bottom centre: Continue | Close, words as the NPC dialog's
+-- The button: Close near the bottom of the screen, a word as the NPC dialog's
 -- answers (the pad's glyph before one with the pad)
 ---------------------------------------------------------------------------
 local function Word(size, r, g, b, glyph)
@@ -377,30 +403,21 @@ local function Word(size, r, g, b, glyph)
     end
     return btn
 end
-local nextButton = Word(17, GOLD[1], GOLD[2], GOLD[3], "PAD1")
 local closeButton = Word(17, 0.7, 0.7, 0.7, "PAD2")
-local divider = HS.Text(root, bodyFont, 17, 0.5, 0.5, 0.5)
-divider:SetText("|")
-nextButton:SetScript("OnClick", function() OB.Press("PAD1") end)
 closeButton:SetScript("OnClick", function() OB.Press("PAD2") end)
 
-local function Buttons(last)
-    nextButton:Set(last and "Done" or "Continue")
-    closeButton:Set("Close")
-    closeButton:SetShown(not last)
-    divider:SetShown(not last)
-    nextButton:ClearAllPoints()
+-- (under the words, close to the tour: the way out, shown with the pad's B or Esc)
+local function Hints()
+    local pad = IF.Input.Pad()
+    moreKey:SetText(pad and IF.GlyphText("PAD1", 18) or "")
+    browse:SetText(pad and (IF.GlyphText("DPAD_UD", 18) .. " Browse") or "")
+end
+
+local function Buttons()
+    Hints()
+    closeButton:Set(IF.Input.Pad() and "Close" or "Close  (Esc)")
     closeButton:ClearAllPoints()
-    divider:ClearAllPoints()
-    if last then
-        nextButton:SetPoint("BOTTOM", root, "BOTTOM", 0, 30)
-    else
-        local gap = 14
-        local total = nextButton:GetWidth() + gap + divider:GetStringWidth() + gap + closeButton:GetWidth()
-        nextButton:SetPoint("BOTTOMLEFT", root, "BOTTOM", -total / 2, 30)
-        divider:SetPoint("LEFT", nextButton, "RIGHT", gap, 0)
-        closeButton:SetPoint("LEFT", divider, "RIGHT", gap, 0)
-    end
+    closeButton:SetPoint("TOPLEFT", root, "TOP", -closeButton:GetWidth() / 2, -(WORDS_Y + 58))
 end
 
 ---------------------------------------------------------------------------
@@ -434,6 +451,7 @@ local function Finish()
     page = 1
     if IF.db then IN.Settings().tourDone = true end
     escape:Hide()
+    OB.StopDemos()
 end
 
 function Go(n)
@@ -448,8 +466,7 @@ function Go(n)
     else
         mark.icon:SetTexture(p.icon)
     end
-    title:SetText(p.name)
-    Buttons(p.last)
+    Buttons()
     line1:SetText(p.lines[1] or "")
     line2:SetText(p.lines[2] or "")
     for key, f in pairs(OB.examples) do
@@ -460,10 +477,19 @@ function Go(n)
     if changed and goal == 1 then PlaySound(SOUNDKIT and SOUNDKIT.IG_QUEST_LIST_SELECT or 856) end
 end
 
+-- (A and a click on the right side reveal the next page, up / down pick among
+-- the revealed, B and Esc end it)
 function OB.Press(key)
     if goal ~= 1 then return end
-    if key == "PAD1" then Go(page + 1) end
-    if key == "PAD2" then Finish() end
+    if key == "PAD1" then
+        if reached < #PAGES then Go(reached + 1) end
+    elseif key == "UP" then
+        if page > 1 then Go(page - 1) end
+    elseif key == "DOWN" then
+        if page < reached then Go(page + 1) end
+    elseif key == "PAD2" then
+        Finish()
+    end
 end
 
 ---------------------------------------------------------------------------
@@ -472,6 +498,8 @@ end
 local catcher = CreateFrame("Frame", nil, UIParent)
 catcher:SetScript("OnGamePadButtonDown", function(_, button)
     if button == "PAD1" then OB.Press(button) end
+    if button == "PADDUP" then OB.Press("UP") end
+    if button == "PADDDOWN" then OB.Press("DOWN") end
 end)
 catcher:SetScript("OnGamePadButtonUp", function(_, button)
     if button == "PAD2" then OB.Press(button) end
@@ -480,7 +508,7 @@ end)
 -- wanted, else it takes the pad from login)
 catcher:EnableGamePadButton(false)
 IF.OnLogin(function()
-    IF.Input.OnChange(function() if goal == 1 then Buttons(PAGES[page].last) end end)
+    IF.Input.OnChange(function() if goal == 1 then Buttons() end end)
 end)
 
 -- (Esc: the game closes it as it does a window)
@@ -503,11 +531,14 @@ local presence = 0
 
 local function Step(elapsed)
     local want = goal == 1 and not IF.InCombat()
+    -- (closed or done: gone at once; a fight only fades it)
+    if goal == 0 then presence = 0 end
     presence = want and math.min(1, presence + elapsed / FADE) or math.max(0, presence - elapsed / FADE)
     TakePad(want and presence >= 0.5)
     if presence <= 0 then
         root:Hide()
         head:Hide()
+        OB.StopDemos()
         return
     end
     head:Show()
@@ -518,10 +549,24 @@ local function Step(elapsed)
     local now = GetTime()
     -- (the page's words slide in as it turns)
     local words = shownAt and Ease(now - shownAt, 0, 0.35) or 1
-    title:ClearAllPoints()
-    title:SetPoint("TOP", right, "TOP", 0, -NAME_Y + SLIDE * (1 - words))
-    for _, s in ipairs({ title, line1, line2 }) do s:SetAlpha(words) end
+    for _, s in ipairs({ line1, line2 }) do s:SetAlpha(words) end
     stage:SetAlpha(0.35 + 0.65 * words)
+    -- (the reveal button on the rule where the next name will be)
+    local nextSlot = reached + 1
+    local beat = (now % 1.2) / 1.2
+    more:SetShown(nextSlot <= #PAGES)
+    if nextSlot <= #PAGES then
+        local y = LIST_TOP + (nextSlot - 0.5) * (LIST_BOTTOM - LIST_TOP) / #PAGES
+        more:ClearAllPoints()
+        more:SetPoint("CENTER", root, "TOPLEFT", RULE_X, -y + 4 * math.sin(now * 5))
+        local size = (TILE - 6) * 64 / 46 * (1 + 0.8 * beat)
+        moreGlow:SetSize(size, size)
+        moreGlow:SetAlpha(0.95 * (1 - beat) ^ 1.3)
+        moreTile:SetScale(1 + 0.06 * math.sin(now * 5))
+        moreKey:ClearAllPoints()
+        moreKey:SetPoint("LEFT", more, "RIGHT", 10, 0)
+    end
+    moreKey:SetShown(nextSlot <= #PAGES)
     -- (the list: the page's name gold)
     for i, row in ipairs(rows) do
         local on = i == page
