@@ -11,6 +11,9 @@
 -- frame of ours takes the mouse over it; at the top level it shows
 -- reputation, left as it is, and the ring goes (with the player frame
 -- off too: the game's bar then shows it).
+-- Under water the same ring shows your breath instead (Breath.lua, XP.Air):
+-- blue, draining clockwise as the breath runs out, the experience's gone
+-- while it does.
 -- The ring is ours, on the card but never anchored to the secure button
 -- itself: it's redrawn in a fight (a kill's experience) by its lines'
 -- points alone.
@@ -27,6 +30,7 @@ local RESTED = "UI-HUD-ExperienceBar-Fill-Rested-Camelot"
 local FILL_COLOR, RESTED_COLOR = { 0.7, 0.25, 0.85 }, { 0.1, 0.45, 0.95 }
 local GLOW_COLOR = { 1, 0.5, 1 }        -- (its glow's, the experience bar's)
 local RESTED_ALPHA = 0.6
+local AIR_COLOR = { 0.3, 0.65, 1 }      -- (the breath's, with its glow)
 -- (on the border, RING_IN in from the card's edge; the line's and glow's
 -- thickness, the gamepad bar's cast ring's)
 local RING_IN, RING_LINE, RING_GLOW = 3, 2.5, 4
@@ -53,10 +57,16 @@ end
 
 -- (an arc's lines (and glows), made as needed, one per side of the card)
 local function Arc(atlas, color, alpha, glow)
-    return { atlas = atlas, color = color, alpha = alpha, glow = glow, lines = {}, glows = {} }
+    return { atlas = atlas, color = color, alpha = alpha, glow = glow, lines = {}, glows = {},
+        glowColor = glow and (atlas == "" and AIR_COLOR or GLOW_COLOR) or nil }
 end
 local fill = Arc(FILL, FILL_COLOR, 1, true)
 local rested = Arc(RESTED, RESTED_COLOR, RESTED_ALPHA, false)
+local air = Arc("", AIR_COLOR, 1, true)
+local breath          -- (the breath's share left, 0 to 1, while under water; else nil)
+-- (the switch between the two: mix 0 is the experience, 1 the breath, eased;
+-- the breath's arc eased to its share, from nothing as it comes)
+local mix, airShown, airGoal = 0, 0, 0
 
 local function ArcLines(arc, i)
     if not arc.lines[i] then
@@ -65,7 +75,7 @@ local function ArcLines(arc, i)
             g:SetThickness(RING_GLOW)
             g:SetTexture(WHITE)
             g:SetBlendMode("ADD")
-            g:SetVertexColor(GLOW_COLOR[1], GLOW_COLOR[2], GLOW_COLOR[3], 0.35)
+            g:SetVertexColor(arc.glowColor[1], arc.glowColor[2], arc.glowColor[3], 0.35)
             arc.glows[i] = g
         end
         local l = ring:CreateLine(nil, "OVERLAY", nil, arc.glow and 3 or 2)
@@ -101,13 +111,14 @@ local function Path()
 end
 
 -- The arc drawn from `from` to `to` (0 to 1 of the way round)
-local function DrawArc(arc, from, to)
+local function DrawArc(arc, from, to, k)
+    k = k or 1
     local path, cuts = Path()
     for i = 1, #path - 1 do
         local line, glow = ArcLines(arc, i)
         local s0, s1 = cuts[i], cuts[i + 1]
         local a, b = math.max(from, s0), math.min(to, s1)
-        if b - a <= 0 or s1 <= s0 then
+        if b - a <= 0 or s1 <= s0 or k <= 0 then
             line:Hide()
             if glow then glow:Hide() end
         else
@@ -118,6 +129,8 @@ local function DrawArc(arc, from, to)
             end
             local x1, y1 = At(a)
             local x2, y2 = At(b)
+            line:SetAlpha(arc.alpha * k)
+            if glow then glow:SetAlpha(k) end
             for _, l in ipairs({ line, glow }) do
                 l:SetStartPoint("CENTER", ring, x1, y1)
                 l:SetEndPoint("CENTER", ring, x2, y2)
@@ -163,8 +176,9 @@ local shown = { f = 0, r = 0 }
 local goal = { f = 0, r = 0 }
 
 local function Draw()
-    DrawArc(fill, 0, shown.f)
-    DrawArc(rested, shown.f, shown.r)
+    DrawArc(fill, 0, shown.f, 1 - mix)
+    DrawArc(rested, shown.f, shown.r, 1 - mix)
+    DrawArc(air, 0, airShown, mix)
 end
 
 local function Step(_, elapsed)
@@ -179,8 +193,24 @@ local function Step(_, elapsed)
             done = false
         end
     end
+    local want = breath and 1 or 0
+    if math.abs(want - mix) < 0.005 then
+        mix = want
+    else
+        mix = mix + (want - mix) * k
+        done = false
+    end
+    if math.abs(airGoal - airShown) < 0.002 then
+        airShown = airGoal
+    else
+        airShown = airShown + (airGoal - airShown) * k
+        done = false
+    end
     Draw()
-    if done then ring:SetScript("OnUpdate", nil) end
+    if done then
+        ring:SetScript("OnUpdate", nil)
+        if mix == 0 then XP.Apply() end
+    end
 end
 
 -- (a new value eased to; less than shown (a new level) from none)
@@ -196,6 +226,20 @@ end
 
 ring:SetScript("OnSizeChanged", Draw)
 ring:HookScript("OnShow", Draw)
+
+-- The breath's share left (0 to 1) drawn in the ring in place of the
+-- experience; nil: the experience again
+function XP.Air(share)
+    if share == breath then return end
+    local coming = share and not breath
+    breath = share
+    if share then
+        airGoal = share
+        if coming then airShown = 0 end
+    end
+    ring:SetScript("OnUpdate", Step)
+    XP.Apply()
+end
 
 -- (the card's tooltip: its numbers after the unit's)
 UF.player:HookScript("OnEnter", function()
@@ -232,13 +276,15 @@ local function Watch()
     if not IF.db then return end
     local native = MainStatusTrackingBarContainer
     local s = IN.Settings()
-    local on = s.xp and s.player and Gaining() or false
-    local hide = on and not UF.EditMode()
+    local xp = s.xp and s.player and Gaining() or false
+    local on = xp or (s.player and not UF.EditMode() and (breath ~= nil or mix > 0))
+    local hide = xp and not UF.EditMode()
     IF.Focus.Fade(native, hide)
     UF.Cover(native, hide)
     if on ~= ring:IsShown() then
         ring:SetShown(on)
         if on then Refresh() end
+        if on then ring:SetScript("OnUpdate", Step) end
     end
 end
 

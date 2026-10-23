@@ -92,6 +92,7 @@ local DEFAULTS = {
     hudCooldowns = true, -- the Cooldown Manager left of the spell diamonds (in the Edit Mode layout; an experiment)
     chatDim = true,     -- the chat as only its lines while not in use
     castBar = true,     -- your casts as a long line over the party cards, filling out from the middle
+    breath = true,      -- your breath under water as water filling the player frame, dropping as it runs out
     castRange = true,   -- the target header greyed while an enemy is out of your reach
     hpLine = true,      -- your health as a bar over the power line
     mpLine = true,      -- your power (mana, rage, energy...) as a bar along the screen's bottom edge

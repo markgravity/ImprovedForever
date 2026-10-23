@@ -83,6 +83,11 @@ local ITEMS = {
             .. "game's bar.",
     }, Toggle("castBar", "Cast bar", function() IN.PlayerCast.Apply() end)),
     Item({
+        key = "breath", group = "bottom", label = "Breath",
+        tip = "Under water, your player frame fills with blue and drains as your breath runs out, in place "
+            .. "of the game's breath bar. Other timers (fatigue) stay the game's.",
+    }, Toggle("breath", "Breath", function() IN.Breath.Apply() end)),
+    Item({
         key = "castRange", group = "top", label = "Target range",
         tip = "Out of reach of your longest-range harmful spell, the target's portrait turns grey and its "
             .. "health line faint.",
