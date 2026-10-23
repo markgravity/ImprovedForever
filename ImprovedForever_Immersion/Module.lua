@@ -141,5 +141,7 @@ function IN.Settings()
     settings.chat, settings.auras, settings.camp = nil, nil, nil
     db.timelineBar = nil
     db.hudLog = nil
+    -- (the breath probes' logs)
+    db.breathLog, db.waterLog = nil, nil
     return settings
 end

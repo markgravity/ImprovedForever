@@ -169,32 +169,6 @@ a.model:HookScript("OnModelLoaded", function()
     if pose and pose ~= STAND and a.model.SetAnimation then pcall(a.model.SetAnimation, a.model, pose, 0) end
 end)
 
--- PROBE (remove once the breath works): raw timer reads into IF.db.breathLog
-local logged, lastLog, lastKey = 0, nil, nil
-local function Log()
-    if not IF.db or logged >= 30 then return end
-    IF.db.breathLog = IF.db.breathLog or { date() }
-    local function S(v) return Secret(v) and "<hidden>" or tostring(v) end
-    local parts = {}
-    for i = 1, 3 do
-        local r = { pcall(GetMirrorTimerInfo, i) }
-        for k = 1, #r do r[k] = S(r[k]) end
-        parts[#parts + 1] = i .. ":" .. table.concat(r, ",")
-    end
-    local prog = GetMirrorTimerProgress and { pcall(GetMirrorTimerProgress, "BREATH") } or { "none" }
-    for k = 1, #prog do prog[k] = S(prog[k]) end
-    -- (depth: does anything read it? a position's third value, the submerged flag)
-    local pos = { pcall(UnitPosition, "player") }
-    for k = 1, #pos do pos[k] = S(pos[k]) end
-    local sub = IsSubmerged and { pcall(IsSubmerged) } or { "none" }
-    for k = 1, #sub do sub[k] = S(sub[k]) end
-    parts[#parts + 1] = "pos " .. table.concat(pos, ",") .. " submerged " .. table.concat(sub, ",")
-    local c = _G.MirrorTimerContainer
-    IF.db.breathLog[#IF.db.breathLog + 1] = string.format("%.1f %s | progress %s | container %s shown %s", GetTime() % 1000,
-        table.concat(parts, " ; "), table.concat(prog, ","), c and (c:GetName() or "?") or "nil", c and S(c:IsShown()) or "-")
-    logged = logged + 1
-end
-
 local function Update()
     local on = IN.Settings().breath and not UF.EditMode()
     Swimming(on)
@@ -217,26 +191,10 @@ local function Update()
     else
         level, atSurface = 0, false
     end
-    -- PROBE: each change of the water's state into IF.db.waterLog
-    do
-        local key = tostring(swimming) .. tostring(submerged) .. tostring(breath ~= nil) .. tostring(level)
-        if key ~= lastKey and IF.db then
-            lastKey = key
-            IF.db.waterLog = IF.db.waterLog or { date() }
-            local d = IsSubmerged and { pcall(IsSubmerged) } or { "none" }
-            IF.db.waterLog[#IF.db.waterLog + 1] = string.format("%.1f swimming=%s submerged=%s raw=%s,%s breath=%s level=%.2f rise=%.2f",
-                GetTime() % 1000, tostring(swimming), tostring(submerged), tostring(d[1]), tostring(d[2]),
-                tostring(breath ~= nil), level, rise)
-        end
-    end
     if not breath then
         if IN.XPBar then IN.XPBar.Air(nil) end
         for _, f in ipairs(Natives()) do IF.Focus.Fade(f, false) end
         return
-    end
-    if GetTime() - (lastLog or 0) > 1 then
-        lastLog = GetTime()
-        Log()
     end
     local XP = IN.XPBar
     if XP then
