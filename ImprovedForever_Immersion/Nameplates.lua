@@ -1,7 +1,8 @@
 -- The nameplates in the module's look: the name in gold (the header's
 -- font), under it a thin line in the nameplate's colour over a dark
--- track, the level in the small circle at the line's end; your target's
--- full size, the others a little smaller and softer. Each is a frame of
+-- track, the level in the small circle at the line's end;
+-- (the others a little smaller and softer; your target's goes out on the
+-- mob, it is in the header's place, TargetHeader.lua). Each is a frame of
 -- ours anchored to the game's plate (a plain anchor: probe verified
 -- taint-free; the plate is never measured or changed), and the game's own
 -- look of it (its UnitFrame) drawn at alpha 0 by an animation of ours
@@ -21,6 +22,7 @@ local TRACK = { 0, 0, 0, 0.55 }
 local NAME_SIZE = 13
 local STEP = 0.1
 local OTHER_SCALE, OTHER_ALPHA = 0.8, 0.85
+local FADE_SPEED = 8                    -- (how fast alpha and size ease)
 
 ---------------------------------------------------------------------------
 -- One plate of ours (pooled)
@@ -80,6 +82,13 @@ local function Level(p, unit)
     end
 end
 
+-- (drawn at its current alpha and size; none left: not shown)
+local function Draw(p)
+    p:SetScale(math.max(0.01, p.scale))
+    p:SetAlpha(p.alpha)
+    p:SetShown(p.alpha > 0.01)
+end
+
 local function Refresh(p)
     local unit = p.unit
     if not unit then return end
@@ -97,10 +106,18 @@ local function Refresh(p)
     local r, g, b = TH.NameplateColor(unit)
     p.bar:SetStatusBarColor(r, g, b)
     Level(p, unit)
+    -- (your target is in the header's place: its plate fades out on the
+    -- mob and comes back when it isn't the target; the header off, it
+    -- stays, full size)
     local target = Flag(IsTarget, unit)
-    p:SetScale(target and 1 or OTHER_SCALE)
-    p:SetAlpha(target and 1 or OTHER_ALPHA)
+    local inHeader = target and IN.Settings().target and not UF.EditMode()
+    p.goalAlpha = inHeader and 0 or target and 1 or OTHER_ALPHA
+    p.goalScale = inHeader and OTHER_SCALE * 0.85 or target and 1 or OTHER_SCALE
     p:SetFrameLevel(target and 20 or 10)
+    if not p.alpha then
+        p.alpha, p.scale = p.goalAlpha, p.goalScale
+        Draw(p)
+    end
 end
 
 ---------------------------------------------------------------------------
@@ -143,10 +160,10 @@ local function Add(unit)
     local p = table.remove(pool) or Build()
     a.ours = p
     p.unit = unit
+    p.alpha = nil
     HideGame(game, true)
     p:ClearAllPoints()
     p:SetPoint("CENTER", game, "CENTER", 0, 0)
-    p:Show()
     Refresh(p)
 end
 
@@ -178,12 +195,24 @@ events:SetScript("OnEvent", function(_, event, unit)
     end
 end)
 
+local function Ease(p, elapsed)
+    if not p.alpha then return end
+    local k = math.min(1, elapsed * FADE_SPEED)
+    p.alpha = p.alpha + (p.goalAlpha - p.alpha) * k
+    p.scale = p.scale + (p.goalScale - p.scale) * k
+    if math.abs(p.alpha - p.goalAlpha) < 0.01 then p.alpha, p.scale = p.goalAlpha, p.goalScale end
+    Draw(p)
+end
+
 local since = 0
 events:SetScript("OnUpdate", function(_, elapsed)
     since = since + elapsed
-    if since < STEP then return end
-    since = 0
+    local data = since >= STEP
+    if data then since = 0 end
     for _, a in pairs(active) do
-        if a.ours then Safe(Refresh, a.ours) end
+        if a.ours then
+            if data then Safe(Refresh, a.ours) end
+            Safe(Ease, a.ours, elapsed)
+        end
     end
 end)
