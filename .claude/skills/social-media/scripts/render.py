@@ -19,6 +19,14 @@ Square post (templates/square.html):
    "headline": "VIBRATION", "headline_size": 150,
    "desc": "Feel every cast, hit and game event in your hands"}
   The height of an overlay follows its aspect unless "height" is given.
+  Optional "badge" (square or wide), a giveaway card with codes:
+    {"left": 1500, "top": 480, "width": 340, "title": "GIVEAWAY",
+     "sub": "WoW: Forever Invite-A-Friend launch codes",
+     "codes": ["AAAA-...", "BBBB-..."], "note": "optional last line",
+     "row": true}          # row: compact, codes side by side, note joins the sub line
+
+Wide post with "center": true puts the text column in the middle (x 580..1340,
+over a dark radial fade) so pictures can sit left and right of it.
 
 Wide post, 1920x1080 (templates/wide.html): the same keys as a square, with
 "type": "wide" and a 1920x1080 "bg" (scene.py with "size": [1920, 1080]).
@@ -104,6 +112,41 @@ def build(spec, base):
             if o.get("round"):
                 style += "border-radius:50%;"
             parts.append(f'<img src="{url(src, base)}" alt="" style="{style}">')
+        if kind == "wide" and spec.get("center"):
+            page = page.replace("left: 110px; top: 0; bottom: 0; width: 760px", "left: 580px; top: 0; bottom: 0; width: 760px")
+            page = page.replace("</style>", ".wd-shade{background:radial-gradient(ellipse 36% 60% at 50% 50%, rgba(14,9,4,0.9) 0%, rgba(14,9,4,0.8) 60%, rgba(14,9,4,0) 100%)}</style>")
+        b = spec.get("badge")
+        if b and b.get("row"):
+            codes = "".join(
+                '<div style="flex:1;padding:8px 0;border:2px solid rgba(239,230,209,0.55);border-radius:10px;'
+                "background:rgba(0,0,0,0.35);font-family:'Cinzel',serif;font-weight:700;font-size:%dpx;"
+                'letter-spacing:0.02em;color:#ffffc0;white-space:nowrap">%s</div>' % (b.get("code_size", 19), html.escape(c))
+                for c in b.get("codes", []))
+            sub = " · ".join(x for x in (b.get("sub"), b.get("note")) if x)
+            parts.append(
+                '<div style="position:absolute;left:%dpx;top:%dpx;width:%dpx;box-sizing:border-box;padding:14px 14px 14px;'
+                'text-align:center;background:rgba(14,9,4,0.82);border:4px solid #efe6d1;border-radius:18px;'
+                'box-shadow:0 16px 34px rgba(0,0,0,0.75);color:#fffaec">'
+                "<div style=\"font-family:'Cinzel',serif;font-weight:700;font-size:30px;letter-spacing:0.08em;color:#ffffc0\">%s</div>"
+                '<div style="margin:2px 0 8px;font-size:19px;letter-spacing:0.03em">%s</div>'
+                '<div style="display:flex;gap:10px">%s</div></div>'
+                % (b["left"], b["top"], b["width"], html.escape(b.get("title", "GIVEAWAY")), html.escape(sub), codes))
+        elif b:
+            codes = "".join(
+                '<div style="margin-top:10px;padding:9px 0;border:2px solid rgba(239,230,209,0.55);border-radius:10px;'
+                "background:rgba(0,0,0,0.35);font-family:'Cinzel',serif;font-weight:700;font-size:%dpx;"
+                'letter-spacing:0.02em;color:#ffffc0;white-space:nowrap">%s</div>' % (b.get("code_size", 19), html.escape(c))
+                for c in b.get("codes", []))
+            note = ('<div style="margin-top:12px;font-size:18px;letter-spacing:0.04em;color:#e8dcc0">%s</div>'
+                    % html.escape(b["note"])) if b.get("note") else ""
+            parts.append(
+                '<div style="position:absolute;left:%dpx;top:%dpx;width:%dpx;box-sizing:border-box;padding:20px 14px 18px;'
+                'text-align:center;background:rgba(14,9,4,0.82);border:4px solid #efe6d1;border-radius:18px;'
+                'box-shadow:0 16px 34px rgba(0,0,0,0.75);color:#fffaec">'
+                "<div style=\"font-family:'Cinzel',serif;font-weight:700;font-size:40px;letter-spacing:0.08em;color:#ffffc0\">%s</div>"
+                '<div style="margin:6px 0 4px;font-size:20px;line-height:1.3;letter-spacing:0.03em">%s</div>%s%s</div>'
+                % (b["left"], b["top"], b["width"], html.escape(b.get("title", "GIVEAWAY")),
+                   html.escape(b.get("sub", "")), codes, note))
         page = (page.replace("__CORNERS__", corners(150, 22, 6, 7))
                 .replace("__OVERLAYS__", "\n  ".join(parts))
                 .replace("__BG__", url(spec["bg"], base))
