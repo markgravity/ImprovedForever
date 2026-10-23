@@ -39,28 +39,111 @@ end
 
 local ITEMS = {
     Item({
-        key = "bottomHud", group = "bottom", label = "Player HUD",
-        tip = "Your player frame with its experience ring, your pet's card, health and power lines along "
-            .. "the bottom edge, the spell diamonds, and the chat as just its lines until used. Off, the "
-            .. "game's own show.",
-    }, OnOff(function()
-        local s = IN.Settings()
-        for _, key in ipairs(BOTTOM) do if s[key] then return true end end
-        return false
-    end, BottomHud, "Player HUD")),
-    Item({
-        key = "target", group = "top", label = "Target header",
+        key = "target", group = "top", section = "Target", label = "Target header",
         tip = "The target under the top of the screen: its health as a line, a portrait diamond with level "
             .. "and elite or rare marks, its name, quests and casts. Click for targeting, right click for "
             .. "its menu.",
     }, Toggle("target", "Target header", function() IN.UnitFrames.Apply() end)),
     Item({
-        key = "cards", group = "party", label = "Party cards",
+        key = "castRange", group = "top", section = "Target", label = "Target range",
+        tip = "Out of reach of your longest-range harmful spell, the target's portrait turns grey and its "
+            .. "health line faint.",
+    }, Toggle("castRange", "Target range", function() end)),
+    Item({
+        key = "nameplates", group = "top", section = "Nameplates", label = "Nameplates",
+        tip = "The nameplates over mobs in our look: the name in gold, a thin health line in the nameplate's "
+            .. "colour and the level in a small circle. Your target's is full size, the others softer. Off, "
+            .. "the game's own.",
+    }, Toggle("nameplates", "Nameplates", function() IN.Nameplates.Apply() end)),
+    Item({
+        key = "nameplateDebuffs", group = "top", section = "Nameplates", label = "Nameplate debuffs",
+        tip = "Your debuffs on a mob as small icons under its nameplate, with their time left and stacks. "
+            .. "Needs the nameplates on.",
+    }, Toggle("nameplateDebuffs", "Nameplate debuffs", function() IN.Nameplates.Apply() end)),
+    Item({
+        key = "questArrow", group = "top", section = "Quests", label = "Quest arrow",
+        tip = "The way to your focused quest near the top: its name, the yards left, and a diamond arrow "
+            .. "that turns green as you head its way. Gives its place to the target, zone names and notices.",
+    }, Toggle("questArrow", "Quest arrow", function() IN.QuestArrow.Apply() end)),
+    Item({
+        key = "questProgress", group = "top", section = "Quests", label = "Quest progress",
+        tip = "Quest progress (\"Crystal Fragment: 6/12\") as a header for a few seconds. /if progresstest "
+            .. "shows it.",
+    }, Toggle("questProgress", "Quest progress", function() IN.QuestProgress.Apply() end)),
+    Item({
+        key = "levelBanner", group = "top", section = "Banners", label = "Level ups",
+        tip = "Your level ups as a header: the new level, what it gave and what's new. /if leveltest shows "
+            .. "it.",
+    }, Toggle("levelBanner", "Level ups", function() IN.LevelBanner.Apply() end)),
+    Item({
+        key = "zoneBanner", group = "top", section = "Banners", label = "Zone names",
+        tip = "The zone's name as you enter it, with its picture and subzone. /if zonetest shows it.",
+    }, Toggle("zoneBanner", "Zone names", function() IN.ZoneBanner.Apply() end)),
+    Item({
+        key = "bottomHud", group = "bottom", section = "Player frame", label = "Player frame",
+        tip = "Your player frame with its experience ring, your pet's card, health and power lines along "
+            .. "the bottom edge, the action bar, and the chat as just its lines until used. Off, the "
+            .. "game's own show.",
+    }, OnOff(function()
+        local s = IN.Settings()
+        for _, key in ipairs(BOTTOM) do if s[key] then return true end end
+        return false
+    end, BottomHud, "Player frame")),
+    Item({
+        key = "breath", group = "bottom", section = "Player frame", label = "Breath",
+        tip = "Under water, your player frame fills with blue and drains as your breath runs out, in place "
+            .. "of the game's breath bar. Other timers (fatigue) stay the game's.",
+    }, Toggle("breath", "Breath", function() IN.Breath.Apply() end)),
+    Item({
+        key = "recentLoot", group = "bottom", section = "Player frame", label = "Recent loot (experiment)",
+        tip = "An experiment. Your last four loots that matter as small tiles beside the bags: upgrades "
+            .. "(green arrow), quest starters (gold !), recipes for your professions, finds worth more at "
+            .. "the auction house, rares, mounts, pets and toys to learn, and bags that open. The rest "
+            .. "flies to the bags' tile. Mouse over one for its tooltip.",
+    }, Toggle("recentLoot", "Recent loot (experiment)", function() IN.RecentLoot.Apply() end)),
+    Item({
+        key = "padStyle", group = "bottom", section = "Action bar", label = "Action bar style",
+        tip = "The shape of the action bar's tiles (and the party spells' and cast bar's): Diamonds, Squares or "
+            .. "Circles.",
+        value = function() return IN.Settings().padStyle end,
+        text = function() return STYLE_NAMES[IN.Settings().padStyle] or "" end,
+        options = function()
+            local list = {}
+            for _, key in ipairs(IN.GamepadBar.STYLE_ORDER) do list[#list + 1] = { action = key, name = STYLE_NAMES[key] } end
+            return list
+        end,
+        choose = function(action)
+            IN.Settings().padStyle = action
+            IN.GamepadBar.Apply()
+        end,
+    }),
+    Item({
+        key = "hudAuras", group = "bottom", section = "Buffs & cooldowns", label = "Buffs along the bottom (experiment)",
+        tip = "An experiment. The game's buffs and debuffs moved to the bottom, between the minion and "
+            .. "party cards, written into your Edit Mode layout once.",
+    }, Toggle("hudAuras", "Buffs along the bottom (experiment)", function() IN.HudLayout.Apply() end)),
+    Item({
+        key = "buffTimeline", group = "bottom", section = "Buffs & cooldowns", label = "Buff row",
+        tip = "Your buffs and debuffs as a row along the bottom: round icons with the time left, soonest "
+            .. "gone nearest the middle. Replaces the game's buffs (Edit Mode shows them).",
+    }, Toggle("buffTimeline", "Buff row", function() IN.BuffTimeline.Apply() end)),
+    Item({
+        key = "cooldownTimeline", group = "bottom", section = "Buffs & cooldowns", label = "Cooldown row",
+        tip = "The cooldowns of your gamepad bar and on-use trinkets as a row along the bottom: red to "
+            .. "green as they run down, flashing when ready. Replaces the game's Cooldown Manager.",
+    }, Toggle("cooldownTimeline", "Cooldown row", function() IN.BuffTimeline.Apply() end)),
+    Item({
+        key = "hudCooldowns", group = "bottom", section = "Buffs & cooldowns", label = "Cooldowns beside the action bar (experiment)",
+        tip = "An experiment. The game's Cooldown Manager moved left of the action bar, written into "
+            .. "your Edit Mode layout once.",
+    }, Toggle("hudCooldowns", "Cooldowns beside the action bar (experiment)", function() IN.HudLayout.Apply() end)),
+    Item({
+        key = "cards", group = "bottom", section = "Party", label = "Party cards",
         tip = "Your party as cards along the bottom: model, class colour, level, name, health and power. "
             .. "Click to target, right click for the menu. Hidden in a raid.",
     }, Toggle("cards", "Party cards", function() IN.PartyCards.Apply() end)),
     Item({
-        key = "cardFocus", group = "party", label = "Party cards focus",
+        key = "cardFocus", group = "bottom", section = "Party", label = "Party cards focus",
         tip = "What the party cards flag for your role. Tank: threat, green to red. Healer: who's hurt, "
             .. "flashing under 35%. Automatic uses your assigned role. /if cards tank (healer, dps) previews"
             .. " it.",
@@ -77,101 +160,23 @@ local ITEMS = {
         end,
     }),
     Item({
-        key = "castBar", group = "cast", label = "Cast bar",
+        key = "partyPad", group = "bottom", section = "Party", label = "Party casting (L1, experiment)",
+        tip = "An experiment. L1 held: the D-pad picks a party spell, a face button casts it on party "
+            .. "member 1 to 4. Out of combat only; off or alone, L1 is the game's.",
+    }, Toggle("partyPad", "Party casting (L1, experiment)", function() IN.PartyCards.Apply() end)),
+    Item({
+        key = "castBar", group = "body", section = "Cast bar", label = "Cast bar",
         tip = "Your casts as a long thin line over the party cards, filling out from the middle. Yellow "
             .. "cast, green channel, grey when it can't be interrupted, red when cut. Edit Mode shows the "
             .. "game's bar.",
     }, Toggle("castBar", "Cast bar", function() IN.PlayerCast.Apply() end)),
     Item({
-        key = "breath", group = "bottom", label = "Breath",
-        tip = "Under water, your player frame fills with blue and drains as your breath runs out, in place "
-            .. "of the game's breath bar. Other timers (fatigue) stay the game's.",
-    }, Toggle("breath", "Breath", function() IN.Breath.Apply() end)),
+        key = "npcDialog", group = "body", section = "NPC dialog", label = "NPC dialog as subtitles",
+        tip = "NPC talk (greetings, quests, gossip) as subtitles low in the middle, in place of the game's "
+            .. "window. Pad and mouse both work. With Spoken installed, its voice reads the words.",
+    }, Toggle("npcDialog", "NPC dialog as subtitles", function() IN.NpcDialog.Apply() end)),
     Item({
-        key = "nameplates", group = "top", label = "Nameplates",
-        tip = "The nameplates over mobs in our look: the name in gold, a thin health line in the nameplate's "
-            .. "colour and the level in a small circle. Your target's is full size, the others softer. Off, "
-            .. "the game's own.",
-    }, Toggle("nameplates", "Nameplates", function() IN.Nameplates.Apply() end)),
-    Item({
-        key = "nameplateDebuffs", group = "top", label = "Nameplate debuffs",
-        tip = "Your debuffs on a mob as small icons under its nameplate, with their time left and stacks. "
-            .. "Needs the nameplates on.",
-    }, Toggle("nameplateDebuffs", "Nameplate debuffs", function() IN.Nameplates.Apply() end)),
-    Item({
-        key = "castRange", group = "top", label = "Target range",
-        tip = "Out of reach of your longest-range harmful spell, the target's portrait turns grey and its "
-            .. "health line faint.",
-    }, Toggle("castRange", "Target range", function() end)),
-    Item({
-        key = "questArrow", group = "top", label = "Quest arrow",
-        tip = "The way to your focused quest near the top: its name, the yards left, and a diamond arrow "
-            .. "that turns green as you head its way. Gives its place to the target, zone names and notices.",
-    }, Toggle("questArrow", "Quest arrow", function() IN.QuestArrow.Apply() end)),
-    Item({
-        key = "levelBanner", group = "top", label = "Level ups",
-        tip = "Your level ups as a header: the new level, what it gave and what's new. /if leveltest shows "
-            .. "it.",
-    }, Toggle("levelBanner", "Level ups", function() IN.LevelBanner.Apply() end)),
-    Item({
-        key = "questProgress", group = "top", label = "Quest progress",
-        tip = "Quest progress (\"Crystal Fragment: 6/12\") as a header for a few seconds. /if progresstest "
-            .. "shows it.",
-    }, Toggle("questProgress", "Quest progress", function() IN.QuestProgress.Apply() end)),
-    Item({
-        key = "zoneBanner", group = "top", label = "Zone names",
-        tip = "The zone's name as you enter it, with its picture and subzone. /if zonetest shows it.",
-    }, Toggle("zoneBanner", "Zone names", function() IN.ZoneBanner.Apply() end)),
-    Item({
-        key = "recentLoot", group = "bottom", label = "Recent loot (experiment)",
-        tip = "An experiment. Your last four loots that matter as small tiles beside the bags: upgrades "
-            .. "(green arrow), quest starters (gold !), recipes for your professions, finds worth more at "
-            .. "the auction house, rares, mounts, pets and toys to learn, and bags that open. The rest "
-            .. "flies to the bags' tile. Mouse over one for its tooltip.",
-    }, Toggle("recentLoot", "Recent loot (experiment)", function() IN.RecentLoot.Apply() end)),
-    Item({
-        key = "padStyle", group = "bottom", label = "Tile style",
-        tip = "The shape of the spell tiles (and the party spells' and cast bar's): Diamonds, Squares or "
-            .. "Circles.",
-        value = function() return IN.Settings().padStyle end,
-        text = function() return STYLE_NAMES[IN.Settings().padStyle] or "" end,
-        options = function()
-            local list = {}
-            for _, key in ipairs(IN.GamepadBar.STYLE_ORDER) do list[#list + 1] = { action = key, name = STYLE_NAMES[key] } end
-            return list
-        end,
-        choose = function(action)
-            IN.Settings().padStyle = action
-            IN.GamepadBar.Apply()
-        end,
-    }),
-    Item({
-        key = "partyPad", group = "party", label = "Party casting (L1, experiment)",
-        tip = "An experiment. L1 held: the D-pad picks a party spell, a face button casts it on party "
-            .. "member 1 to 4. Out of combat only; off or alone, L1 is the game's.",
-    }, Toggle("partyPad", "Party casting (L1, experiment)", function() IN.PartyCards.Apply() end)),
-    Item({
-        key = "hudAuras", group = "auras", label = "Buffs along the bottom (experiment)",
-        tip = "An experiment. The game's buffs and debuffs moved to the bottom, between the minion and "
-            .. "party cards, written into your Edit Mode layout once.",
-    }, Toggle("hudAuras", "Buffs along the bottom (experiment)", function() IN.HudLayout.Apply() end)),
-    Item({
-        key = "buffTimeline", group = "auras", label = "Buff row",
-        tip = "Your buffs and debuffs as a row along the bottom: round icons with the time left, soonest "
-            .. "gone nearest the middle. Replaces the game's buffs (Edit Mode shows them).",
-    }, Toggle("buffTimeline", "Buff row", function() IN.BuffTimeline.Apply() end)),
-    Item({
-        key = "cooldownTimeline", group = "auras", label = "Cooldown row",
-        tip = "The cooldowns of your gamepad bar and on-use trinkets as a row along the bottom: red to "
-            .. "green as they run down, flashing when ready. Replaces the game's Cooldown Manager.",
-    }, Toggle("cooldownTimeline", "Cooldown row", function() IN.BuffTimeline.Apply() end)),
-    Item({
-        key = "hudCooldowns", group = "auras", label = "Cooldowns beside the diamonds (experiment)",
-        tip = "An experiment. The game's Cooldown Manager moved left of the spell diamonds, written into "
-            .. "your Edit Mode layout once.",
-    }, Toggle("hudCooldowns", "Cooldowns beside the diamonds (experiment)", function() IN.HudLayout.Apply() end)),
-    Item({
-        key = "auctionScene", group = "auction", label = "Auction house scene",
+        key = "auctionScene", group = "body", section = "Auction house", label = "Auction house scene",
         tip = "With the Auction module, the auction house as a scene in this look: no window frame, the "
             .. "world dimmed, the HUD faded, items as a grid. Off, its classic window. Changes after a "
             .. "/reload.",
@@ -179,21 +184,12 @@ local ITEMS = {
         IF.Print("Auction house scene " .. (IN.Settings().auctionScene and "on" or "off")
             .. ": it changes after a /reload.")
     end)),
-    Item({
-        key = "npcDialog", group = "dialog", label = "NPC dialog as subtitles",
-        tip = "NPC talk (greetings, quests, gossip) as subtitles low in the middle, in place of the game's "
-            .. "window. Pad and mouse both work. With Spoken installed, its voice reads the words.",
-    }, Toggle("npcDialog", "NPC dialog as subtitles", function() IN.NpcDialog.Apply() end)),
 }
 
 local GROUPS = {
     { key = "top", label = "Header" },
-    { key = "bottom", label = "Player HUD" },
-    { key = "party", label = "Party" },
-    { key = "cast", label = "Cast bar" },
-    { key = "auras", label = "Buffs & cooldowns" },
-    { key = "dialog", label = "NPC dialog" },
-    { key = "auction", label = "Auction house" },
+    { key = "body", label = "Body" },
+    { key = "bottom", label = "Footer" },
 }
 
 IF.InterfaceEditor = IF.SettingsPage({ key = "interface", label = "Immersion", module = "interface", order = 35 },

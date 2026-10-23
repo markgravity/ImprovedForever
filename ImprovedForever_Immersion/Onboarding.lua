@@ -47,7 +47,7 @@ local SPELLS = {
 ---------------------------------------------------------------------------
 local PAGES = {
     {
-        name = "Your frame", icon = "Interface\\Icons\\Achievement_Character_Human_Male", example = "frame",
+        name = "Player frame", icon = "Interface\\Icons\\Achievement_Character_Human_Male", example = "frame",
         portrait = true,
         lines = { "Your portrait sits bottom left, ringed by your experience.",
             "Your health and power run as lines along the bottom edge." },
@@ -68,18 +68,18 @@ local PAGES = {
             "Grey when it can't be interrupted, red when it is cut." },
     },
     {
-        name = "Pet and party", icon = "Interface\\Icons\\Spell_Holy_PrayerOfHealing", example = "cards",
-        lines = { "Cards along the bottom: click to target, right click for the menu.",
-            "They flag threat for a tank and who is hurt for a healer." },
+        name = "Party cards", icon = "Interface\\Icons\\Spell_Holy_PrayerOfHealing", example = "cards",
+        lines = { "Your pet and party as cards along the bottom: click to target, right click for the menu.",
+            "A tank sees threat, a healer sees who is hurt." },
     },
     {
-        name = "The header", icon = "Interface\\Icons\\INV_Misc_Map_01", example = "header",
+        name = "Header", icon = "Interface\\Icons\\INV_Misc_Map_01", example = "header",
         lines = { "Under the top of the screen, taking turns: your target, zone names,",
             "the way to your quest, level ups and quest progress." },
     },
     {
-        name = "Make it yours", icon = "Interface\\Icons\\INV_Misc_Gear_01", example = "switches",
-        lines = { "Each piece has a switch in Improved Forever, Immersion.",
+        name = "Settings", icon = "Interface\\Icons\\INV_Misc_Gear_01", example = "switches",
+        lines = { "Each piece has its own switch in Improved Forever, Immersion.",
             "/if tour plays this again." },
         last = true,
     },
@@ -329,12 +329,12 @@ end)
 -- quest (QA.Demo), the zone's name, quest progress and a level up (their own
 -- tests). Under it, the name of what is showing.
 local STEPS = {
-    { label = "Friendly target", run = function() IN.TargetHeader.Demo("friend") end },
-    { label = "Enemy target", run = function() IN.TargetHeader.Demo("enemy") end },
-    { label = "Quest guide", run = function() IN.QuestArrow.Demo(true) end },
-    { label = "Zone name", run = function() IN.ZoneBanner.Test() end },
+    { label = "Target header: friendly", run = function() IN.TargetHeader.Demo("friend") end },
+    { label = "Target header: enemy", run = function() IN.TargetHeader.Demo("enemy") end },
+    { label = "Quest arrow", run = function() IN.QuestArrow.Demo(true) end },
+    { label = "Zone names", run = function() IN.ZoneBanner.Test() end },
     { label = "Quest progress", run = function() IN.QuestProgress.Test() end },
-    { label = "Level up", run = function() IN.LevelBanner.Test() end },
+    { label = "Level ups", run = function() IN.LevelBanner.Test() end },
 }
 local STEP_HOLD = 6.5
 
@@ -418,7 +418,7 @@ end)
 
 -- The settings: a switch for each piece, as the tab shows them
 Example("switches", function(f)
-    local list = { { "Player HUD", true }, { "Target header", true }, { "Party cards", true },
+    local list = { { "Player frame", true }, { "Target header", true }, { "Party cards", true },
         { "Cast bar", true }, { "Recent loot (experiment)", false } }
     for i, r in ipairs(list) do
         local y = -34 - (i - 1) * 34
@@ -486,7 +486,7 @@ headName:SetText("Immersion")
 local headSmall = HS.Text(head, bodyFont, HS.SMALL_SIZE, 1, 1, 1)
 headSmall:SetWidth(2.2 * HS.RULE_W)
 headSmall:SetPoint("TOP", headName, "BOTTOM", 0, -4)
-headSmall:SetText("The game's HUD, rearranged. A quick look at what is where.")
+headSmall:SetText("Turn your adventure into a cinematic, immersive journey. Here is what changes.")
 
 ---------------------------------------------------------------------------
 -- The pages
