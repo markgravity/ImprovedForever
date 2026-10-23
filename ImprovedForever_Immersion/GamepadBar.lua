@@ -317,9 +317,20 @@ local function Button(center, d, dir, key, parent)
     b.count:SetPoint("CENTER", b.countBg, "CENTER", 0, -0.5)
     b.countBg:SetPoint("BOTTOM", b, "CENTER", 0, -d.width / 2 + (b.countLift or COUNT_LIFT))
     hooksecurefunc(b.count, "SetText", function(self, text)
+        -- (a secret text: compared by nothing, its badge shown at the least
+        -- width; an error here would flood the game's handler)
+        if issecretvalue and issecretvalue(text) then
+            b.countBg:Show()
+            b.countBg:SetSize(COUNT_BADGE, COUNT_BADGE)
+            return
+        end
         local on = type(text) == "string" and text ~= ""
         b.countBg:SetShown(on)
-        if on then b.countBg:SetSize(math.max(COUNT_BADGE, self:GetStringWidth() + 10), COUNT_BADGE) end
+        if on then
+            local width = self:GetStringWidth()
+            if issecretvalue and issecretvalue(width) then width = 0 end
+            b.countBg:SetSize(math.max(COUNT_BADGE, width + 10), COUNT_BADGE)
+        end
     end)
 
     b.key = over:CreateTexture(nil, "OVERLAY", nil, 2)
