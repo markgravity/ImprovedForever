@@ -21,7 +21,7 @@ def gem():
     d = ImageDraw.Draw(im)
     c = S / 2
     r = S * 0.46
-    top, right, bottom, left = (c, c - r), (c + r * 0.78, c), (c, c + r), (c - r * 0.78, c)
+    top, right, bottom, left = (c, c - r), (c + r, c), (c, c + r), (c - r, c)
     mid = (c, c)
     # the four facets, lit from the top left
     facets = [
@@ -36,8 +36,8 @@ def gem():
     d.line([top, right, bottom, left, top], fill=(90, 8, 20, 255), width=int(S * 0.045), joint="curve")
     d.line([left, top, right], fill=(255, 208, 120, 255), width=int(S * 0.022), joint="curve")
     # the highlight: a small bright sliver on the upper left face
-    d.polygon([(c - r * 0.34, c - r * 0.18), (c - r * 0.08, c - r * 0.62), (c - r * 0.02, c - r * 0.40),
-               (c - r * 0.22, c - r * 0.1)], fill=(255, 255, 255, 200))
+    d.polygon([(c - r * 0.42, c - r * 0.12), (c - r * 0.1, c - r * 0.62), (c - r * 0.02, c - r * 0.4),
+               (c - r * 0.26, c - r * 0.06)], fill=(255, 255, 255, 200))
     return im.resize((CELL, CELL), Image.LANCZOS)
 
 

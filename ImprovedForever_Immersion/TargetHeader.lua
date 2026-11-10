@@ -149,11 +149,11 @@ end, ": all eight raid markers beside a name, as on the target header (again: go
 -- under) in a V over the diamond's top, following its two upper edges, the ones you have lit (a rogue's, a
 -- feral druid's). Read for your target; a number the game hides in a fight is never compared: they show as
 -- they were.
-local COMBO_MAX, GEM_W, GEM_H = 5, 10, 13
+local COMBO_MAX, GEM_W, GEM_H = 5, 13, 13
 local combo = {}
 local function PlaceCombo()
     local half = tile.across / 2
-    local step = GEM_W + 3
+    local step = GEM_W + 2
     for i = 1, COMBO_MAX do
         local x = (i - 3) * step
         -- (on a line parallel to the diamond's upper edges, a gem's height outside them)
