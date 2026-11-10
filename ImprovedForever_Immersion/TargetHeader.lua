@@ -71,25 +71,6 @@ for i, reverse in ipairs({ true, false }) do
 end
 tile:SetFrameLevel(halves[1].bar:GetFrameLevel() + 4)
 -- (its raid marker over the diamond's top left: skull, cross, moon...)
-local markFrame = CreateFrame("Frame", nil, look)
-markFrame:SetAllPoints(tile)
-markFrame:SetFrameLevel(tile:GetFrameLevel() + 10)
-local mark = markFrame:CreateTexture(nil, "OVERLAY", nil, 7)
-mark:SetTexture("Interface\\TargetingFrame\\UI-RaidTargetingIcons")
-mark:SetSize(22, 22)
-mark:SetPoint("CENTER", tile, "TOPLEFT", 0, -2)
-mark:Hide()
-local function Mark(unit)
-    -- (the game answers a secret number: handed to its setter, never compared; none: nil, refused)
-    local ok, index = pcall(GetRaidTargetIndex, unit)
-    local set = ok and SetRaidTargetIconTexture and pcall(SetRaidTargetIconTexture, mark, index)
-    mark:SetShown(set and true or false)
-end
-local markEvents = CreateFrame("Frame")
-markEvents:RegisterEvent("RAID_TARGET_UPDATE")
-markEvents:SetScript("OnEvent", function()
-    if look:IsShown() and UnitExists("target") then Mark("target") end
-end)
 
 local function LineWidth(k)
     for _, h in ipairs(halves) do h.holder:SetWidth(math.max(1, (HS.RULE_W - radius) * k)) end
@@ -116,6 +97,30 @@ classIcon:Hide()
 -- (the words)
 local name = HS.Text(look, HS.FONT, HS.NAME_SIZE, HS.GOLD[1], HS.GOLD[2], HS.GOLD[3])
 name:SetWidth(2 * HS.RULE_W)
+-- (beside the name: just left of its first letter, whatever the name's length)
+-- Our markers (tools/make_raid_marks.py: cut shapes in the quest arrow's look, on a sheet laid out as the
+-- game's own, so its SetRaidTargetIconTexture picks one), right of the name
+local MARK_SIZE = 26
+local mark = look:CreateTexture(nil, "OVERLAY", nil, 7)
+mark:SetTexture(IF.TEX .. "ic_raid_marks")
+mark:SetSize(MARK_SIZE, MARK_SIZE)
+mark:Hide()
+local function Mark(unit)
+    -- (the game answers a secret number: handed to its setter, never compared; none: nil, refused)
+    local ok, index = pcall(GetRaidTargetIndex, unit)
+    local set = ok and SetRaidTargetIconTexture and pcall(SetRaidTargetIconTexture, mark, index)
+    mark:SetShown(set and true or false)
+    if set then
+        local width = (name:GetStringWidth() or 0) * (name.GetTextScale and name:GetTextScale() or 1)
+        mark:ClearAllPoints()
+        mark:SetPoint("LEFT", name, "CENTER", width / 2 + 7, 0)
+    end
+end
+local markEvents = CreateFrame("Frame")
+markEvents:RegisterEvent("RAID_TARGET_UPDATE")
+markEvents:SetScript("OnEvent", function()
+    if look:IsShown() and UnitExists("target") then Mark("target") end
+end)
 local quest = look:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
 quest:SetPoint("TOP", name, "BOTTOM", 0, -4)
 quest:SetWidth(QUEST_W)       -- (one line, cut with "..." past that)

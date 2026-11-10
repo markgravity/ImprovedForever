@@ -81,9 +81,8 @@ local function Build()
     p.skull:Hide()
     -- (its raid marker, as the game gives them: skull, cross, moon...; left of the line, the badge's twin)
     p.mark = p:CreateTexture(nil, "OVERLAY", nil, 5)
-    p.mark:SetTexture("Interface\\TargetingFrame\\UI-RaidTargetingIcons")
-    p.mark:SetSize(BADGE + 4, BADGE + 4)
-    p.mark:SetPoint("RIGHT", p, "LEFT", -2, 0)
+    p.mark:SetTexture(IF.TEX .. "ic_raid_marks")
+    p.mark:SetSize(BADGE + 2, BADGE + 2)
     p.mark:Hide()
     -- (its cast: a bar of ours, the times handed to it (secret in a fight), never compared)
     local cb = CreateFrame("StatusBar", nil, p)
@@ -219,6 +218,11 @@ local function Mark(p, unit)
     local ok, index = pcall(GetRaidTargetIndex, unit)
     local set = ok and SetRaidTargetIconTexture and pcall(SetRaidTargetIconTexture, p.mark, index)
     p.mark:SetShown(set and true or false)
+    if set then
+        local width = p.name:GetStringWidth() or 0
+        p.mark:ClearAllPoints()
+        p.mark:SetPoint("LEFT", p.name, "CENTER", width / 2 + 4, 0)
+    end
 end
 
 -- (drawn at its current alpha and size; none left: not shown)
@@ -304,9 +308,9 @@ end
 local function Refresh(p)
     local unit = p.unit
     if not unit then return end
-    Mark(p, unit)
     StyleName(p)
     Try(p.name.SetText, p.name, UnitName(unit))
+    Mark(p, unit)
     if Flag(UnitIsDeadOrGhost, unit) then
         p.name:SetTextColor(0.5, 0.5, 0.5)
     else
