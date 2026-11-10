@@ -50,7 +50,7 @@ local function Place(key, label, tip, min, max, step, format)
         key = key, group = key:find("^player") and "bottom" or "top", section = key:find("^player") and "Player frame"
             or "Header position", label = label, tip = tip,
         slider = {
-            min = min, max = max, step = step,
+            min = min, max = max, step = step, default = IN.DEFAULTS[key],
             get = function() return IN.Settings()[key] end,
             set = function(n)
                 IN.Settings()[key] = n
@@ -68,7 +68,7 @@ local function Slide(key, group, section, label, tip, min, max, step, format, ap
     return {
         key = key, group = group, section = section, label = label, tip = tip,
         slider = {
-            min = min, max = max, step = step,
+            min = min, max = max, step = step, default = IN.DEFAULTS[key],
             get = function() return IN.Settings()[key] end,
             set = function(n)
                 IN.Settings()[key] = n
@@ -77,6 +77,31 @@ local function Slide(key, group, section, label, tip, min, max, step, format, ap
             format = format or function(n) return tostring(n) end,
         },
     }
+end
+
+-- Every place and size put back to its default (the sliders' own reset buttons do one each)
+local PLACED = { "playerX", "playerY", "playerScale", "padX", "padY", "padScale", "partyX", "partyY", "headerX",
+    "headerY", "headerScale", "hudWidth" }
+local function ResetPlaces()
+    local s = IN.Settings()
+    for _, key in ipairs(PLACED) do s[key] = IN.DEFAULTS[key] end
+    s.hudPlaced = nil
+    ApplyBottom()
+    IN.HeaderSlot.ApplyScale()
+    IN.HeaderSlot.Place()
+    IF.Print("every place and size is back to its default.")
+end
+local function ResetItem(group, section)
+    return Item({
+        key = "resetPlaces" .. group, group = group, section = section, label = "Reset every place and size",
+        tip = "Puts the player frame, action bar, party cards and header back where they were, at their own "
+            .. "sizes, and the screen width to full. Out of combat only.",
+        button = "Reset all", confirm = true, confirmText = "Reset every place and size?",
+        run = function()
+            if IF.InCombat() then return IF.Print("not in a fight.") end
+            ResetPlaces()
+        end,
+    })
 end
 
 local ITEMS = {
@@ -102,6 +127,7 @@ local ITEMS = {
     Slide("headerScale", "top", "Header position", "Header: size", "How big the header is (the target, quest arrow, "
         .. "zone names, banners), in percent. Out of combat only.", 50, 150, 5, Percent,
         function() IN.HeaderSlot.ApplyScale() end),
+    ResetItem("top", "Header position"),
     Item({
         key = "nameplates", group = "top", section = "Nameplates", label = "Nameplates",
         tip = "The nameplates over mobs in our look: the name in gold, a thin health line in the nameplate's "
@@ -239,6 +265,7 @@ local ITEMS = {
         function() IN.PartyCards.Apply() end),
     Slide("partyY", "bottom", "Party cards", "Party cards: up", "Moves the party's cards up (down with a minus), in "
         .. "pixels.", -50, 500, 10, nil, function() IN.PartyCards.Apply() end),
+    ResetItem("bottom", "Party cards"),
     -- (each piece on its own, for those who want the action bar without the rest)
     Item({
         key = "player", group = "bottom", section = "Player frame", label = "Player card and ring",

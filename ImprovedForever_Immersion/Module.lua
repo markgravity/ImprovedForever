@@ -167,6 +167,9 @@ function IN.Watcher(name, every, fn)
     return f
 end
 
+-- A setting's default, for the reset buttons
+IN.DEFAULTS = DEFAULTS
+
 function IN.Settings()
     local db = IF.db
     db.plateLog = nil           -- (the nameplate probes' logs, done)

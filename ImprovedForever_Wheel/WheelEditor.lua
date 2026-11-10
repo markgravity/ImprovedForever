@@ -889,6 +889,8 @@ function W:Press(name)
             menu.Render()
         elseif (name == "LEFT" or name == "RIGHT") and (self.settingsRow or 1) == 1 then
             self:SizeStep(name == "LEFT" and -5 or 5)
+        elseif name == "X" and (self.settingsRow or 1) == 1 then
+            self:SizeSet(100)
         elseif (name == "LEFT" or name == "RIGHT" or name == "A") and self.settingsRow == 2 then
             self:ToggleRelease()
         elseif name == "B" then
@@ -1195,7 +1197,8 @@ function W:Render()
         r.name:SetText("Wheel size")
         r.line:SetText("How big the wheel is, in percent: smaller if it covers too much of the screen. Out of combat only.")
         local row = self.settingsRow or 1
-        r:SetControl({ slider = { min = 50, max = 150, step = 5, format = function(n) return n .. "%" end,
+        r.onReset = function() W:SizeSet(100) end
+        r:SetControl({ slider = { min = 50, max = 150, step = 5, format = function(n) return n .. "%" end, default = 100,
             get = function() return tonumber(IF.db.ringScale) or 100 end } }, "slider", row == 1, false)
         r.focus:Light(IF.Input.Pad() and row == 1, false)
         local r2 = f.pane.row2

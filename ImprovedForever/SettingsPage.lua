@@ -39,7 +39,8 @@ end
 --               { { action, name } or { header } }, choose(action);
 --               cycle = false: left / right don't step through them (a menu
 --               of things to do, as "Clear the prices")
---   a slider:   slider = { min, max, step, get, set, format(v) -> text }
+--   a slider:   slider = { min, max, step, get, set, format(v) -> text, default }
+--               (with a default: a reset button beside it, X on the pad)
 --   a button:   run(), confirm = true (asks for Cross again first)
 --   a press:    bindable, bindId (Binds.lua), binding() -> spec,
 --               keyText(size), chord, toggle (recording its own press again
@@ -285,6 +286,24 @@ local function FieldRow(parent, width, onClick, onStep, onSlide)
         value:SetJustifyH("RIGHT")
     end
 
+    -- (a slider with a default: its reset button, left of it)
+    r.reset = CreateFrame("Button", nil, r)
+    r.reset:SetSize(22, 22)
+    r.reset:SetPoint("RIGHT", r, "RIGHT", -(12 + VALUE_W + 8 + (CONTROL_W - VALUE_W - 8) + 8), 0)
+    r.reset.bg = K.Solid(r.reset, KC.controlBg, 0.95, "BACKGROUND")
+    r.reset.bg:SetAllPoints()
+    r.reset.text = r.reset:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    r.reset.text:SetPoint("CENTER", 0, 1)
+    r.reset.text:SetText("R")
+    r.reset:SetScript("OnClick", function() if r.slot and r.onReset then r.onReset(r.slot) end end)
+    r.reset:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_TOP")
+        GameTooltip:SetText("Reset to the default", 1, 1, 1)
+        GameTooltip:Show()
+    end)
+    r.reset:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    r.reset:Hide()
+
     local c = K.NewFrame("Frame", nil, r)
     c:SetSize(CONTROL_W, 28)
     c:SetPoint("RIGHT", -12, 0)
@@ -305,6 +324,11 @@ local function FieldRow(parent, width, onClick, onStep, onSlide)
         r.check:SetShown(kind == "toggle")
         r.drop:SetShown(kind == "dropdown")
         r.slider:SetShown(kind == "slider")
+        if kind ~= "slider" then
+            r.reset:Hide()
+            r.name:SetPoint("RIGHT", r, "RIGHT", -(CONTROL_W + 24), 0)
+            r.line:SetPoint("RIGHT", r, "RIGHT", -(CONTROL_W + 24), 0)
+        end
         c:SetShown((kind == "button" or kind == "binding") or (kind == "info" and item.text and item.text() ~= ""))
         self.anchor = c
         if kind == "toggle" then
@@ -327,6 +351,16 @@ local function FieldRow(parent, width, onClick, onStep, onSlide)
                 return s.format and s.format(math.floor(v + 0.5)) or tostring(math.floor(v + 0.5))
             end)
             if r.slider.SetEnabled then r.slider:SetEnabled(not disabled) end
+            -- (a default: the reset button, dim while the value is it)
+            local has = s.default ~= nil
+            r.reset:SetShown(has)
+            if has then
+                local at = s.get() == s.default
+                r.reset:SetAlpha(at and 0.35 or 1)
+                r.reset.text:SetTextColor(unpack(at and KC.disabled or KC.focusText))
+            end
+            r.name:SetPoint("RIGHT", r, "RIGHT", -(CONTROL_W + 24 + (has and 26 or 0)), 0)
+            r.line:SetPoint("RIGHT", r, "RIGHT", -(CONTROL_W + 24 + (has and 26 or 0)), 0)
             self.anchor = r.slider
             return
         end
@@ -592,6 +626,11 @@ function IF.SettingsPage(tab, GROUPS, ITEMS, hooks)
             if sl and value ~= sl.get() and not Resolve(item.disabled) then sl.set(value) end
             menu.Render()
         end)
+        r.onReset = function(slot)
+            local item = Focus(slot)
+            G:Reset(item)
+            menu.Render()
+        end
         -- (the mouse over a field: the focus, its help on the right)
         r:HookScript("OnEnter", function(self)
             if self.slot and not IF.Input.Pad() and G.zone == "fields"
@@ -661,6 +700,16 @@ function IF.SettingsPage(tab, GROUPS, ITEMS, hooks)
         -- (a toggle: left off, right on; a dropdown: round from the ends)
         local next = item.onoff and (dir > 0 and "on" or "off") or actions[(at - 1 + dir) % #actions + 1]
         if next ~= item.value() then item.choose(next) end
+    end
+
+    -- A slider put back to its default (X on the pad, the row's reset button)
+    function G:Reset(item)
+        local s = item and item.slider
+        if not s or s.default == nil or Resolve(item.disabled) then return end
+        if s.get() ~= s.default then
+            s.set(s.default)
+            menu.Toast(item.label .. ": " .. (s.format and s.format(s.default) or tostring(s.default)))
+        end
     end
 
     -- The dropdown opened on the current choice
@@ -823,6 +872,7 @@ function IF.SettingsPage(tab, GROUPS, ITEMS, hooks)
         if not item then return false end
         if name == "X" then
             if item.bindable then self:StartCapture() end
+            if item.slider then self:Reset(item); menu.Render() end
             return true
         end
         if name == "Y" then
@@ -865,6 +915,7 @@ function IF.SettingsPage(tab, GROUPS, ITEMS, hooks)
             binding = "Record" })[kind]
         if verb and not Resolve(item.disabled) then hints[#hints + 1] = H({ "A" }, verb, "A") end
         if item.bindable and kind ~= "binding" then hints[#hints + 1] = H({ "X" }, "Record", "X") end
+        if item.slider and item.slider.default ~= nil then hints[#hints + 1] = H({ "X" }, "Reset", "X") end
         if item.try then hints[#hints + 1] = H({ "Y" }, "Try it", "Y") end
         hints[#hints + 1] = H({ "LS" }, "Category")
         hints[#hints + 1] = H({ "RS" }, "Tab")
