@@ -131,6 +131,7 @@ local DEFAULTS = {
     padSame = false,    -- the D-pad's tiles as big as the face buttons' (read as it loads: after a reload)
     partyX = 0, partyY = 0, -- the party cards' place, px right / up
     headerScale = 100,  -- the header's size (%)
+    comboPoints = true, -- your combo points as small gems on the target header's rule (TargetHeader.lua)
     fullNames = false,  -- a player's last name after the first on the cards, header and plates (when the game has one)
     hudWidth = "off",   -- the HUD kept inside a screen ratio on an ultrawide: "off", "16:9" or "21:9" (IN.Inset)
     tourDone = false,   -- the first-time tour has been shown (Onboarding.lua)

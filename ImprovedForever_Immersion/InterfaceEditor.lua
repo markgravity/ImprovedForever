@@ -239,6 +239,11 @@ local ITEMS = {
         return false
     end, BottomHud, "Player frame")),
     Item({
+        key = "comboPoints", group = "top", section = "Target", label = "Combo points",
+        tip = "Your combo points (a rogue's, a feral druid's) as small gold gems on the line right of the target's "
+            .. "diamond.",
+    }, Toggle("comboPoints", "Combo points", function() IN.ComboPoints() end)),
+    Item({
         key = "fullNames", group = "bottom", section = "Player frame", label = "Last names",
         tip = "A player's last name after the first on the player card, the party cards, the target header and the "
             .. "nameplates, where the game gives one. Off: the first name only (an NPC's name is whole already).",

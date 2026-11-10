@@ -145,6 +145,57 @@ IF.AddCommand("marktest", function()
     markDemo:Show()
     C_Timer.After(12, function() if markDemo then markDemo:Hide() end end)
 end, ": all eight raid markers beside a name, as on the target header (again: gone)")
+-- Combo points: five small gems on the gold rule, right of the diamond, the ones you have lit (a rogue's, a
+-- feral druid's). Read for your target; a number the game hides in a fight is never compared: the row shows
+-- as it was.
+local COMBO_MAX, COMBO_SIZE, COMBO_GAP = 5, 11, 5
+local combo = {}
+for i = 1, COMBO_MAX do
+    local g = look:CreateTexture(nil, "OVERLAY", nil, 6)
+    g:SetTexture("Interface\\Buttons\\WHITE8x8")
+    g:SetSize(COMBO_SIZE, COMBO_SIZE)
+    g:SetRotation(math.pi / 4)
+    g:SetPoint("LEFT", tile, "CENTER", tile.across / 2 + 14 + (i - 1) * (COMBO_SIZE + COMBO_GAP + 3), 0)
+    g:Hide()
+    combo[i] = g
+end
+local comboShown, comboDemo = 0, nil
+local function Combo()
+    local s = IF.db and IN.Settings()
+    if not (s and s.comboPoints) or not (UnitExists("target") or comboDemo) then
+        for i = 1, COMBO_MAX do combo[i]:Hide() end
+        comboShown = 0
+        return
+    end
+    local ok, n = pcall(GetComboPoints, "player", "target")
+    if comboDemo then ok, n = true, comboDemo end
+    if not ok or type(n) ~= "number" or (issecretvalue and issecretvalue(n)) then return end
+    if n == comboShown then return end
+    comboShown = n
+    for i = 1, COMBO_MAX do
+        local g = combo[i]
+        if i <= n then
+            local r, gr, b = 1, 0.82 - 0.14 * (i - 1) / 4, 0.3 - 0.12 * (i - 1) / 4
+            g:SetVertexColor(r, gr, b, 1)
+            g:Show()
+        else
+            g:Hide()
+        end
+    end
+end
+IN.ComboPoints = Combo
+-- /if combotest [0-5]: that many gems for 10 seconds, to see them (on a target)
+IF.AddCommand("combotest", function(args)
+    comboDemo = math.max(0, math.min(COMBO_MAX, tonumber(args[1]) or 3))
+    comboShown = -1
+    Combo()
+    C_Timer.After(10, function() comboDemo, comboShown = nil, -1 Combo() end)
+end, "[0-5]: show that many combo point gems for 10 seconds (with a target)")
+local comboEvents = CreateFrame("Frame")
+for _, e in ipairs({ "PLAYER_TARGET_CHANGED", "UNIT_POWER_UPDATE", "UNIT_POWER_FREQUENT", "UNIT_COMBO_POINTS", "PLAYER_ENTERING_WORLD" }) do
+    pcall(comboEvents.RegisterEvent, comboEvents, e)
+end
+comboEvents:SetScript("OnEvent", function() Combo() end)
 local markEvents = CreateFrame("Frame")
 markEvents:RegisterEvent("RAID_TARGET_UPDATE")
 markEvents:SetScript("OnEvent", function()
