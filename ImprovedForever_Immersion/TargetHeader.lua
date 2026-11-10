@@ -100,7 +100,7 @@ name:SetWidth(2 * HS.RULE_W)
 -- (beside the name: just left of its first letter, whatever the name's length)
 -- Our markers (tools/make_raid_marks.py: cut shapes in the quest arrow's look, on a sheet laid out as the
 -- game's own, so its SetRaidTargetIconTexture picks one), right of the name
-local MARK_SIZE = 26
+local MARK_SIZE = 18
 local mark = look:CreateTexture(nil, "OVERLAY", nil, 7)
 mark:SetTexture(IF.TEX .. "ic_raid_marks")
 mark:SetSize(MARK_SIZE, MARK_SIZE)
@@ -113,7 +113,7 @@ local function Mark(unit)
     if set then
         local width = (name:GetStringWidth() or 0) * (name.GetTextScale and name:GetTextScale() or 1)
         mark:ClearAllPoints()
-        mark:SetPoint("LEFT", name, "CENTER", width / 2 + 7, 0)
+        mark:SetPoint("LEFT", name, "CENTER", width / 2 + 12, 0)
     end
 end
 local markEvents = CreateFrame("Frame")

@@ -82,7 +82,7 @@ local function Build()
     -- (its raid marker, as the game gives them: skull, cross, moon...; left of the line, the badge's twin)
     p.mark = p:CreateTexture(nil, "OVERLAY", nil, 5)
     p.mark:SetTexture(IF.TEX .. "ic_raid_marks")
-    p.mark:SetSize(BADGE + 2, BADGE + 2)
+    p.mark:SetSize(BADGE - 4, BADGE - 4)
     p.mark:Hide()
     -- (its cast: a bar of ours, the times handed to it (secret in a fight), never compared)
     local cb = CreateFrame("StatusBar", nil, p)
@@ -221,7 +221,7 @@ local function Mark(p, unit)
     if set then
         local width = p.name:GetStringWidth() or 0
         p.mark:ClearAllPoints()
-        p.mark:SetPoint("LEFT", p.name, "CENTER", width / 2 + 4, 0)
+        p.mark:SetPoint("LEFT", p.name, "CENTER", width / 2 + 9, 0)
     end
 end
 
