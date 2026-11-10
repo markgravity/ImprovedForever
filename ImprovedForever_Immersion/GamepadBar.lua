@@ -80,8 +80,10 @@ local function Shape(d)
     d.spread = style.grid and (d.side + TILE_GAP) / 2 or (d.side + TILE_GAP) / ROOT2
     return d
 end
+-- (the D-pad's tiles as big as the face buttons': the setting "padSame", read as the file loads)
+local SAME = IF.db and IN.Settings().padSame
 local FACE = Shape({ size = 44, glyph = 22 })
-local DPAD = Shape({ size = 36, glyph = 18 })
+local DPAD = Shape({ size = SAME and 44 or 36, glyph = SAME and 22 or 18 })
 local CLASS = Shape({ size = 36, glyph = 18 })
 
 -- (a press's direction to its tile's place, times its spread: the
@@ -1714,8 +1716,16 @@ local function Picking()
     return PC ~= nil and PC.Picking ~= nil and PC.Picking()
 end
 
+local placedKey
 local function Watch()
     if not IF.db then return end
+    -- (the bar's place and size from the settings: again when they change)
+    local s = IN.Settings()
+    local key = table.concat({ s.padX or 0, s.padY or 0, s.padScale or 100, IN.Inset() }, ":")
+    if key ~= placedKey and not InCombatLockdown() then
+        placedKey = key
+        GB.Reanchor()
+    end
     GB.SetStyle(IN.Settings().padStyle)
     local pu = PageUnit()
     local main = GamepadMainActionBarFrame
@@ -2123,10 +2133,15 @@ end
 local EDGE = 8
 local fit = 0
 -- (the holder at the screen's right edge, in by the HUD width setting's inset: IN.Inset)
+-- Moved and sized by the settings padX, padY, padScale (the offsets count in the holder's own scale).
 function GB.Reanchor()
     if InCombatLockdown() then return end
+    local s = IF.db and IN.Settings() or {}
+    local k = math.max(0.5, math.min(1.5, (tonumber(s.padScale) or 100) / 100))
+    holder:SetScale(k)
     holder:ClearAllPoints()
-    holder:SetPoint("BOTTOMRIGHT", UIParent, "BOTTOMRIGHT", -(MARGIN_X + IN.Inset() + fit), IN.BOTTOM)
+    holder:SetPoint("BOTTOMRIGHT", UIParent, "BOTTOMRIGHT",
+        -((MARGIN_X + IN.Inset() - (s.padX or 0)) / k + fit), (IN.BOTTOM + (s.padY or 0)) / k)
 end
 local lastInset = 0
 local function Fit()

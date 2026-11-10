@@ -127,6 +127,10 @@ local DEFAULTS = {
     recentLoot = true, -- your last four loots as tiles beside the bags' one, flying in from the loot window
     recentLootKey = false, -- the binding's controller press (RecentLoot.lua)
     padStyle = "diamond", -- its tiles: "diamond", "square" (rows and columns) or "circle" (GamepadBar.lua)
+    padX = 0, padY = 0, padScale = 100, -- the action bar's place (px right, px up) and size (%)
+    padSame = false,    -- the D-pad's tiles as big as the face buttons' (read as it loads: after a reload)
+    partyX = 0, partyY = 0, -- the party cards' place, px right / up
+    headerScale = 100,  -- the header's size (%)
     hudWidth = "off",   -- the HUD kept inside a screen ratio on an ultrawide: "off", "16:9" or "21:9" (IN.Inset)
     tourDone = false,   -- the first-time tour has been shown (Onboarding.lua)
     partyPad = false,   -- L1 ours: + the D-pad picks a party spell, + a face button casts it on party 1 to 4 (an experiment)

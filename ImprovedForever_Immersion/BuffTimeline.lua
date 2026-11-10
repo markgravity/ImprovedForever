@@ -349,7 +349,7 @@ end
 -- (the buffs' lane: after the minion card, to the party's row)
 local function BuffLane()
     local start = (UF.PlayerRight() or 140) + 16 + MINION_W + START_GAP
-    local stop = UIParent:GetWidth() / 2 - (IN.PartyCards.ROW_HALF or 164) - MIDDLE_GAP
+    local stop = UIParent:GetWidth() / 2 + (IN.Settings().partyX or 0) - (IN.PartyCards.ROW_HALF or 164) - MIDDLE_GAP
     return start, math.max(start + 1, stop)
 end
 
@@ -827,7 +827,7 @@ end)
 
 local cooldowns = Timeline("ImprovedForeverCooldownTimeline", {
     Lane = function()
-        local middle = UIParent:GetWidth() / 2
+        local middle = UIParent:GetWidth() / 2 + (IN.Settings().partyX or 0)
         local near = middle + (IN.PartyCards.ROW_HALF or 164) + MIDDLE_GAP
         local PP = IN.PartyPad
         if PP and PP.Shown and PP.Shown() then near = near + PAD_GAP + PP.Width() end

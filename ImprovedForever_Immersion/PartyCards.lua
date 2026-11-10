@@ -706,19 +706,22 @@ local function Layout()
     -- centred without it)
     local pp = IN.PartyPad
     local pad = pp and pp.Shown() and pp.Width() or 0
+    -- (moved by the settings partyX, partyY)
+    local s = IN.Settings()
+    local dx, dy = s.partyX or 0, s.partyY or 0
     if #members == 0 then
-        if pad > 0 then pp.Place(-pad / 2, BOTTOM + CARD_H / 2) end
+        if pad > 0 then pp.Place(-pad / 2 + dx, BOTTOM + dy + CARD_H / 2) end
         return
     end
     local width = (#members - 1) * GAP
     for _, b in ipairs(members) do width = width + b.cardW end
-    local x = -width / 2
+    local x = -width / 2 + dx
     for _, b in ipairs(members) do
         b:ClearAllPoints()
-        b:SetPoint("BOTTOMLEFT", UIParent, "BOTTOM", x, BOTTOM)
+        b:SetPoint("BOTTOMLEFT", UIParent, "BOTTOM", x, BOTTOM + dy)
         x = x + b.cardW + GAP
     end
-    if pad > 0 then pp.Place(x - GAP + PAD_GAP, BOTTOM + CARD_H / 2) end
+    if pad > 0 then pp.Place(x - GAP + PAD_GAP, BOTTOM + dy + CARD_H / 2) end
 end
 PC.Layout = Layout
 

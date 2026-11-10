@@ -114,6 +114,23 @@ function HS.Place()
     HS.Origin:SetPoint("CENTER", UIParent, "TOP", x, -HS.RULE_Y + y)
 end
 
+-- The header's size (the Immersion tab's slider, a percent): each piece of it scaled, about the header's
+-- origin (they hang off it). Out of combat only (the target's button is secure).
+local HEADER_FRAMES = { "ImprovedForeverTargetHeader", "ImprovedForeverQuestArrow", "ImprovedForeverZoneBanner",
+    "ImprovedForeverHeaderRule", "ImprovedForeverLevelBanner", "ImprovedForeverQuestProgress" }
+function HS.ApplyScale()
+    if InCombatLockdown() or not IF.db then return end
+    local s = IF.db.interface
+    local k = math.max(0.5, math.min(1.5, ((s and tonumber(s.headerScale)) or 100) / 100))
+    local function Set(f)
+        if f and f.SetScale and math.abs((f:GetScale() or 1) - k) > 0.001 then f:SetScale(k) end
+    end
+    for _, name in ipairs(HEADER_FRAMES) do Set(rawget(_G, name)) end
+    local UFm = IN.UnitFrames
+    Set(UFm and UFm.target)
+end
+IN.Watcher("header scale", 0.5, HS.ApplyScale)
+
 function HS.MoveOrigin(frame, x, y)
     HS.moved = true
     HS.Origin:ClearAllPoints()

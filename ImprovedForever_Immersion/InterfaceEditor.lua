@@ -62,6 +62,23 @@ local function Place(key, label, tip, min, max, step, format)
 end
 local function Percent(n) return n .. "%" end
 
+-- A slider on a setting of its own place / size (the action bar, the party cards, the header's size):
+-- apply() puts it at once
+local function Slide(key, group, section, label, tip, min, max, step, format, apply)
+    return {
+        key = key, group = group, section = section, label = label, tip = tip,
+        slider = {
+            min = min, max = max, step = step,
+            get = function() return IN.Settings()[key] end,
+            set = function(n)
+                IN.Settings()[key] = n
+                apply()
+            end,
+            format = format or function(n) return tostring(n) end,
+        },
+    }
+end
+
 local ITEMS = {
     Item({
         key = "target", group = "top", section = "Target", label = "Target header",
@@ -82,6 +99,9 @@ local ITEMS = {
     Place("headerX", "Header: right", "Moves the header (the target, quest arrow, zone names, banners) to the "
         .. "right (left with a minus), in pixels.", -900, 900, 10),
     Place("headerY", "Header: up", "Moves the header up (down with a minus), in pixels.", -700, 100, 10),
+    Slide("headerScale", "top", "Header position", "Header: size", "How big the header is (the target, quest arrow, "
+        .. "zone names, banners), in percent. Out of combat only.", 50, 150, 5, Percent,
+        function() IN.HeaderSlot.ApplyScale() end),
     Item({
         key = "nameplates", group = "top", section = "Nameplates", label = "Nameplates",
         tip = "The nameplates over mobs in our look: the name in gold, a thin health line in the nameplate's "
@@ -214,6 +234,11 @@ local ITEMS = {
     Place("playerY", "Player frame: up", "Moves the player frame up (down with a minus), in pixels.", -50, 700, 10),
     Place("playerScale", "Player frame: size", "How big the player frame is, in percent. The pet and party "
         .. "cards stay the same size and follow it.", 50, 150, 5, Percent),
+    Slide("partyX", "bottom", "Party cards", "Party cards: right", "Moves the party's cards (and the party spells' "
+        .. "diamond) to the right (left with a minus), in pixels.", -700, 700, 10, nil,
+        function() IN.PartyCards.Apply() end),
+    Slide("partyY", "bottom", "Party cards", "Party cards: up", "Moves the party's cards up (down with a minus), in "
+        .. "pixels.", -50, 500, 10, nil, function() IN.PartyCards.Apply() end),
     -- (each piece on its own, for those who want the action bar without the rest)
     Item({
         key = "player", group = "bottom", section = "Player frame", label = "Player card and ring",
@@ -266,6 +291,16 @@ local ITEMS = {
             IN.GamepadBar.Apply()
         end,
     }),
+    Slide("padX", "bottom", "Action bar", "Action bar: right", "Moves the action bar to the right (left with a minus), "
+        .. "in pixels. Out of combat only.", -900, 300, 10, nil, function() IN.GamepadBar.Reanchor() end),
+    Slide("padY", "bottom", "Action bar", "Action bar: up", "Moves the action bar up (down with a minus), in pixels. "
+        .. "Out of combat only.", -50, 700, 10, nil, function() IN.GamepadBar.Reanchor() end),
+    Slide("padScale", "bottom", "Action bar", "Action bar: size", "How big the action bar is, in percent. Out of "
+        .. "combat only.", 50, 150, 5, Percent, function() IN.GamepadBar.Reanchor() end),
+    Item({
+        key = "padSame", group = "bottom", section = "Action bar", label = "D-pad tiles as big as the face buttons'",
+        tip = "The D-pad's four tiles the same size as the face buttons' four. Takes effect after a /reload.",
+    }, Toggle("padSame", "Same size", function() IF.Print("the action bar's tiles are the same size after a /reload.") end)),
     Item({
         key = "gcd", group = "bottom", section = "Action bar", label = "Global cooldown",
         tip = "A swipe over the action bar's tiles while the global cooldown runs (after any spell), so you "
