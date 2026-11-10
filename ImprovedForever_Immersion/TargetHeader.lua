@@ -152,15 +152,17 @@ end, ": all eight raid markers beside a name, as on the target header (again: go
 local COMBO_MAX, GEM_W, GEM_H = 5, 13, 13
 local combo = {}
 local function PlaceCombo()
+    -- (all five on one V, parallel to the diamond's two upper edges and standing off them: the apex over its
+    -- top, each next gem one step out along the diagonal, so the gaps are all the same)
     local half = tile.across / 2
-    local step = GEM_W + 2
+    local step = GEM_W + 4                       -- (across and down, so the neighbours are step * 1.41 apart)
+    local apex = half + 17
     for i = 1, COMBO_MAX do
-        local x = (i - 3) * step
-        -- (on a line parallel to the diamond's upper edges, a gem's height outside them)
-        local y = half - math.abs(x) + GEM_H * 0.55 + 4
+        local k = i - 3
         local g = combo[i]
         g:ClearAllPoints()
-        g:SetPoint("CENTER", tile, "CENTER", x, y)
+        -- (the apex a little lower than the line: the middle gem sits closer to the diamond)
+        g:SetPoint("CENTER", tile, "CENTER", k * step, apex - math.abs(k) * step - (k == 0 and 3 or 0))
     end
 end
 -- (a gem gained: it pops in, big then settling; spent: it flares and flies outward, fading; the animations
@@ -266,12 +268,28 @@ local function Combo(instant)
     end
 end
 IN.ComboPoints = Combo
+-- (the count for others to draw, the nameplate's: the demo's or your real one on your target; nil: none)
+function IN.ComboCount()
+    local s = IF.db and IN.Settings()
+    if not (s and s.comboPoints) then return nil end
+    if comboDemo then return comboDemo end
+    local ok, n = pcall(GetComboPoints, "player", "target")
+    if ok and type(n) == "number" and not (issecretvalue and issecretvalue(n)) then return n end
+    return nil
+end
 -- /if combotest [0-5]: that many gems for 10 seconds, to see them (on a target)
 IF.AddCommand("combotest", function(args)
     comboDemo = math.max(0, math.min(COMBO_MAX, tonumber(args[1]) or 3))
     Combo()
+    if IN.Nameplates then IN.Nameplates.ComboRefresh() end
     local mine = comboDemo
-    C_Timer.After(10, function() if comboDemo == mine then comboDemo = nil Combo() end end)
+    C_Timer.After(10, function()
+        if comboDemo == mine then
+            comboDemo = nil
+            Combo()
+            if IN.Nameplates then IN.Nameplates.ComboRefresh() end
+        end
+    end)
 end, "[0-5]: show that many combo point dots for 10 seconds (with a target); again with another number: gained / spent")
 local markEvents = CreateFrame("Frame")
 markEvents:RegisterEvent("RAID_TARGET_UPDATE")

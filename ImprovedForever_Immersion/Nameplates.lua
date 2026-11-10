@@ -84,6 +84,17 @@ local function Build()
     p.mark:SetTexture(IF.TEX .. "ic_raid_marks")
     p.mark:SetSize(BADGE - 4, BADGE - 4)
     p.mark:Hide()
+    -- (your combo points on your target's plate: five small gems in a row over its name; the same gems
+    -- as the target header's, tools/make_combo_gem.py)
+    p.combo = {}
+    for i = 1, 5 do
+        local g = p:CreateTexture(nil, "OVERLAY", nil, 6)
+        g:SetTexture(IF.TEX .. "ic_combo_gem")
+        g:SetTexCoord(0, 0.5, 0, 1)
+        g:SetSize(9, 9)
+        g:Hide()
+        p.combo[i] = g
+    end
     -- (its cast: a bar of ours, the times handed to it (secret in a fight), never compared)
     local cb = CreateFrame("StatusBar", nil, p)
     cb:SetSize(W, CAST_H)
@@ -225,6 +236,23 @@ local function Mark(p, unit)
     end
 end
 
+-- The combo gems over a plate's name: only on your target's, as many as you have
+local function Combo(p, unit)
+    local n = unit and UnitIsUnit(unit, "target") and IN.ComboCount and IN.ComboCount() or 0
+    if p.comboN == n then return end
+    p.comboN = n
+    for i = 1, 5 do
+        local g = p.combo[i]
+        if i <= n then
+            g:ClearAllPoints()
+            g:SetPoint("BOTTOM", p.name, "TOP", (i - 3) * 10, 2)
+            g:Show()
+        else
+            g:Hide()
+        end
+    end
+end
+
 -- (drawn at its current alpha and size; none left: not shown)
 local function Draw(p)
     local a = p.alpha * (p.seen or 1)
@@ -311,6 +339,8 @@ local function Refresh(p)
     StyleName(p)
     Try(p.name.SetText, p.name, IN.DisplayName(unit))
     Mark(p, unit)
+    p.comboN = nil
+    Combo(p, unit)
     if Flag(UnitIsDeadOrGhost, unit) then
         p.name:SetTextColor(0.5, 0.5, 0.5)
     else
@@ -540,11 +570,21 @@ local function Safe(fn, ...)
     end
 end
 
+-- (the combo gems on the plates again: the demo, the setting)
+function N.ComboRefresh()
+    for u, a in pairs(active) do
+        if a.ours then Safe(Combo, a.ours, u) end
+    end
+end
+
 local events = CreateFrame("Frame")
 events:RegisterEvent("NAME_PLATE_UNIT_ADDED")
 events:RegisterEvent("NAME_PLATE_UNIT_REMOVED")
 events:RegisterEvent("PLAYER_TARGET_CHANGED")
 events:RegisterEvent("RAID_TARGET_UPDATE")
+for _, e in ipairs({ "UNIT_POWER_UPDATE", "UNIT_POWER_FREQUENT", "UNIT_COMBO_POINTS" }) do
+    pcall(events.RegisterEvent, events, e)
+end
 -- (casts: any unit's, the ones with a plate of ours kept)
 local CAST_EVENTS = {
     UNIT_SPELLCAST_START = CastStart, UNIT_SPELLCAST_STOP = CastStart, UNIT_SPELLCAST_FAILED = CastStart,
@@ -555,6 +595,14 @@ local CAST_EVENTS = {
 }
 for e in pairs(CAST_EVENTS) do pcall(events.RegisterEvent, events, e) end
 events:SetScript("OnEvent", function(_, event, unit)
+    if event == "UNIT_POWER_UPDATE" or event == "UNIT_POWER_FREQUENT" or event == "UNIT_COMBO_POINTS" then
+        if unit == "player" then
+            for u, a in pairs(active) do
+                if a.ours then Safe(Combo, a.ours, u) end
+            end
+        end
+        return
+    end
     local onCast = CAST_EVENTS[event]
     if onCast then
         local a = unit and active[unit]
