@@ -177,17 +177,49 @@ function UI.SideTabs(win, onSelect, opts)
     -- and a count beyond each end that has more, the wheel over the tabs
     -- scrolls; the picked tab is always in view
     local TAB_H, TAB_GAP, TOP_ROOM, BOTTOM_ROOM = 54, 2, 52, 40
-    local function More(texture, rotate)
-        local m = { icon = win:CreateTexture(nil, "OVERLAY"), count = win:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall") }
-        m.icon:SetSize(18, 18)
+    -- (just an arrow, gold, bobbing a little toward the tabs not shown; a click moves by the tabs that fit,
+    -- the wheel by one; the tooltip says how many)
+    local function More(texture, direction)
+        local m = CreateFrame("Button", nil, win)
+        m:SetSize(44, 26)
+        m:SetFrameLevel(win:GetFrameLevel() + 5)
+        m.icon = m:CreateTexture(nil, "OVERLAY")
+        m.icon:SetSize(22, 22)
         m.icon:SetTexture(texture)
-        m.count:SetTextColor(1, 0.82, 0.3)
-        m.Show = function(self, shown) self.icon:SetShown(shown) self.count:SetShown(shown) end
-        m:Show(false)
+        m.icon:SetPoint("CENTER")
+        m.icon:SetVertexColor(1, 0.85, 0.3)
+        -- (the arrow points down; the one for the tabs above is turned over)
+        if direction < 0 then m.icon:SetTexCoord(0, 1, 1, 0) end
+        -- (a slow, small bob toward where the tabs are)
+        local bob = m:CreateAnimationGroup()
+        bob:SetLooping("BOUNCE")
+        local move = bob:CreateAnimation("Translation")
+        move:SetOffset(0, -4 * direction)
+        move:SetDuration(0.7)
+        move:SetSmoothing("IN_OUT")
+        m.count = { SetText = function() end }   -- (nothing to write: the tooltip has the number)
+        m:SetScript("OnEnter", function(self)
+            self.icon:SetVertexColor(1, 1, 0.7)
+            GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+            GameTooltip:SetText((self.n or 0) .. " more " .. ((self.n or 0) == 1 and "tab" or "tabs") .. " "
+                .. (direction < 0 and "above" or "below"), 1, 0.9, 0.5)
+            GameTooltip:AddLine("Click, or the mouse wheel over the tabs.", 0.8, 0.8, 0.8)
+            GameTooltip:Show()
+        end)
+        m:SetScript("OnLeave", function(self)
+            self.icon:SetVertexColor(1, 0.85, 0.3)
+            GameTooltip:Hide()
+        end)
+        m:SetScript("OnClick", function() tabs:Scroll(direction * (tabs:Fit() - 1)) end)
+        m.Show = function(self, shown)
+            self:SetShown(shown)
+            if shown and not bob:IsPlaying() then bob:Play() elseif not shown then bob:Stop() end
+        end
+        m:Hide()
         return m
     end
-    local up = More("Interface\\Buttons\\Arrow-Up-Up")
-    local down = More("Interface\\Buttons\\Arrow-Down-Up")
+    local up = More("Interface\\Calendar\\MoreArrow", -1)
+    local down = More("Interface\\Calendar\\MoreArrow", 1)
     tabs.offset = 0
 
     function tabs:Fit()
@@ -253,31 +285,31 @@ function UI.SideTabs(win, onSelect, opts)
         glyph:ClearAllPoints()
         if firstButton then
             -- (the glyph moves left for the arrow beside it)
-            if over then glyph:SetPoint("BOTTOMLEFT", firstButton, "TOPLEFT", -4, 4)
-            else glyph:SetPoint("BOTTOM", firstButton, "TOP", -3, 4) end
+            glyph:SetPoint("BOTTOM", firstButton, "TOP", -3, 4)
         end
         glyph:SetText(pad and IF.GlyphText(keys and keys[1] or "RS", keys and 22 or 26) or "")
         below:ClearAllPoints()
         if previous then below:SetPoint("TOP", previous, "BOTTOM", -3, -4) end
         below:SetText(pad and keys and IF.GlyphText(keys[2], 22) or "")
-        -- the arrows: the tabs before and after the ones shown
+        -- the buttons: the tabs before and after the ones shown
         local before, after = first - 1, over and (#list - last) or 0
         if firstButton and before > 0 then
-            up.icon:ClearAllPoints()
-            up.icon:SetPoint("BOTTOMRIGHT", firstButton, "TOPRIGHT", -4, 4)
-            up.count:ClearAllPoints()
-            up.count:SetPoint("RIGHT", up.icon, "LEFT", 0, 0)
+            up:ClearAllPoints()
+            up:SetPoint("BOTTOM", firstButton, "TOP", 0, 2)
             up.count:SetText(before)
+            up.n = before
+            -- (the stick's glyph above the button)
+            glyph:ClearAllPoints()
+            glyph:SetPoint("BOTTOM", up, "TOP", 0, 2)
         end
         up:Show(firstButton ~= nil and before > 0)
         if previous and after > 0 then
-            down.icon:ClearAllPoints()
-            down.icon:SetPoint("TOPRIGHT", previous, "BOTTOMRIGHT", -4, -4)
-            down.count:ClearAllPoints()
-            down.count:SetPoint("RIGHT", down.icon, "LEFT", 0, 0)
+            down:ClearAllPoints()
+            down:SetPoint("TOP", previous, "BOTTOM", 0, -2)
             down.count:SetText(after)
-            -- (the keys' glyph below, when there is one, moves left of it)
-            if pad and keys then below:ClearAllPoints() below:SetPoint("TOPLEFT", previous, "BOTTOMLEFT", -4, -4) end
+            down.n = after
+            -- (the keys' glyph below, when there is one, under the button)
+            if pad and keys then below:ClearAllPoints() below:SetPoint("TOP", down, "BOTTOM", 0, -2) end
         end
         down:Show(previous ~= nil and after > 0)
     end
