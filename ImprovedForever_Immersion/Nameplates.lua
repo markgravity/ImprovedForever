@@ -91,7 +91,7 @@ local function Build()
         local g = p:CreateTexture(nil, "OVERLAY", nil, 6)
         g:SetTexture(IF.TEX .. "ic_combo_gem")
         g:SetTexCoord(0, 0.5, 0, 1)
-        g:SetSize(9, 9)
+        g:SetSize(10, 10)
         g:Hide()
         p.combo[i] = g
     end
@@ -245,7 +245,7 @@ local function Combo(p, unit)
         local g = p.combo[i]
         if i <= n then
             g:ClearAllPoints()
-            g:SetPoint("BOTTOM", p.name, "TOP", (i - 3) * 10, 2)
+            g:SetPoint("BOTTOM", p.name, "TOP", (i - 3) * 16, 3)
             g:Show()
         else
             g:Hide()
