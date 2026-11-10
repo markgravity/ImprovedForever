@@ -118,7 +118,10 @@ local placed = {}
 local function Place(frame)
     local l, b, w, h = frame:GetRect()
     if not (l and b and w and h) then return false end
-    local k = frame:GetEffectiveScale() / UIParent:GetEffectiveScale()
+    local k = frame:GetEffectiveScale()
+    if issecretvalue and (issecretvalue(l) or issecretvalue(b) or issecretvalue(w)
+        or issecretvalue(h) or issecretvalue(k)) then return false end
+    k = k / UIParent:GetEffectiveScale()
     l, b, w, h = l * k, b * k, w * k, h * k
     if placed.l ~= l or placed.b ~= b or placed.w ~= w or placed.h ~= h then
         placed.l, placed.b, placed.w, placed.h = l, b, w, h

@@ -136,11 +136,27 @@ PIECES.chat = function(layout)
 end
 
 -- (a shown icon's size on screen, in UIParent's units, under frame)
+-- (right after a kill the game can hand these sizes back secret: never compared, the
+-- caller's default size used instead; a compare of a secret errors and taints, and the
+-- timelines' redraw repeats it until the client freezes: issue #10)
+local function Secret(v)
+    return type(issecretvalue) == "function" and issecretvalue(v) or false
+end
+
+local measured = {}
 local function IconSize(frame)
-    for _, child in ipairs(frame and { frame:GetChildren() } or {}) do
+    if not frame then return nil end
+    for _, child in ipairs({ frame:GetChildren() }) do
         local icon = child.Icon or child.icon
-        if child:IsShown() and icon and icon.GetWidth and icon:GetWidth() > 0 then
-            return icon:GetWidth() * icon:GetEffectiveScale() / UIParent:GetEffectiveScale()
+        local shown = child:IsShown()
+        if Secret(shown) then return measured[frame] end
+        if shown and icon and icon.GetWidth then
+            local w, k = icon:GetWidth(), icon:GetEffectiveScale()
+            if Secret(w) or Secret(k) then return measured[frame] end
+            if type(w) == "number" and type(k) == "number" and w > 0 then
+                measured[frame] = w * k / UIParent:GetEffectiveScale()
+                return measured[frame]
+            end
         end
     end
 end

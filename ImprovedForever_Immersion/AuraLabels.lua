@@ -115,7 +115,10 @@ local function Place(f, button)
     local region = button.Icon or button
     local l, b, w, h = region:GetRect()
     if not (l and b and w and h) then return false end
-    local k = region:GetEffectiveScale() / UIParent:GetEffectiveScale()
+    local k = region:GetEffectiveScale()
+    if issecretvalue and (issecretvalue(l) or issecretvalue(b) or issecretvalue(w)
+        or issecretvalue(h) or issecretvalue(k)) then return false end
+    k = k / UIParent:GetEffectiveScale()
     f:ClearAllPoints()
     f:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", l * k, b * k)
     f:SetSize(w * k, h * k)

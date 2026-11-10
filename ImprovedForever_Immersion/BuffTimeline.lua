@@ -250,8 +250,15 @@ local function Timeline(name, source)
         T.since = T.since + elapsed
         if T.dirty or T.since >= LAYOUT_EVERY then
             T.dirty, T.since = false, 0
-            local entries = source.Read(GetTime())
-            Fill(entries, Layout(entries))
+            -- (one failure stops the redraw instead of flooding the error handler every tick)
+            local ok, err = pcall(function()
+                local entries = source.Read(GetTime())
+                Fill(entries, Layout(entries))
+            end)
+            if not ok and not T.failed then
+                T.failed = true
+                print("|cffff8800Improved Forever Immersion:|r timeline layout error: " .. tostring(err))
+            end
         end
         local k = math.min(1, elapsed * SLIDE)
         for key, b in pairs(T.byKey) do
