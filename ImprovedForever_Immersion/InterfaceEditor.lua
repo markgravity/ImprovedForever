@@ -15,6 +15,8 @@ local function Toggle(key, label, after)
     end, label)
 end
 
+local STYLE_NAMES = { diamond = "Diamonds", square = "Squares", circle = "Circles" }
+
 local FOCUS_ORDER = { "auto", "tank", "healer", "off" }
 local FOCUS_NAMES = { auto = "Automatic", tank = "Tank", healer = "Healer", off = "Off" }
 
@@ -226,6 +228,22 @@ local ITEMS = {
         key = "pad", group = "bottom", section = "Action bar", label = "Action bar",
         tip = "The gamepad bar as spell tiles bottom right. Off, the game's own gamepad bar shows.",
     }, Toggle("pad", "Action bar", ApplyBottom)),
+    Item({
+        key = "padStyle", group = "bottom", section = "Action bar", label = "Action bar style",
+        tip = "The shape of the action bar's tiles (and the party spells' and cast bar's): Diamonds, Squares or "
+            .. "Circles.",
+        value = function() return IN.Settings().padStyle end,
+        text = function() return STYLE_NAMES[IN.Settings().padStyle] or "" end,
+        options = function()
+            local list = {}
+            for _, key in ipairs(IN.GamepadBar.STYLE_ORDER) do list[#list + 1] = { action = key, name = STYLE_NAMES[key] } end
+            return list
+        end,
+        choose = function(action)
+            IN.Settings().padStyle = action
+            IN.GamepadBar.Apply()
+        end,
+    }),
     Item({
         key = "gcd", group = "bottom", section = "Action bar", label = "Global cooldown",
         tip = "A swipe over the action bar's tiles while the global cooldown runs (after any spell), so you "

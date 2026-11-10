@@ -126,6 +126,7 @@ local DEFAULTS = {
     pad = true,         -- the gamepad bar as Hogwarts Legacy's spell diamonds, bottom right
     recentLoot = true, -- your last four loots as tiles beside the bags' one, flying in from the loot window
     recentLootKey = false, -- the binding's controller press (RecentLoot.lua)
+    padStyle = "diamond", -- its tiles: "diamond", "square" (rows and columns) or "circle" (GamepadBar.lua)
     tourDone = false,   -- the first-time tour has been shown (Onboarding.lua)
     partyPad = false,   -- L1 ours: + the D-pad picks a party spell, + a face button casts it on party 1 to 4 (an experiment)
 }
@@ -169,7 +170,6 @@ function IN.Settings()
     -- campfire scene was ours (the Camp module's now): their keys gone; the
     -- timelines' bar test's log too)
     settings.chat, settings.auras, settings.camp = nil, nil, nil
-    settings.padStyle = nil          -- (the action bar is only diamonds now)
     settings.auctionScene = nil      -- (the auction house scene is gone: its classic window only)
     db.timelineBar = nil
     db.hudLog = nil

@@ -88,7 +88,6 @@
 
 - The keyboard and mouse bar's twelve tiles say their own key and show what it runs, for the layer of the Alt / Ctrl / Shift you hold.
 
-- The action bar is always diamonds: the "Action bar style" setting (Squares, Circles) is gone.
 - A click on the free bag slots' tile opens the bags, and the menu's "Bag Slots" entry is called "Bags".
 - The target's cast runs round its avatar diamond: the spell's icon inside it, its edges lit as the cast goes (yellow cast, green channel, grey when it can't be interrupted, red when cut); the long bar under the name is gone, the spell's name stands over the diamond and the target's buffs sit close under its race and class line. `/if targetcast` tries it on your target.
 - Your own cast bar's icon is always the diamond, whatever the action bar's style. `/if casttest` shows it with a made-up cast.
