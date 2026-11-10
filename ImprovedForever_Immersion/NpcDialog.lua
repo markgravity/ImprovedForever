@@ -1641,6 +1641,8 @@ local function Camera(on)
             local pitchSpeed = tonumber(GetCVar("GamePadCameraPitchSpeed")) or 1
             x = Axis(stick.x) * yawSpeed * (GetCVar("gamepadInvertYaw") == "1" and -1 or 1)
             y = Axis(stick.y) * pitchSpeed * (GetCVar("gamepadInvertPitch") == "1" and -1 or 1)
+            -- (MoveView turns the view, the opposite of the game's own stick camera: issue #13)
+            x, y = -x, -y
         end
     end
     Turn("yaw", x, LEFT, RIGHT)
