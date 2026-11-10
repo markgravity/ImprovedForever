@@ -380,8 +380,11 @@ local function Container()
             initializeFrame = function(b) StyleButton(b, harmful, size) end,
         })
     end
-    Group("buffs", "HELPFUL", false, math.max(1, fits - DEBUFF_MAX))
-    Group("debuffs", "HARMFUL", true, math.min(DEBUFF_MAX, fits))
+    -- (the debuffs keep a third of the row at most: a short row (a small screen, a low UI scale) left the
+    -- buffs only what DEBUFF_MAX did not take, two icons)
+    local debuffs = math.max(1, math.min(DEBUFF_MAX, math.floor(fits / 3)))
+    Group("buffs", "HELPFUL", false, math.max(1, fits - debuffs))
+    Group("debuffs", "HARMFUL", true, debuffs)
     c:Hide()
     container = c
     return c
