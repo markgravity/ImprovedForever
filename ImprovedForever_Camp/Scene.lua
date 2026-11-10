@@ -661,7 +661,11 @@ chat:SetFading(true)
 chat:SetTimeVisible(CHAT_SHOWN)
 chat:SetFadeDuration(3)
 -- (subtitles as a cutscene has them: the game's bold face, big, outlined)
-local SUBTITLE_FONT, SUBTITLE_SIZE = "Fonts\\FRIZQT__.TTF", 21
+-- (Friz Quadrata has Latin letters only: Russian, Korean and Chinese clients get the game's font)
+local SUBTITLE_LOCALE = GetLocale()
+local SUBTITLE_FONT = (SUBTITLE_LOCALE == "ruRU" or SUBTITLE_LOCALE == "koKR" or SUBTITLE_LOCALE == "zhCN"
+    or SUBTITLE_LOCALE == "zhTW") and STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF"
+local SUBTITLE_SIZE = 21
 if not chat:SetFont(SUBTITLE_FONT, SUBTITLE_SIZE, "OUTLINE") then chat:SetFontObject(ChatFontNormal) end
 chat:SetShadowColor(0, 0, 0, 1)
 chat:SetShadowOffset(1, -1)

@@ -8,7 +8,12 @@ local K = {}
 IF.ConfigKit = K
 
 local TEX = "Interface\\AddOns\\ImprovedForever\\textures\\"
-local FONT = "Fonts\\FRIZQT__.TTF"
+-- (Friz Quadrata has Latin letters only: a Russian, Korean or Chinese client gets the game's own
+-- font, else translated names are rows of empty squares: issue #12)
+local LOCALE = GetLocale()
+local FONT = (LOCALE == "ruRU" or LOCALE == "koKR" or LOCALE == "zhCN" or LOCALE == "zhTW")
+    and STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF"
+K.FONT = FONT
 K.TEX = TEX
 
 local function hex(h)
@@ -752,7 +757,7 @@ function K.Picker(parent, width, onRender, opts)
         -- (centred over the rows, its top on the picker's: the list's top line)
         local mid = 12 + (width - 24) / 2
         p.listName = p:CreateFontString(nil, "OVERLAY")
-        p.listName:SetFont("Fonts\\FRIZQT__.TTF", 14, "")
+        p.listName:SetFont(FONT, 14, "")
         p.listName:SetShadowOffset(1, -1)
         p.listName:SetTextColor(1, 1, 1)
         p.listName:SetPoint("TOP", p, "TOPLEFT", mid, 0)
