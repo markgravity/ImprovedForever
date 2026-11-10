@@ -102,7 +102,7 @@ local SHOTS = {
 -- cameraYawMoveSpeed, cameraPitchMoveSpeed degrees a second at speed 1)
 local TURN_SPEED = 2
 -- (MoveViewDown raises the camera to look down: -1 if it's the other way)
-local PITCH_SIGN = 1
+local PITCH_SIGN = -1
 local WORDS_X = 0.25 -- (the words' side, a share of the screen's width from the middle)
 local CUT_ZOOM_SPEED = 50 -- (the distance changed while black: at once)
 -- (a cut: to black, held while the camera moves, back)
@@ -1085,7 +1085,12 @@ local function Pitch(v)
 end
 
 -- (turned to yaw and pitch, both there together: how long it takes)
+-- (the camera's pitch is limited by the game, and it turns faster than the speeds say: past the
+-- limit the way back didn't end level, the camera left looking straight up or down. The shots'
+-- pitch is kept well inside it, so every turn goes back by the same amount)
+local MAX_PITCH = 35
 local function TurnTo(yaw, pitch)
+    pitch = math.max(-MAX_PITCH, math.min(MAX_PITCH, pitch))
     local dy = (yaw - yawDeg + 180) % 360 - 180
     local dp = pitch - pitchDeg
     local time = math.max(math.abs(dy) / (TURN_SPEED * yawRate), math.abs(dp) / (TURN_SPEED * pitchRate))
@@ -1131,6 +1136,11 @@ local function CameraRestore(zoomBack)
     Pitch(0)
     local saved = Saved()
     if not saved then return end
+    -- (the game's dynamic pitch tilts the camera by itself while its setting is on, and what it
+    -- turned stays when the setting goes back: our tally of turns can't undo it. The camera goes
+    -- to its first saved view, behind you, level, and the tally starts again from there)
+    pcall(SetView, 1)
+    yawDeg, pitchDeg = 0, 0
     if zoomBack and saved.zoom then
         SetCVarSafe("cameraZoomSpeed", CUT_ZOOM_SPEED)
         ZoomTo(saved.zoom)
@@ -1170,10 +1180,18 @@ local function StepCut(dt)
         black:SetAlpha(Smooth(cut.t / CUT_DOWN))
         if cut.t >= CUT_DOWN then
             cut.state, cut.t = "hold", 0
-            cut.hold = math.max(CUT_HOLD, cut.set and cut.set() or 0)
+            -- (the turn is stopped when its time is up, not at the end of the hold: a hold longer than
+            -- the turn went on turning past the shot, and the way back then didn't end level)
+            cut.turn = cut.set and cut.set() or 0
+            cut.hold = math.max(CUT_HOLD, cut.turn)
         end
     elseif cut.state == "hold" then
         black:SetAlpha(1)
+        if cut.turn and cut.turn > 0 and cut.t >= cut.turn then
+            cut.turn = nil
+            Yaw(0)
+            Pitch(0)
+        end
         if cut.t >= cut.hold then
             if cut.done then cut.done() end
             cut.state, cut.t = "up", 0
@@ -1267,7 +1285,9 @@ local function PopupFade(on)
         for i = 1, 4 do
             local f = rawget(_G, "StaticPopup" .. i)
             local which = f and f:IsShown() and f.which
-            if (which == LOGOUT_POPUP[false] or which == LOGOUT_POPUP[true]) and not popupFaded[f] then
+            -- (the game's warning for the test_camera* settings we turn on: it comes with every scene)
+            if (which == LOGOUT_POPUP[false] or which == LOGOUT_POPUP[true] or which == "EXPERIMENTAL_CVAR_WARNING")
+                and not popupFaded[f] then
                 IF.Focus.Fade(f, true, 0)
                 popupFaded[f] = true
             end
@@ -1415,6 +1435,7 @@ C.Watcher("camp scene", 0.25, function()
         if IF.InCombat() then return Leave(true) end
         if up or away >= 2 or not on then return Leave() end
         HUD(hudA, phase == "on")
+        PopupFade(true)
         Refresh()
         return
     end
