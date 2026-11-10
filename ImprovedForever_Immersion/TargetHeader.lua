@@ -116,6 +116,35 @@ local function Mark(unit)
         mark:SetPoint("LEFT", name, "CENTER", width / 2 + 12, 0)
     end
 end
+-- /if marktest: all eight markers each beside a name, as on the header, for 12 seconds (again: gone)
+local markDemo
+IF.AddCommand("marktest", function()
+    if markDemo and markDemo:IsShown() then markDemo:Hide() return end
+    if not markDemo then
+        markDemo = CreateFrame("Frame", nil, UIParent)
+        markDemo:SetFrameStrata("DIALOG")
+        markDemo:SetSize(900, 140)
+        markDemo:SetPoint("CENTER", UIParent, "CENTER", 0, 120)
+        markDemo.bg = markDemo:CreateTexture(nil, "BACKGROUND")
+        markDemo.bg:SetAllPoints()
+        markDemo.bg:SetColorTexture(0, 0, 0, 0.55)
+        markDemo.items = {}
+        local names = { "Daily", "Windshaper", "Boro", "Zephras", "Thendal", "Rend", "Skyborne", "Aileen" }
+        for i = 1, 8 do
+            local col, row = (i - 1) % 4, math.floor((i - 1) / 4)
+            local fs = HS.Text(markDemo, HS.FONT, HS.NAME_SIZE, HS.GOLD[1], HS.GOLD[2], HS.GOLD[3])
+            fs:SetPoint("CENTER", markDemo, "TOPLEFT", 112 + col * 225, -36 - row * 62)
+            fs:SetText(names[i])
+            local t = markDemo:CreateTexture(nil, "OVERLAY")
+            t:SetTexture(IF.TEX .. "ic_raid_marks")
+            t:SetSize(MARK_SIZE, MARK_SIZE)
+            SetRaidTargetIconTexture(t, i)
+            t:SetPoint("LEFT", fs, "CENTER", (fs:GetStringWidth() or 0) / 2 + 12, 0)
+        end
+    end
+    markDemo:Show()
+    C_Timer.After(12, function() if markDemo then markDemo:Hide() end end)
+end, ": all eight raid markers beside a name, as on the target header (again: gone)")
 local markEvents = CreateFrame("Frame")
 markEvents:RegisterEvent("RAID_TARGET_UPDATE")
 markEvents:SetScript("OnEvent", function()
