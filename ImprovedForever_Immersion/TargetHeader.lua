@@ -145,8 +145,8 @@ IF.AddCommand("marktest", function()
     markDemo:Show()
     C_Timer.After(12, function() if markDemo then markDemo:Hide() end end)
 end, ": all eight raid markers beside a name, as on the target header (again: gone)")
--- Combo points: five small cut red gems (tools/make_combo_gem.py: four lit facets, a gold edge, a soft glow
--- under) in a V over the diamond's top, following its two upper edges, the ones you have lit (a rogue's, a
+-- Combo points: five small cut red gems (tools/make_combo_gem.py: four lit facets, a gold edge)
+-- in a V over the diamond's top, following its two upper edges, the ones you have lit (a rogue's, a
 -- feral druid's). Read for your target; a number the game hides in a fight is never compared: they show as
 -- they were.
 local COMBO_MAX, GEM_W, GEM_H = 5, 13, 13
@@ -206,13 +206,6 @@ for i = 1, COMBO_MAX do
     local g = CreateFrame("Frame", nil, look)
     g:SetSize(GEM_W, GEM_H)
     g:SetFrameLevel(tile:GetFrameLevel() + 2)
-    g.glow = g:CreateTexture(nil, "BACKGROUND")
-    g.glow:SetTexture(IF.TEX .. "ic_combo_gem")
-    g.glow:SetTexCoord(0.5, 1, 0, 1)
-    g.glow:SetPoint("CENTER")
-    g.glow:SetSize(GEM_H * 1.9, GEM_H * 1.9)
-    g.glow:SetBlendMode("ADD")
-    g.glow:SetAlpha(0.35)
     g.gem = g:CreateTexture(nil, "ARTWORK")
     g.gem:SetTexture(IF.TEX .. "ic_combo_gem")
     g.gem:SetTexCoord(0, 0.5, 0, 1)
