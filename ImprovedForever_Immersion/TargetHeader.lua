@@ -145,23 +145,26 @@ IF.AddCommand("marktest", function()
     markDemo:Show()
     C_Timer.After(12, function() if markDemo then markDemo:Hide() end end)
 end, ": all eight raid markers beside a name, as on the target header (again: gone)")
--- Combo points: five small red dots in an arc over the diamond's top (a rogue's, a feral druid's), the ones you
--- have lit. Read for your target; a number the game hides in a fight is never compared: the arc shows as it
--- was.
-local COMBO_MAX, COMBO_SIZE = 5, 6
+-- Combo points: five small cut red gems (tools/make_combo_gem.py: four lit facets, a gold edge, a soft glow
+-- under) in a V over the diamond's top, following its two upper edges, the ones you have lit (a rogue's, a
+-- feral druid's). Read for your target; a number the game hides in a fight is never compared: they show as
+-- they were.
+local COMBO_MAX, GEM_W, GEM_H = 5, 10, 13
 local combo = {}
 local function PlaceCombo()
-    local R = tile.across / 2 * 1.08 + 5
+    local half = tile.across / 2
+    local step = GEM_W + 3
     for i = 1, COMBO_MAX do
+        local x = (i - 3) * step
+        -- (on a line parallel to the diamond's upper edges, a gem's height outside them)
+        local y = half - math.abs(x) + GEM_H * 0.55 + 4
         local g = combo[i]
-        -- (from the upper left round the top to the upper right, the middle one straight up)
-        local angle = math.rad(90 + (3 - i) * 24)
         g:ClearAllPoints()
-        g:SetPoint("CENTER", tile, "CENTER", R * math.cos(angle), R * math.sin(angle) - 1)
+        g:SetPoint("CENTER", tile, "CENTER", x, y)
     end
 end
--- (a dot gained: it pops in, big then settling, with a white flash; spent: it flares and flies outward,
--- fading; the animations are the dot's own, never the game's frames')
+-- (a gem gained: it pops in, big then settling; spent: it flares and flies outward, fading; the animations
+-- are the gem's own frame's, never the game's)
 local function Anim(g)
     local gain = g:CreateAnimationGroup()
     local grow = gain:CreateAnimation("Scale")
@@ -198,11 +201,19 @@ local function Anim(g)
     g.spend = spend
 end
 for i = 1, COMBO_MAX do
-    local g = look:CreateTexture(nil, "OVERLAY", nil, 6)
-    g:SetTexture("Interface\\Buttons\\WHITE8x8")
-    g:SetSize(COMBO_SIZE, COMBO_SIZE)
-    g:SetRotation(math.pi / 4)
-    g:SetVertexColor(1, 0.2, 0.2, 1)
+    local g = CreateFrame("Frame", nil, look)
+    g:SetSize(GEM_W, GEM_H)
+    g:SetFrameLevel(tile:GetFrameLevel() + 2)
+    g.glow = g:CreateTexture(nil, "BACKGROUND")
+    g.glow:SetTexture(IF.TEX .. "ic_combo_gem")
+    g.glow:SetTexCoord(0.5, 1, 0, 1)
+    g.glow:SetPoint("CENTER")
+    g.glow:SetSize(GEM_H * 2.3, GEM_H * 2.3)
+    g.glow:SetBlendMode("ADD")
+    g.gem = g:CreateTexture(nil, "ARTWORK")
+    g.gem:SetTexture(IF.TEX .. "ic_combo_gem")
+    g.gem:SetTexCoord(0, 0.5, 0, 1)
+    g.gem:SetAllPoints()
     g:Hide()
     combo[i] = g
     Anim(g)
