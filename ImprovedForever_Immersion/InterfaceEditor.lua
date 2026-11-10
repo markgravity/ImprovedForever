@@ -239,6 +239,17 @@ local ITEMS = {
         return false
     end, BottomHud, "Player frame")),
     Item({
+        key = "fullNames", group = "bottom", section = "Player frame", label = "Last names",
+        tip = "A player's last name after the first on the player card, the party cards, the target header and the "
+            .. "nameplates, where the game gives one. Off: the first name only (an NPC's name is whole already).",
+    }, Toggle("fullNames", "Last names", function()
+        IN.UnitFrames.Apply()
+        IN.PartyCards.Apply()
+        IN.Nameplates.Apply()
+        local target = IN.UnitFrames.target
+        if target and target.Refresh and not IF.InCombat() then target.Refresh(target) end
+    end)),
+    Item({
         key = "hudWidth", group = "bottom", section = "Player frame", label = "Screen width",
         tip = "On an ultrawide screen, keeps the player frame, chat, buffs and action bar inside a 16:9 or 21:9 "
             .. "part in the middle, so they are not at the far edges. Full screen: to the screen's edges.",

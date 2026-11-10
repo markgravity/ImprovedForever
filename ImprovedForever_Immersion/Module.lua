@@ -131,6 +131,7 @@ local DEFAULTS = {
     padSame = false,    -- the D-pad's tiles as big as the face buttons' (read as it loads: after a reload)
     partyX = 0, partyY = 0, -- the party cards' place, px right / up
     headerScale = 100,  -- the header's size (%)
+    fullNames = false,  -- a player's last name after the first on the cards, header and plates (when the game has one)
     hudWidth = "off",   -- the HUD kept inside a screen ratio on an ultrawide: "off", "16:9" or "21:9" (IN.Inset)
     tourDone = false,   -- the first-time tour has been shown (Onboarding.lua)
     partyPad = false,   -- L1 ours: + the D-pad picks a party spell, + a face button casts it on party 1 to 4 (an experiment)
@@ -165,6 +166,22 @@ function IN.Watcher(name, every, fn)
         end
     end)
     return f
+end
+
+-- A unit's name for our cards: the game's name, and with the setting fullNames a player's last name after it
+-- (UnitFullName's second answer: Forever gives it where WoW has a realm). Secret strings go through as they
+-- are, never joined or compared.
+function IN.DisplayName(unit)
+    local name = UnitName(unit)
+    if not IF.db or not IN.Settings().fullNames then return name end
+    if type(name) ~= "string" or (issecretvalue and issecretvalue(name)) then return name end
+    local ok, isPlayer = pcall(UnitIsPlayer, unit)
+    if not ok or (issecretvalue and issecretvalue(isPlayer)) or not isPlayer then return name end
+    local ok2, _, last = pcall(UnitFullName, unit)
+    if ok2 and type(last) == "string" and last ~= "" and not (issecretvalue and issecretvalue(last)) then
+        return name .. " " .. last
+    end
+    return name
 end
 
 -- A setting's default, for the reset buttons

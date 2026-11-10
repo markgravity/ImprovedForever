@@ -318,7 +318,7 @@ local demo
 local function Refresh(button)
     local unit = demo and "player" or button.unit
     if not UnitExists(unit) then return end
-    Try(name.SetText, name, UnitName(unit))
+    Try(name.SetText, name, IN.DisplayName(unit))
     local dead = Flag(UnitIsDeadOrGhost, unit)
     if dead then name:SetTextColor(0.5, 0.5, 0.5) else name:SetTextColor(HS.GOLD[1], HS.GOLD[2], HS.GOLD[3]) end
     FillHealth(unit)

@@ -309,7 +309,7 @@ local function Refresh(p)
     local unit = p.unit
     if not unit then return end
     StyleName(p)
-    Try(p.name.SetText, p.name, UnitName(unit))
+    Try(p.name.SetText, p.name, IN.DisplayName(unit))
     Mark(p, unit)
     if Flag(UnitIsDeadOrGhost, unit) then
         p.name:SetTextColor(0.5, 0.5, 0.5)

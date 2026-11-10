@@ -390,7 +390,7 @@ local function Refresh(b)
         return
     end
     UF.AvatarUnit(b.avatar, unit)
-    Try(b.name.SetText, b.name, UnitName(unit))
+    Try(b.name.SetText, b.name, IN.DisplayName(unit))
     UF.NameColor(b)
     local c = CardColor(b)
     UF.AvatarLook(b.avatar, unit, c, c == UF.GREY)

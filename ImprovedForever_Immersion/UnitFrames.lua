@@ -422,7 +422,7 @@ function player:Refresh(event)
     local dead = Flag(UnitIsDeadOrGhost, unit)
     local color = ClassColor(unit) or GOLD
     AvatarLook(self.avatar, unit, dead and GREY or color, dead)
-    Try(self.name.SetText, self.name, UnitName(unit))
+    Try(self.name.SetText, self.name, IN.DisplayName(unit))
     NameColor(self)
     -- (the combat mark by alpha: a region of a secure frame, protected)
     local fighting = Flag(UnitAffectingCombat, unit)
