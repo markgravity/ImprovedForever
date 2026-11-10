@@ -160,6 +160,43 @@ local function PlaceCombo()
         g:SetPoint("CENTER", tile, "CENTER", R * math.cos(angle), R * math.sin(angle) - 1)
     end
 end
+-- (a dot gained: it pops in, big then settling, with a white flash; spent: it flares and flies outward,
+-- fading; the animations are the dot's own, never the game's frames')
+local function Anim(g)
+    local gain = g:CreateAnimationGroup()
+    local grow = gain:CreateAnimation("Scale")
+    grow:SetScaleFrom(0.2, 0.2)
+    grow:SetScaleTo(1.7, 1.7)
+    grow:SetDuration(0.12)
+    grow:SetOrder(1)
+    local settle = gain:CreateAnimation("Scale")
+    settle:SetScaleFrom(1, 1)
+    settle:SetScaleTo(1 / 1.7, 1 / 1.7)
+    settle:SetDuration(0.16)
+    settle:SetSmoothing("OUT")
+    settle:SetOrder(2)
+    local fade = gain:CreateAnimation("Alpha")
+    fade:SetFromAlpha(0)
+    fade:SetToAlpha(1)
+    fade:SetDuration(0.1)
+    fade:SetOrder(1)
+    g.gain = gain
+    local spend = g:CreateAnimationGroup()
+    local out = spend:CreateAnimation("Translation")
+    out:SetDuration(0.28)
+    out:SetSmoothing("OUT")
+    g.spendMove = out
+    local big = spend:CreateAnimation("Scale")
+    big:SetScaleFrom(1, 1)
+    big:SetScaleTo(1.9, 1.9)
+    big:SetDuration(0.28)
+    local gone = spend:CreateAnimation("Alpha")
+    gone:SetFromAlpha(1)
+    gone:SetToAlpha(0)
+    gone:SetDuration(0.28)
+    spend:SetScript("OnFinished", function() g:Hide() g:SetAlpha(1) end)
+    g.spend = spend
+end
 for i = 1, COMBO_MAX do
     local g = look:CreateTexture(nil, "OVERLAY", nil, 6)
     g:SetTexture("Interface\\Buttons\\WHITE8x8")
@@ -168,36 +205,62 @@ for i = 1, COMBO_MAX do
     g:SetVertexColor(1, 0.2, 0.2, 1)
     g:Hide()
     combo[i] = g
+    Anim(g)
 end
 PlaceCombo()
 local comboShown, comboDemo = 0, nil
-local function Combo()
+-- (instant: a target change or the setting off, nothing gained or spent)
+local function ComboSet(n)
+    for i = 1, COMBO_MAX do
+        local g = combo[i]
+        g.gain:Stop()
+        g.spend:Stop()
+        g:SetAlpha(1)
+        g:SetShown(i <= n)
+    end
+    comboShown = n
+end
+local function Combo(instant)
     local s = IF.db and IN.Settings()
     if not (s and s.comboPoints) or not (UnitExists("target") or comboDemo) then
-        for i = 1, COMBO_MAX do combo[i]:Hide() end
-        comboShown = 0
+        ComboSet(0)
         return
     end
     local ok, n = pcall(GetComboPoints, "player", "target")
     if comboDemo then ok, n = true, comboDemo end
     if not ok or type(n) ~= "number" or (issecretvalue and issecretvalue(n)) then return end
     if n == comboShown then return end
+    if instant or not look:IsShown() then return ComboSet(n) end
+    local before = comboShown
     comboShown = n
-    for i = 1, COMBO_MAX do combo[i]:SetShown(i <= n) end
+    for i = 1, COMBO_MAX do
+        local g = combo[i]
+        if i <= n and i > before then
+            g.spend:Stop()
+            g:Show()
+            g.gain:Play()
+        elseif i > n and i <= before then
+            -- (flies off the diamond, away from its middle)
+            local cx, cy = g:GetCenter()
+            local tx, ty = tile:GetCenter()
+            local dx, dy = (cx or 0) - (tx or 0), (cy or 0) - (ty or 0)
+            local len = math.max(1, math.sqrt(dx * dx + dy * dy))
+            g.spendMove:SetOffset(dx / len * 16, dy / len * 16)
+            g.gain:Stop()
+            g.spend:Play()
+        elseif i <= n then
+            g:Show()
+        end
+    end
 end
 IN.ComboPoints = Combo
 -- /if combotest [0-5]: that many gems for 10 seconds, to see them (on a target)
 IF.AddCommand("combotest", function(args)
     comboDemo = math.max(0, math.min(COMBO_MAX, tonumber(args[1]) or 3))
-    comboShown = -1
     Combo()
-    C_Timer.After(10, function() comboDemo, comboShown = nil, -1 Combo() end)
-end, "[0-5]: show that many combo point dots for 10 seconds (with a target)")
-local comboEvents = CreateFrame("Frame")
-for _, e in ipairs({ "PLAYER_TARGET_CHANGED", "UNIT_POWER_UPDATE", "UNIT_POWER_FREQUENT", "UNIT_COMBO_POINTS", "PLAYER_ENTERING_WORLD" }) do
-    pcall(comboEvents.RegisterEvent, comboEvents, e)
-end
-comboEvents:SetScript("OnEvent", function() Combo() end)
+    local mine = comboDemo
+    C_Timer.After(10, function() if comboDemo == mine then comboDemo = nil Combo() end end)
+end, "[0-5]: show that many combo point dots for 10 seconds (with a target); again with another number: gained / spent")
 local markEvents = CreateFrame("Frame")
 markEvents:RegisterEvent("RAID_TARGET_UPDATE")
 markEvents:SetScript("OnEvent", function()
