@@ -374,13 +374,59 @@ end
 -- back, so only a firm reading counts then.
 local aim = SecureButton("ImprovedForeverRingAim")
 aim:RegisterForClicks("AnyDown", "AnyUp")
+-- (its action, when it has one, is done on the key's release whatever ActionButtonUseKeyDown says:
+-- "Use on release", below)
+aim:SetAttribute("useOnKeyDown", false)
 SecureHandlerWrapScript(aim, "OnClick", aim, [[
+    self:SetAttribute("type", nil)
     local ring = self:GetFrameRef("ring")
     if ring:GetAttribute("ic-waiting") then ring:RunAttribute("ic-take-pad") end
     if ring:IsShown() then
         local pick = ring:RunAttribute("ic-pick-body", down and 0.12 or 0.5)
         if pick then
             ring:SetAttribute("ic-sticky", pick)
+        end
+        -- "Use on release" (the Wheels settings): the stick let go of (no direction held any more), the
+        -- slot it pointed at is used, as the game's own wheel does
+        if not down and not pick and (ring:GetAttribute("ic-release") or 0) == 1 then
+            local sticky = ring:GetAttribute("ic-sticky")
+            if sticky then
+                local key = ring:GetAttribute("ic-active")
+                ring:Hide()
+                local actionType = ring:GetAttribute(key .. "-type-" .. sticky)
+                local value = ring:GetAttribute(key .. "-value-" .. sticky)
+                local text = ring:GetAttribute(key .. "-phrase-" .. sticky)
+                local channel = ring:GetAttribute("ic-channel") or 1
+                if text and channel > 1 and ring:GetAttribute("chan-cmd-" .. channel) then
+                    value = ring:GetAttribute("chan-cmd-" .. channel) .. " " .. text
+                end
+                self:SetAttribute("spell", nil)
+                self:SetAttribute("item", nil)
+                self:SetAttribute("macrotext", nil)
+                local unit = ring:GetAttribute(key .. "-unit-" .. sticky)
+                self:SetAttribute("unit", unit)
+                if unit then
+                    local spell = ring:GetAttribute("cast-spell-" .. (ring:GetAttribute("ic-cast") or 1))
+                    if spell then
+                        actionType, value = "spell", spell
+                    else
+                        actionType, value = "target", nil
+                    end
+                end
+                if actionType and actionType ~= "target" then
+                    self:SetAttribute(actionType == "macro" and "macrotext" or actionType, value)
+                end
+                self:SetAttribute("type", actionType)
+                local wheel = ring:GetAttribute(key .. "-wheel")
+                if wheel and actionType then
+                    ring:SetAttribute("recent-" .. wheel .. "-type", actionType)
+                    ring:SetAttribute("recent-" .. wheel .. "-value", value)
+                    ring:SetAttribute("recent-" .. wheel .. "-unit", unit)
+                    ring:SetAttribute("ic-used-n", (ring:GetAttribute("ic-used-n") or 0) + 1)
+                    ring:SetAttribute("ic-used", key .. "#" .. sticky .. "#" .. ring:GetAttribute("ic-used-n"))
+                end
+                return
+            end
         end
     end
     return false
@@ -442,6 +488,11 @@ SecureHandlerWrapScript(use, "OnClick", use, [[
     if ring:GetAttribute("ic-waiting") then ring:RunAttribute("ic-take-pad") end
     if not ring:IsShown() then
         self:SetAttribute("ic-pressed", nil)
+        return false
+    end
+    -- ("Use on release": the stick's let-go uses a slot, R2 just closes the wheel)
+    if (ring:GetAttribute("ic-release") or 0) == 1 then
+        if down then ring:Hide() end
         return false
     end
     if down then self:SetAttribute("ic-pressed", true) end
@@ -1419,6 +1470,8 @@ function IF.ApplyRingBindings()
     ring:SetAttribute("ic-stick2", nil)
     use:SetAttribute("ic-keydown", GetCVarSafe("ActionButtonUseKeyDown") == "0" and 0 or 1)
     trigger:SetAttribute("ic-keydown", use:GetAttribute("ic-keydown"))
+    -- "Use on release" (the Wheels settings): a slot is used when the stick is let go of; R2 closes the wheel
+    ring:SetAttribute("ic-release", IF.db and IF.db.ringRelease and 1 or 0)
     -- The key prefixes R3 reaches us under for a combo with a ring: the
     -- modifier its held button makes (GamePadEmulate*), or none (R3 alone,
     -- or held with a button that isn't one). Only those are taken: the rest
@@ -1587,3 +1640,9 @@ ring:HookScript("OnHide", function()
     revealToken = revealToken + 1
     ring:SetAlpha(1)
 end)
+
+-- The "Use on release" setting (the Wheels settings page)
+function IF.SetRingRelease(on)
+    IF.db.ringRelease = on and true or nil
+    IF.ApplyRingBindings()
+end

@@ -320,6 +320,13 @@ function W:Build(parent)
     pane.row:SetPoint("RIGHT", pane, "RIGHT", 0, 0)
     pane.row:SetHeight(70)
     pane.row.slot = 1
+    -- (the second setting: use a slot on letting go of R3)
+    pane.row2 = IF.FieldRow(pane, 400, function() W:ToggleRelease() end, function() W:ToggleRelease() end,
+        function() end)
+    pane.row2:SetPoint("TOPLEFT", pane.row, "BOTTOMLEFT", 0, -8)
+    pane.row2:SetPoint("RIGHT", pane, "RIGHT", 0, 0)
+    pane.row2:SetHeight(70)
+    pane.row2.slot = 2
     pane:Hide()
     f.pane = pane
 
@@ -863,6 +870,13 @@ end
 
 function W:ToggleSettings()
     self.settings = not self.settings
+    self.settingsRow = 1
+    menu.Render()
+end
+
+-- "Use on release": the slot the right stick points at is used when the stick is let go; R2 dismisses the wheel
+function W:ToggleRelease()
+    IF.SetRingRelease(not IF.db.ringRelease)
     menu.Render()
 end
 
@@ -870,8 +884,13 @@ function W:Press(name)
     local wheel = self:Current()
     -- The settings shown on the right: left / right change the size, Circle goes back to the wheel
     if self.settings and self.zone == nil then
-        if name == "LEFT" or name == "RIGHT" then
+        if name == "UP" or name == "DOWN" then
+            self.settingsRow = (self.settingsRow or 1) == 1 and 2 or 1
+            menu.Render()
+        elseif (name == "LEFT" or name == "RIGHT") and (self.settingsRow or 1) == 1 then
             self:SizeStep(name == "LEFT" and -5 or 5)
+        elseif (name == "LEFT" or name == "RIGHT" or name == "A") and self.settingsRow == 2 then
+            self:ToggleRelease()
         elseif name == "B" then
             self.settings = false
             menu.Render()
@@ -1175,9 +1194,17 @@ function W:Render()
         local r = f.pane.row
         r.name:SetText("Wheel size")
         r.line:SetText("How big the wheel is, in percent: smaller if it covers too much of the screen. Out of combat only.")
+        local row = self.settingsRow or 1
         r:SetControl({ slider = { min = 50, max = 150, step = 5, format = function(n) return n .. "%" end,
-            get = function() return tonumber(IF.db.ringScale) or 100 end } }, "slider", true, false)
-        r.focus:Light(IF.Input.Pad(), false)
+            get = function() return tonumber(IF.db.ringScale) or 100 end } }, "slider", row == 1, false)
+        r.focus:Light(IF.Input.Pad() and row == 1, false)
+        local r2 = f.pane.row2
+        r2.name:SetText("Use on release")
+        r2.line:SetText("As the game's own wheel: aim with the right stick and let go of it to use the slot. R2 closes "
+            .. "the wheel without using anything. Off: R2 uses the slot.")
+        r2:SetControl({ onoff = true, value = function() return IF.db.ringRelease and "on" or "off" end }, "toggle",
+            row == 2, false)
+        r2.focus:Light(IF.Input.Pad() and row == 2, false)
     end
     if not isNew then f.hideButton.label:SetText(wheel.hidden and "Show wheel" or "Hide wheel") end
     -- The box over the wheel: naming
