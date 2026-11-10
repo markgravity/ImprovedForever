@@ -1,5 +1,35 @@
 # Changelog
 
+## Core 0.17.0
+
+- Every slider with a default has a reset icon (a circular arrow) right of its title; X on the pad. A reset-all icon sits at the right end of a section's title.
+- The side tabs' "more tabs" marker is a gold arrow bobbing gently toward them. A click or the wheel scrolls; the tooltip has the number.
+- The config window uses the game's font on Russian, Korean and Chinese clients.
+
+## Immersion 0.10.0
+
+- **Raid markers** (skull, cross, moon...) on the nameplates and the target header, in the quest arrow's look.
+- **Combo points** as small cut gems in a V over the target diamond and the target's nameplate name; they pop in when gained and flare outward when spent.
+- **Last names** setting: a player's last name after the first on the player card, party cards, target header and nameplates (off by default).
+- **Screen width** setting keeps the player frame, chat, buffs and action bar inside 16:9 or 21:9 on an ultrawide screen.
+- Sliders to move and resize the action bar, move the party cards and resize the header; a setting for D-pad tiles as big as the face buttons'. "Reset every place and size" button in the tab.
+- The Action bar style setting is back (Diamonds by default, or Squares / Circles).
+- The player card's name is centred, and a full name fits.
+- On a short buff row the buffs no longer get only two icons.
+- Fixed: secret-number errors in combat.
+- Fixed: the NPC dialog camera follows the stick the way the game's camera does.
+
+## Wheel 0.13.0
+
+- **"Use on release"** setting: aim with the right stick and let go of it to use the slot, as the game's own wheel does. R2 then closes the wheel without using anything (off by default).
+- A reset button on the Wheel size slider.
+
+## Camp 0.1.3
+
+- The camera ends level after a scene, back to its first view; the shots' pitch goes the right way, and the game's experimental camera warning is hidden while the scene runs.
+- The scene fades the game's own HUD (player frame, action bar, buffs, chat, minimap...) when Immersion isn't there to hide it.
+- The subtitles use the game's font on Russian, Korean and Chinese clients.
+
 ## Core 0.16.0
 
 - The Wiki with the mouse, like the spellbook: a search box and a filter button at the top right. Typing searches as you go; emptying the box goes back to the page you were on. No more Search, Filters or Close buttons along the bottom (the window's close button and Escape close it).
