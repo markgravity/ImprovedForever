@@ -1,11 +1,11 @@
 -- The game's world tooltip (the unit or object under the mouse or the soft target, anchored
 -- bottom right over the action bar) drawn again as ours: to the right of your character in the
--- 3D world, between it and the quest tracker, fading in, in the Immersion look (the
--- header's gold rule fading out, the name in Morpheus, the rest small). The game's
--- stays alive but drawn at 0 (IF.Focus.Fade, an animation of ours: a property of the game's
--- frames set from addon code taints them); ours only reads its lines (text and colour).
+-- 3D world, between it and the quest tracker, as a card in the Immersion look (Card.lua: the
+-- diamond with the mob's portrait, the gold line, the words, the cinematic in and out). The
+-- game's stays alive but drawn at 0 (IF.Focus.Fade, an animation of ours: a property of the
+-- game's frames set from addon code taints them); ours only reads its lines (text and colour).
 -- A tooltip anchored to something else (an item in the bags, a button) is the game's, as it is.
--- Setting tooltip.
+-- Setting tooltipOurs.
 local IF = ImprovedForever
 local IN = IF.Interface
 
@@ -13,119 +13,73 @@ local TT = {}
 IN.Tooltip = TT
 
 local OFFSET_X, OFFSET_Y = 230, -40     -- (from the screen's middle: right of your character)
-local SLIDE = 12                        -- (it comes in from this far left)
-local FADE = 0.2                        -- (seconds, in and out)
-local PAD_Y = 6
-local MAX_W = 360
 
 local function Secret(v)
     return type(issecretvalue) == "function" and issecretvalue(v)
 end
 
-local panel = CreateFrame("Frame", "ImprovedForeverTooltip", UIParent)
-panel:SetFrameStrata("TOOLTIP")
-panel:EnableMouse(false)
-panel:SetAlpha(0)
-panel:Hide()
-
--- (the Immersion look, as the header's (HeaderSlot.lua): the spell diamonds' tile at the top with
--- the unit's portrait in it, under it a gold line running down (fading out), and the words to the
--- right of it: the name in Morpheus, the rest small with a shadow)
-local HS = IN.HeaderSlot
-local G = HS.GOLD
-local TILE = 24
-local tile = HS.Tile(panel, TILE)
-local ACROSS = tile.across
-local TEXT_X = ACROSS + 10             -- (the words' left: past the tile)
-tile:ClearAllPoints()
-tile:SetPoint("CENTER", panel, "TOPLEFT", ACROSS / 2, -ACROSS / 2)
-tile.icon:SetSize(ACROSS * 0.72, ACROSS * 0.72)
-local line = panel:CreateTexture(nil, "ARTWORK")
-line:SetWidth(1)
-line:SetPoint("TOPLEFT", panel, "TOPLEFT", ACROSS / 2, -(ACROSS + 4))
-line:SetPoint("BOTTOMLEFT", panel, "BOTTOMLEFT", ACROSS / 2, 0)
-line:SetColorTexture(G[1], G[2], G[3], 1)
-if not pcall(line.SetGradient, line, "VERTICAL", CreateColor(G[1], G[2], G[3], 0),
-    CreateColor(G[1], G[2], G[3], 0.9)) then
-    line:SetAlpha(0.6)
-end
--- (Spoken's subtitle band, as the NPC dialog draws it (NpcDialog.lua): its texture is 64 high, its
--- top 28 rows a fade in, its last 8 a fade out; the fades kept this high however tall ours is;
--- reaching past the words each side)
-local SPOKEN_BAND = "Interface\\AddOns\\Spoken\\Textures\\SubtitleBand"
-local BAND_REACH, BAND_TOP_ROWS, BAND_BOTTOM_ROWS = 40, 28 / 64, 8 / 64
-local BAND_TOP_FADE, BAND_BOTTOM_FADE = 40, 12
-local band = CreateFrame("Frame", nil, panel)
-band:SetPoint("TOPLEFT", -BAND_REACH, 10)
-band:SetPoint("BOTTOMRIGHT", BAND_REACH, -4)
-band:SetFrameLevel(math.max(0, panel:GetFrameLevel() - 1))
-do
-    local function Slice(top, bottom)
-        local t = band:CreateTexture(nil, "BACKGROUND")
-        t:SetTexture(SPOKEN_BAND)
-        t:SetTexCoord(0, 1, top, bottom)
-        return t
-    end
-    local head = Slice(0, BAND_TOP_ROWS)
-    head:SetPoint("TOPLEFT")
-    head:SetPoint("TOPRIGHT")
-    head:SetHeight(BAND_TOP_FADE)
-    local foot = Slice(1 - BAND_BOTTOM_ROWS, 1)
-    foot:SetPoint("BOTTOMLEFT")
-    foot:SetPoint("BOTTOMRIGHT")
-    foot:SetHeight(BAND_BOTTOM_FADE)
-    local middle = Slice(BAND_TOP_ROWS, 1 - BAND_BOTTOM_ROWS)
-    middle:SetPoint("TOPLEFT", head, "BOTTOMLEFT")
-    middle:SetPoint("BOTTOMRIGHT", foot, "TOPRIGHT")
-end
+local card = IN.Card.New("ImprovedForeverTooltip", { seamless = true, grace = 0.15 })
+card.panel:SetPoint("TOPLEFT", UIParent, "CENTER", OFFSET_X, OFFSET_Y + 30)
 
 -- (the portrait: the tooltip's unit's; for an object (a herb, a chest) the cursor the game draws
 -- for it (SetUnitCursorTexture: its herb, its lock), as the interact tile does; else a plain mark)
-local OBJECT_ICON = "Interface\\Icons\\INV_Misc_QuestionMark"
 local function Yes(fn, unit)
     local ok, v = pcall(fn, unit)
     return ok and not Secret(v) and v and true or false
 end
-local function Portrait()
+local function Portrait(icon)
     local ok, _, unit = pcall(GameTooltip.GetUnit, GameTooltip)
     if not (ok and type(unit) == "string" and not Secret(unit)) then unit = nil end
-    local tokens = { unit, "mouseover", "softinteract" }
-    for _, token in pairs(tokens) do
+    for _, token in pairs({ unit, "mouseover", "softinteract" }) do
         if Yes(UnitIsGameObject, token) then
-            local drawn, done = pcall(SetUnitCursorTexture, tile.icon, token, nil, nil, false)
+            local drawn, done = pcall(SetUnitCursorTexture, icon, token, nil, nil, false)
             if drawn and done and not Secret(done) then return end
         end
     end
     if unit and Yes(UnitExists, unit) then
-        SetPortraitTexture(tile.icon, unit)
-        tile.icon:SetTexCoord(0, 1, 0, 1)
+        SetPortraitTexture(icon, unit)
+        icon:SetTexCoord(0, 1, 0, 1)
     else
-        tile.icon:SetTexture(OBJECT_ICON)
-        tile.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+        IN.Card.Icon(icon, nil)
     end
 end
 
-local rows = {}
-local function Row(i)
-    local r = rows[i]
-    if r then return r end
-    r = {}
-    r.left = panel:CreateFontString(nil, "OVERLAY")
-    r.left:SetJustifyH("LEFT")
-    r.left:SetWordWrap(false)
-    r.left:SetShadowColor(0, 0, 0, 1)
-    r.left:SetShadowOffset(1, -1)
-    r.right = panel:CreateFontString(nil, "OVERLAY")
-    r.right:SetJustifyH("RIGHT")
-    r.right:SetWordWrap(false)
-    r.right:SetShadowColor(0, 0, 0, 1)
-    r.right:SetShadowOffset(1, -1)
-    for _, fs in ipairs({ r.left, r.right }) do
-        local ok = i == 1 and fs:SetFont(HS.FONT, 22, "")
-        if not ok then fs:SetFont(STANDARD_TEXT_FONT, i == 1 and 20 or 13, "") end
+-- (the tooltip's unit token, nil for an object)
+local function UnitToken()
+    local ok, _, unit = pcall(GameTooltip.GetUnit, GameTooltip)
+    if ok and type(unit) == "string" and not Secret(unit) and Yes(UnitExists, unit) then return unit end
+    return nil
+end
+
+-- (its level for the badge: { text, color }; a skull (text nil) when
+-- too high to say; nil for an object or a level we can't read)
+local function LevelInfo(unit)
+    if not unit then return nil end
+    local ok, v = pcall(UnitLevel, unit)
+    if not ok or Secret(v) or type(v) ~= "number" then return nil end
+    if v <= 0 then return { color = { 1, 0, 0 } } end
+    return { text = tostring(v), color = { 1, 0.82, 0 } }
+end
+
+-- (the lines without the level the badge says: "Level 5" goes, "Level 5 Beast" is "Beast")
+local function WithoutLevel(lines)
+    local word = _G.LEVEL
+    if type(word) ~= "string" then return lines end
+    local out = {}
+    for _, l in ipairs(lines) do
+        local text = l.lt
+        if text and text:find("^" .. word .. "%s+[%d%?]") then
+            text = text:gsub("^" .. word .. "%s+[%d%?]+%s*", "")
+            text = text:gsub("^%?%?%s*", "")
+        end
+        if text ~= "" or l.rt then
+            local copy = {}
+            for k, v in pairs(l) do copy[k] = v end
+            copy.lt = text ~= "" and text or nil
+            out[#out + 1] = copy
+        end
     end
-    rows[i] = r
-    return r
+    return #out > 0 and out or lines
 end
 
 -- (a line of the game's tooltip: its text and colour, nil when empty or a secret)
@@ -163,38 +117,6 @@ local function Signature(lines)
     return table.concat(parts, "\n")
 end
 
-local function Layout(lines)
-    local y, width = -(ACROSS / 2 - 10), 0
-    -- (the rule's own gap, then the name)
-    for i, l in ipairs(lines) do
-        local r = Row(i)
-        r.left:ClearAllPoints()
-        r.right:ClearAllPoints()
-        r.left:SetPoint("TOPLEFT", panel, "TOPLEFT", TEXT_X, y)
-        r.y = y
-        r.left:SetText(l.lt or "")
-        r.left:SetTextColor(l.lr or 1, l.lg or 1, l.lb or 1)
-        r.right:SetText(l.rt or "")
-        r.right:SetTextColor(l.rr or 1, l.rg or 1, l.rb or 1)
-        local lw, rw = r.left:GetStringWidth(), r.right:GetStringWidth()
-        width = math.max(width, lw + (l.rt and rw + 16 or 0))
-        r.left:Show()
-        r.right:SetShown(l.rt ~= nil)
-        r.h = r.left:GetStringHeight()
-        y = y - r.h - (i == 1 and 5 or 3)
-    end
-    for i = #lines + 1, #rows do
-        rows[i].left:Hide()
-        rows[i].right:Hide()
-    end
-    width = math.min(MAX_W, width)
-    panel:SetSize(TEXT_X + width, math.max(-y + PAD_Y, ACROSS + 24))
-    for i, l in ipairs(lines) do
-        local r = rows[i]
-        r.right:SetPoint("TOPRIGHT", panel, "TOPLEFT", TEXT_X + width, r.y)
-    end
-end
-
 -- (the game's tooltip is the default world one: shown, on the screen's frame)
 local function WorldTip()
     if not (IF.db and IN.Settings().tooltipOurs ~= false) then return false end
@@ -203,9 +125,27 @@ local function WorldTip()
     return ok and owner == UIParent
 end
 
-local shown, signature = 0, nil     -- (0 to 1: how far in)
-local gameFaded = false
+-- The game's own buff tooltip on the pad: with the controller on, its buff frame shows a buff's
+-- tooltip by itself, in a tooltip frame of its own (BuffFrameTooltip: bottom right, by the buffs;
+-- found by a probe). Drawn at 0 like the world one while the mouse isn't on the buff (a mouse over
+-- it is asked for). Setting hideAuraTip.
+local buffFaded = false
+local function BuffTip()
+    local tip = _G.BuffFrameTooltip
+    local hide = false
+    local pad = IF.Input and IF.Input.Pad()
+    local on = tip and IF.db and IN.Settings().hideAuraTip ~= false and pad
+    if on then
+        local ok, shown = pcall(tip.IsShown, tip)
+        hide = ok and shown == true
+    end
+    if tip and hide ~= buffFaded then
+        buffFaded = hide
+        IF.Focus.Fade(tip, hide)
+    end
+end
 
+local gameFaded = false
 local function Native(on)
     if on == gameFaded then return end
     gameFaded = on
@@ -214,29 +154,14 @@ end
 
 local ticker = CreateFrame("Frame")
 ticker:SetScript("OnUpdate", function(_, elapsed)
-    local want = WorldTip()
-    local lines = want and Lines() or nil
+    local lines = WorldTip() and Lines() or nil
+    Native(lines ~= nil)
+    BuffTip()
+    local content
     if lines then
-        local sig = Signature(lines)
-        if sig ~= signature then
-            signature = sig
-            Layout(lines)
-            Portrait()
-        end
-        Native(true)
-    else
-        Native(false)
+        local level = LevelInfo(UnitToken())
+        if level then lines = WithoutLevel(lines) end
+        content = { key = lines[1].lt or "", sig = Signature(lines) .. "#" .. (level and level.text or ""), lines = lines, portrait = Portrait, level = level }
     end
-    local step = elapsed / FADE
-    shown = lines and math.min(1, shown + step) or math.max(0, shown - step)
-    if shown <= 0 then
-        signature = nil
-        if panel:IsShown() then panel:Hide() end
-        return
-    end
-    local e = 1 - (1 - shown) * (1 - shown)
-    panel:SetAlpha(e)
-    panel:ClearAllPoints()
-    panel:SetPoint("LEFT", UIParent, "CENTER", OFFSET_X - SLIDE * (1 - e), OFFSET_Y)
-    if not panel:IsShown() then panel:Show() end
+    card:Update(elapsed, content)
 end)

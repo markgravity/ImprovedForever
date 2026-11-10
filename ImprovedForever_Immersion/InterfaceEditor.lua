@@ -363,6 +363,16 @@ local ITEMS = {
             .. "see when the next one can go. Off by default; the tiles show real cooldowns only.",
     }, Toggle("gcd", "Global cooldown", function() IN.GamepadBar.Apply() end)),
     Item({
+        key = "auraNotice", group = "bottom", section = "Buffs & cooldowns", label = "Announce buffs and debuffs you gain",
+        tip = "A buff or debuff you gain shows as a card to the left of your character: its icon, name, "
+            .. "kind, time and words. Several come one after another. Out of combat only.",
+    }, Toggle("auraNotice", "Announce buffs and debuffs you gain", function() end)),
+    Item({
+        key = "hideAuraTip", group = "bottom", section = "Buffs & cooldowns", label = "Hide the game's buff tooltip on the pad",
+        tip = "With the controller on, the game shows a buff's tooltip by itself (its focus on the buff frame). "
+            .. "On, it stays hidden unless the mouse is on the buff.",
+    }, Toggle("hideAuraTip", "Hide the game's buff tooltip on the pad", function() end)),
+    Item({
         key = "hudAuras", group = "bottom", section = "Buffs & cooldowns", label = "Buffs along the bottom (experiment)",
         tip = "An experiment. The game's buffs and debuffs moved to the bottom, between the minion and "
             .. "party cards, written into your Edit Mode layout once.",

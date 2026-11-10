@@ -130,6 +130,8 @@ local DEFAULTS = {
     padStyle = "diamond", -- its tiles: "diamond", "square" (rows and columns) or "circle" (GamepadBar.lua)
     padX = 0, padY = 0, padScale = 100, -- the action bar's place (px right, px up) and size (%)
     padPeek = true,     -- holding L2 / R2: small tiles on each tile with the other sets' cooldowns on the same slot (GamepadBar.lua)
+    hideAuraTip = true, -- on the pad, the game's own buff tooltip (shown by itself) drawn at 0 (Tooltip.lua)
+    auraNotice = true,  -- a buff or debuff you gain announced as a card left of your character (AuraNotice.lua)
     tooltipOurs = true, -- the world tooltip drawn as ours, fading in right of your character (Tooltip.lua)
     padSame = false,    -- the D-pad's tiles as big as the face buttons' (read as it loads: after a reload)
     partyX = 0, partyY = 0, -- the party cards' place, px right / up
@@ -196,6 +198,7 @@ function IN.Settings()
     db.plateLog = nil           -- (the nameplate probes' logs, done)
     db.plateFly = nil
     db.npLog = nil              -- (the nameplate probes' log, done)
+    db.tipLog = nil             -- (the tooltip probe's log, done)
     db.interface = db.interface or {}
     local settings = db.interface
     -- (the name's size default grew from 13 to 17: the old default moves up once)

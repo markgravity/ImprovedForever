@@ -24,7 +24,9 @@ PlayerCast.lua
 PlayerHealth.lua
 XPBar.lua
 GamepadBar.lua
+Card.lua
 Tooltip.lua
+AuraNotice.lua
 RecentLoot.lua
 HudLayout.lua
 AuraLabels.lua
