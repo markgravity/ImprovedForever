@@ -240,7 +240,7 @@ local ITEMS = {
     end, BottomHud, "Player frame")),
     Item({
         key = "comboPoints", group = "top", section = "Target", label = "Combo points",
-        tip = "Your combo points (a rogue's, a feral druid's) as small gold gems on the line right of the target's "
+        tip = "Your combo points (a rogue's, a feral druid's) as small red dots in an arc over the target's "
             .. "diamond.",
     }, Toggle("comboPoints", "Combo points", function() IN.ComboPoints() end)),
     Item({
