@@ -348,7 +348,8 @@ local ITEMS = {
     Item({
         key = "tooltipOurs", group = "bottom", section = "Action bar", label = "World tooltip in our look",
         tip = "The tooltip of a unit or object in the world (the game shows it bottom right, over the action "
-            .. "bar) drawn as ours instead: to the right of your character, fading in, in the HUD's look.",
+            .. "bar) drawn as ours instead: to the right of your character, fading in, in the HUD's look. Off, "
+            .. "the game's own shows, moved just above the action bar so it doesn't cover it.",
     }, Toggle("tooltipOurs", "World tooltip in our look", function() end)),
     Item({
         key = "padPeek", group = "bottom", section = "Action bar", label = "Peek at the other sets' cooldowns",

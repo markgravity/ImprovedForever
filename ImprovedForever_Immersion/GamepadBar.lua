@@ -2165,6 +2165,23 @@ function GB.Rect()
     return l, b, r, t
 end
 
+-- With our tooltip off (setting tooltipOurs, Tooltip.lua) the game's own one (bottom right) would
+-- cover the bar: it sits just above it, its right edge on the bar's, fading in. Only its own
+-- anchor, as the game sets it; one anchored to something else is left alone. The fade is an
+-- animation of ours (Focus.FadeIn), never its alpha.
+hooksecurefunc("GameTooltip_SetDefaultAnchor", function(tooltip, parent)
+    if tooltip ~= GameTooltip or parent ~= UIParent or not IF.db or IN.Settings().tooltipOurs ~= false then return end
+    pcall(function()
+        local _, _, r, t = GB.Rect()
+        if not r then return end
+        local k = UIParent:GetEffectiveScale()
+        local fresh = not tooltip:IsShown()
+        tooltip:ClearAllPoints()
+        tooltip:SetPoint("BOTTOMRIGHT", UIParent, "BOTTOMLEFT", r / k, t / k + 10)
+        if fresh then IF.Focus.FadeIn(tooltip, 0.2) end
+    end)
+end)
+
 -- Another addon's tile beside these (the Wheel module's recent slot,
 -- ImprovedForever_Wheel/RecentSlot.lua): left of the D-pad's group, the
 -- D-pad's tile size; level with its middle, or (a grid) beside its bottom
