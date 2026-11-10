@@ -70,6 +70,26 @@ for i, reverse in ipairs({ true, false }) do
     halves[i] = { holder = holder, bar = bar }
 end
 tile:SetFrameLevel(halves[1].bar:GetFrameLevel() + 4)
+-- (its raid marker over the diamond's top left: skull, cross, moon...)
+local markFrame = CreateFrame("Frame", nil, look)
+markFrame:SetAllPoints(tile)
+markFrame:SetFrameLevel(tile:GetFrameLevel() + 10)
+local mark = markFrame:CreateTexture(nil, "OVERLAY", nil, 7)
+mark:SetTexture("Interface\\TargetingFrame\\UI-RaidTargetingIcons")
+mark:SetSize(22, 22)
+mark:SetPoint("CENTER", tile, "TOPLEFT", 0, -2)
+mark:Hide()
+local function Mark(unit)
+    -- (the game answers a secret number: handed to its setter, never compared; none: nil, refused)
+    local ok, index = pcall(GetRaidTargetIndex, unit)
+    local set = ok and SetRaidTargetIconTexture and pcall(SetRaidTargetIconTexture, mark, index)
+    mark:SetShown(set and true or false)
+end
+local markEvents = CreateFrame("Frame")
+markEvents:RegisterEvent("RAID_TARGET_UPDATE")
+markEvents:SetScript("OnEvent", function()
+    if look:IsShown() and UnitExists("target") then Mark("target") end
+end)
 
 local function LineWidth(k)
     for _, h in ipairs(halves) do h.holder:SetWidth(math.max(1, (HS.RULE_W - radius) * k)) end
@@ -271,6 +291,7 @@ local function Refresh(button)
     local r, g, b = NameplateColor(unit)
     for _, h in ipairs(halves) do h.bar:SetStatusBarColor(r, g, b) end
     Level(unit)
+    if demo then mark:Hide() else Mark(unit) end
     local quests = QuestText(unit)
     quest:SetText(quests ~= "" and quests or Extras(unit))
     SetPortraitTexture(tile.icon, unit)

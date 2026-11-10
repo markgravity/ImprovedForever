@@ -79,6 +79,12 @@ local function Build()
     p.skull:SetAtlas("UI-HUD-UnitFrame-Target-HighLevelTarget_Icon", true)
     p.skull:SetPoint("CENTER", badge, "CENTER")
     p.skull:Hide()
+    -- (its raid marker, as the game gives them: skull, cross, moon...; left of the line, the badge's twin)
+    p.mark = p:CreateTexture(nil, "OVERLAY", nil, 5)
+    p.mark:SetTexture("Interface\\TargetingFrame\\UI-RaidTargetingIcons")
+    p.mark:SetSize(BADGE + 4, BADGE + 4)
+    p.mark:SetPoint("RIGHT", p, "LEFT", -2, 0)
+    p.mark:Hide()
     -- (its cast: a bar of ours, the times handed to it (secret in a fight), never compared)
     local cb = CreateFrame("StatusBar", nil, p)
     cb:SetSize(W, CAST_H)
@@ -206,6 +212,15 @@ local function Level(p, unit)
     end
 end
 
+-- The raid marker on a plate (the index can be secret in a fight: handed to the texture, never compared)
+local function Mark(p, unit)
+    -- (the game answers a secret number here: handed to its own setter, never compared; none: nil, which
+    -- the setter refuses)
+    local ok, index = pcall(GetRaidTargetIndex, unit)
+    local set = ok and SetRaidTargetIconTexture and pcall(SetRaidTargetIconTexture, p.mark, index)
+    p.mark:SetShown(set and true or false)
+end
+
 -- (drawn at its current alpha and size; none left: not shown)
 local function Draw(p)
     local a = p.alpha * (p.seen or 1)
@@ -289,6 +304,7 @@ end
 local function Refresh(p)
     local unit = p.unit
     if not unit then return end
+    Mark(p, unit)
     StyleName(p)
     Try(p.name.SetText, p.name, UnitName(unit))
     if Flag(UnitIsDeadOrGhost, unit) then
@@ -524,6 +540,7 @@ local events = CreateFrame("Frame")
 events:RegisterEvent("NAME_PLATE_UNIT_ADDED")
 events:RegisterEvent("NAME_PLATE_UNIT_REMOVED")
 events:RegisterEvent("PLAYER_TARGET_CHANGED")
+events:RegisterEvent("RAID_TARGET_UPDATE")
 -- (casts: any unit's, the ones with a plate of ours kept)
 local CAST_EVENTS = {
     UNIT_SPELLCAST_START = CastStart, UNIT_SPELLCAST_STOP = CastStart, UNIT_SPELLCAST_FAILED = CastStart,
