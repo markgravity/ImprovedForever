@@ -91,18 +91,21 @@ local function ResetPlaces()
     IN.HeaderSlot.Place()
     IF.Print("every place and size is back to its default.")
 end
-local function ResetItem(group, section)
-    return Item({
-        key = "resetPlaces" .. group, group = group, section = section, label = "Reset every place and size",
-        tip = "Puts the player frame, action bar, party cards and header back where they were, at their own "
-            .. "sizes, and the screen width to full. Out of combat only.",
-        button = "Reset all", confirm = true, confirmText = "Reset every place and size?",
-        run = function()
-            if IF.InCombat() then return IF.Print("not in a fight.") end
-            ResetPlaces()
-        end,
-    })
+-- (an icon at the right end of a section's title: its first field carries it, SettingsPage's headerAction)
+local RESET_ALL
+local function WithReset(item)
+    item.headerAction = RESET_ALL
+    return item
 end
+RESET_ALL = {
+    tip = "Reset every place and size: the player frame, action bar, party cards and header back where they were, "
+        .. "at their own sizes, and the screen width to full. Out of combat only.",
+    confirmText = "Reset every place and size?", hint = "Reset all",
+    run = function()
+        if IF.InCombat() then return IF.Print("not in a fight.") end
+        ResetPlaces()
+    end,
+}
 
 local ITEMS = {
     Item({
@@ -121,13 +124,12 @@ local ITEMS = {
         tip = "Out of reach of your longest-range harmful spell, the target's portrait turns grey and its "
             .. "health line faint.",
     }, Toggle("castRange", "Target range", function() end)),
-    Place("headerX", "Header: right", "Moves the header (the target, quest arrow, zone names, banners) to the "
-        .. "right (left with a minus), in pixels.", -900, 900, 10),
+    WithReset(Place("headerX", "Header: right", "Moves the header (the target, quest arrow, zone names, banners) to the "
+        .. "right (left with a minus), in pixels.", -900, 900, 10)),
     Place("headerY", "Header: up", "Moves the header up (down with a minus), in pixels.", -700, 100, 10),
     Slide("headerScale", "top", "Header position", "Header: size", "How big the header is (the target, quest arrow, "
         .. "zone names, banners), in percent. Out of combat only.", 50, 150, 5, Percent,
         function() IN.HeaderSlot.ApplyScale() end),
-    ResetItem("top", "Header position"),
     Item({
         key = "nameplates", group = "top", section = "Nameplates", label = "Nameplates",
         tip = "The nameplates over mobs in our look: the name in gold, a thin health line in the nameplate's "
@@ -255,17 +257,16 @@ local ITEMS = {
             ApplyBottom()
         end,
     }),
-    Place("playerX", "Player frame: right", "Moves the player frame (with its pet and party cards) to the right "
-        .. "(left with a minus), in pixels. Out of combat only.", -200, 1400, 10),
+    WithReset(Place("playerX", "Player frame: right", "Moves the player frame (with its pet and party cards) to the right "
+        .. "(left with a minus), in pixels. Out of combat only.", -200, 1400, 10)),
     Place("playerY", "Player frame: up", "Moves the player frame up (down with a minus), in pixels.", -50, 700, 10),
     Place("playerScale", "Player frame: size", "How big the player frame is, in percent. The pet and party "
         .. "cards stay the same size and follow it.", 50, 150, 5, Percent),
-    Slide("partyX", "bottom", "Party cards", "Party cards: right", "Moves the party's cards (and the party spells' "
+    WithReset(Slide("partyX", "bottom", "Party cards", "Party cards: right", "Moves the party's cards (and the party spells' "
         .. "diamond) to the right (left with a minus), in pixels.", -700, 700, 10, nil,
-        function() IN.PartyCards.Apply() end),
+        function() IN.PartyCards.Apply() end)),
     Slide("partyY", "bottom", "Party cards", "Party cards: up", "Moves the party's cards up (down with a minus), in "
         .. "pixels.", -50, 500, 10, nil, function() IN.PartyCards.Apply() end),
-    ResetItem("bottom", "Party cards"),
     -- (each piece on its own, for those who want the action bar without the rest)
     Item({
         key = "player", group = "bottom", section = "Player frame", label = "Player card and ring",
@@ -318,8 +319,8 @@ local ITEMS = {
             IN.GamepadBar.Apply()
         end,
     }),
-    Slide("padX", "bottom", "Action bar", "Action bar: right", "Moves the action bar to the right (left with a minus), "
-        .. "in pixels. Out of combat only.", -900, 300, 10, nil, function() IN.GamepadBar.Reanchor() end),
+    WithReset(Slide("padX", "bottom", "Action bar", "Action bar: right", "Moves the action bar to the right (left with a minus), "
+        .. "in pixels. Out of combat only.", -900, 300, 10, nil, function() IN.GamepadBar.Reanchor() end)),
     Slide("padY", "bottom", "Action bar", "Action bar: up", "Moves the action bar up (down with a minus), in pixels. "
         .. "Out of combat only.", -50, 700, 10, nil, function() IN.GamepadBar.Reanchor() end),
     Slide("padScale", "bottom", "Action bar", "Action bar: size", "How big the action bar is, in percent. Out of "

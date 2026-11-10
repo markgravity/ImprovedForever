@@ -29,6 +29,20 @@ local function Resolve(v)
     return v
 end
 
+-- The reset icon (a circular arrow: the game's refresh button's art), dimmed when there is nothing to reset
+local RESET_ICON = "Interface\\Buttons\\UI-RefreshButton"
+local function ResetIcon(button)
+    button.icon = button:CreateTexture(nil, "OVERLAY")
+    button.icon:SetTexture(RESET_ICON)
+    button.icon:SetPoint("CENTER")
+    button.icon:SetSize(14, 14)
+    function button:Dim(dim)
+        self.icon:SetVertexColor(dim and 0.4 or 1, dim and 0.4 or 0.82, dim and 0.4 or 0.45)
+        self.icon:SetDesaturated(dim and true or false)
+    end
+    button:Dim(false)
+end
+
 ---------------------------------------------------------------------------
 -- The fields. Each item = { key, group (its category), section (a title
 -- over it and the fields after it with the same one), label, tip, note (a
@@ -41,6 +55,8 @@ end
 --               of things to do, as "Clear the prices")
 --   a slider:   slider = { min, max, step, get, set, format(v) -> text, default }
 --               (with a default: a reset button beside it, X on the pad)
+--   headerAction = { tip, run, confirmText }: on any field of a section, an icon button at the right end
+--               of the section's title (click twice: it asks first); Y on the pad on a field of that section
 --   a button:   run(), confirm = true (asks for Cross again first)
 --   a press:    bindable, bindId (Binds.lua), binding() -> spec,
 --               keyText(size), chord, toggle (recording its own press again
@@ -288,13 +304,11 @@ local function FieldRow(parent, width, onClick, onStep, onSlide)
 
     -- (a slider with a default: its reset button, left of it)
     r.reset = CreateFrame("Button", nil, r)
-    r.reset:SetSize(22, 22)
-    r.reset:SetPoint("RIGHT", r, "RIGHT", -(12 + VALUE_W + 8 + (CONTROL_W - VALUE_W - 8) + 8), 0)
+    r.reset:SetSize(18, 18)
+    r.reset:SetPoint("LEFT", r.name, "LEFT", 0, 0)
     r.reset.bg = K.Solid(r.reset, KC.controlBg, 0.95, "BACKGROUND")
     r.reset.bg:SetAllPoints()
-    r.reset.text = r.reset:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    r.reset.text:SetPoint("CENTER", 0, 1)
-    r.reset.text:SetText("R")
+    ResetIcon(r.reset)
     r.reset:SetScript("OnClick", function() if r.slot and r.onReset then r.onReset(r.slot) end end)
     r.reset:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_TOP")
@@ -324,11 +338,7 @@ local function FieldRow(parent, width, onClick, onStep, onSlide)
         r.check:SetShown(kind == "toggle")
         r.drop:SetShown(kind == "dropdown")
         r.slider:SetShown(kind == "slider")
-        if kind ~= "slider" then
-            r.reset:Hide()
-            r.name:SetPoint("RIGHT", r, "RIGHT", -(CONTROL_W + 24), 0)
-            r.line:SetPoint("RIGHT", r, "RIGHT", -(CONTROL_W + 24), 0)
-        end
+        if kind ~= "slider" then r.reset:Hide() end
         c:SetShown((kind == "button" or kind == "binding") or (kind == "info" and item.text and item.text() ~= ""))
         self.anchor = c
         if kind == "toggle" then
@@ -356,11 +366,12 @@ local function FieldRow(parent, width, onClick, onStep, onSlide)
             r.reset:SetShown(has)
             if has then
                 local at = s.get() == s.default
-                r.reset:SetAlpha(at and 0.35 or 1)
-                r.reset.text:SetTextColor(unpack(at and KC.disabled or KC.focusText))
+                r.reset:SetAlpha(at and 0.5 or 1)
+                r.reset:Dim(at)
             end
-            r.name:SetPoint("RIGHT", r, "RIGHT", -(CONTROL_W + 24 + (has and 26 or 0)), 0)
-            r.line:SetPoint("RIGHT", r, "RIGHT", -(CONTROL_W + 24 + (has and 26 or 0)), 0)
+            -- (right of the title, as wide as the title is)
+            r.reset:ClearAllPoints()
+            r.reset:SetPoint("LEFT", r.name, "LEFT", math.ceil((r.name:GetStringWidth() or 0) + 8), 0)
             self.anchor = r.slider
             return
         end
@@ -655,8 +666,38 @@ function IF.SettingsPage(tab, GROUPS, ITEMS, hooks)
         hd.rule:SetHeight(1)
         hd.rule:SetPoint("LEFT", hd.text, "RIGHT", 10, 0)
         hd.rule:SetPoint("RIGHT", hd, "RIGHT", -4, 0)
+        -- (the section's own action, as its fields' reset buttons look)
+        hd.act = CreateFrame("Button", nil, hd)
+        hd.act:SetSize(22, 22)
+        hd.act:SetPoint("BOTTOMRIGHT", hd, "BOTTOMRIGHT", -12, 2)
+        hd.act.bg = K.Solid(hd.act, KC.controlBg, 0.95, "BACKGROUND")
+        hd.act.bg:SetAllPoints()
+        ResetIcon(hd.act)
+        hd.act:SetScript("OnClick", function(self) if self.action then G:RunHeaderAction(self.action, self.section) end end)
+        hd.act:SetScript("OnEnter", function(self)
+            GameTooltip:SetOwner(self, "ANCHOR_TOP")
+            GameTooltip:SetText(self.action and self.action.tip or "", 1, 1, 1, 1, true)
+            GameTooltip:Show()
+        end)
+        hd.act:SetScript("OnLeave", function() GameTooltip:Hide() end)
+        hd.act:Hide()
         f.heads[i] = hd
         return hd
+    end
+
+    -- A section's action, asking first (a second click, or Cross / Triangle again)
+    function G:RunHeaderAction(action, section)
+        -- (asked first: the same again within 4 seconds does it)
+        local id = "head:" .. tab.key .. ":" .. tostring(section)
+        if not (self.headAsked and self.headAsked.id == id and GetTime() - self.headAsked.at < 4) then
+            self.headAsked = { id = id, at = GetTime() }
+            menu.Toast(IF.PadText((action.confirmText or "Reset?")
+                .. (IF.Input.Pad() and " {Y} again to confirm" or " Click again to confirm")), true, 4)
+            return
+        end
+        self.headAsked = nil
+        action.run()
+        menu.Render()
     end
 
     function G:SetGroup(i)
@@ -876,7 +917,15 @@ function IF.SettingsPage(tab, GROUPS, ITEMS, hooks)
             return true
         end
         if name == "Y" then
-            if item.try then item.try() end
+            if item.try then
+                item.try()
+            else
+                local act
+                for _, other in ipairs(fields) do
+                    if other.section == item.section and other.headerAction then act = other.headerAction break end
+                end
+                if act then self:RunHeaderAction(act, item.section) end
+            end
             return true
         end
         if name == "UP" or name == "DOWN" then
@@ -917,6 +966,14 @@ function IF.SettingsPage(tab, GROUPS, ITEMS, hooks)
         if item.bindable and kind ~= "binding" then hints[#hints + 1] = H({ "X" }, "Record", "X") end
         if item.slider and item.slider.default ~= nil then hints[#hints + 1] = H({ "X" }, "Reset", "X") end
         if item.try then hints[#hints + 1] = H({ "Y" }, "Try it", "Y") end
+        if not item.try then
+            for _, other in ipairs(select(3, self:Item()) or {}) do
+                if other.section == item.section and other.headerAction then
+                    hints[#hints + 1] = H({ "Y" }, other.headerAction.hint or "Reset all", "Y")
+                    break
+                end
+            end
+        end
         hints[#hints + 1] = H({ "LS" }, "Category")
         hints[#hints + 1] = H({ "RS" }, "Tab")
         hints[#hints + 1] = H({ "B" }, "Close", "B")
@@ -996,7 +1053,14 @@ function IF.SettingsPage(tab, GROUPS, ITEMS, hooks)
         if not w or w <= 0 then w = 760 end
         local lines, at, section = {}, {}, nil
         for i, it in ipairs(fields) do
-            if it.section and it.section ~= section then lines[#lines + 1] = { head = it.section } end
+            if it.section and it.section ~= section then
+                local act
+                for j = i, #fields do
+                    if fields[j].section ~= it.section then break end
+                    act = act or fields[j].headerAction
+                end
+                lines[#lines + 1] = { head = it.section, action = act }
+            end
             section = it.section
             lines[#lines + 1] = { slot = i }
             at[i] = #lines
@@ -1031,6 +1095,11 @@ function IF.SettingsPage(tab, GROUPS, ITEMS, hooks)
                 hd:SetPoint("RIGHT", f.list, "RIGHT", 0, 0)
                 hd:SetHeight(heights[n])
                 hd.text:SetText(line.head)
+                hd.act.action, hd.act.section = line.action, line.head
+                hd.act:SetShown(line.action ~= nil)
+                hd.rule:ClearAllPoints()
+                hd.rule:SetPoint("LEFT", hd.text, "RIGHT", 10, 0)
+                hd.rule:SetPoint("RIGHT", hd, "RIGHT", line.action and -40 or -4, 0)
                 hd:Show()
                 y = y + heights[n] + ROW_GAP
             else
