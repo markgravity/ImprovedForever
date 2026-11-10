@@ -346,6 +346,17 @@ local ITEMS = {
         tip = "The D-pad's four tiles the same size as the face buttons' four. Takes effect after a /reload.",
     }, Toggle("padSame", "Same size", function() IF.Print("the action bar's tiles are the same size after a /reload.") end)),
     Item({
+        key = "tooltipOurs", group = "bottom", section = "Action bar", label = "World tooltip in our look",
+        tip = "The tooltip of a unit or object in the world (the game shows it bottom right, over the action "
+            .. "bar) drawn as ours instead: to the right of your character, fading in, in the HUD's look.",
+    }, Toggle("tooltipOurs", "World tooltip in our look", function() end)),
+    Item({
+        key = "padPeek", group = "bottom", section = "Action bar", label = "Peek at the other sets' cooldowns",
+        tip = "A small tile on each action tile shows the cooldown of the same slot in the other sets (the "
+            .. "plain one, L2, R2, both): cast on L2 + a button and the plain set's tile shows it cooling, "
+            .. "and holding L2 shows the plain set's. Only while a cooldown runs.",
+    }, Toggle("padPeek", "Peek at the other sets' cooldowns", function() IN.GamepadBar.Apply() end)),
+    Item({
         key = "gcd", group = "bottom", section = "Action bar", label = "Global cooldown",
         tip = "A swipe over the action bar's tiles while the global cooldown runs (after any spell), so you "
             .. "see when the next one can go. Off by default; the tiles show real cooldowns only.",
@@ -435,6 +446,11 @@ local ITEMS = {
             .. "window. Pad and mouse both work. With Spoken installed, its voice reads the words. With "
             .. "DialogueUI installed, it keeps the talking and this stays off.",
     }, Toggle("npcDialog", "NPC dialog as subtitles", function() IN.NpcDialog.Apply() end)),
+    Item({
+        key = "dialogStopVoice", group = "body", section = "NPC dialog", label = "Stop the voice when the dialog closes",
+        tip = "With Spoken installed: closing the NPC dialog (or walking away) stops the voice at once. "
+            .. "Off, the line finishes by itself.",
+    }, Toggle("dialogStopVoice", "Stop the voice when the dialog closes", function() end)),
     {
         key = "dialogX", group = "body", section = "NPC dialog", label = "NPC dialog: right",
         tip = "Moves the NPC subtitle to the right (left with a minus), in pixels.",

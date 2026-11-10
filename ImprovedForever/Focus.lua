@@ -104,6 +104,31 @@ function F.Fade(region, hide, alpha)
     end
 end
 
+-- A game frame fading in (0 to 1 over `duration`, its own alpha untouched): the same alpha
+-- animation of ours aimed at it, played again each call
+local ins = {}
+function F.FadeIn(region, duration)
+    if not (region and region.GetObjectType) then return end
+    local group = ins[region]
+    if not group then
+        local ok
+        ok, group = pcall(function()
+            local g = fader:CreateAnimationGroup()
+            local a = g:CreateAnimation("Alpha")
+            a:SetTarget(region)
+            a:SetFromAlpha(0)
+            a:SetToAlpha(1)
+            a:SetSmoothing("OUT")
+            return g
+        end)
+        if not ok or not group then return end
+        ins[region] = group
+    end
+    group:GetAnimations():SetDuration(duration or 0.2)
+    group:Stop()
+    group:Play()
+end
+
 -- A fade played again, so ours is the newest alpha animation on the frame: one of the game's own
 -- (its cast bar's FadeOutAnim, a flash) started on it after ours takes the alpha over till it ends
 function F.Refade(region)

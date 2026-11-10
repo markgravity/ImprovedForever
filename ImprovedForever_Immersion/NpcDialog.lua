@@ -1611,7 +1611,10 @@ local STICK_DEAD = 0.15
 local turning = { yaw = 0, pitch = 0 }
 
 local function Turn(axis, speed, less, more)
-    if math.abs(speed - turning[axis]) < 0.02 then return end
+    -- (a stop is never skipped: a tiny speed left running turned the camera
+    -- by itself after the window closed)
+    if speed ~= 0 and math.abs(speed - turning[axis]) < 0.02 then return end
+    if speed == turning[axis] then return end
     if speed == 0 or (speed > 0) ~= (turning[axis] > 0) then
         if turning[axis] > 0 then more.stop() elseif turning[axis] < 0 then less.stop() end
     end
@@ -1680,7 +1683,9 @@ local function Fade(native, on)
 end
 
 local function Off()
-    if current then ND.StopLine() end
+    if current then
+        if IN.Settings().dialogStopVoice ~= false then ND.StopLine() else shownClip = nil end
+    end
     if current then Fade(current.native, false) end
     Fade(nil)
     current, signature = nil, nil

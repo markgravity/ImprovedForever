@@ -122,12 +122,15 @@ local DEFAULTS = {
     questProgress = true, -- quest progress in the header's place a moment, the game's other notices under it (ours)
     zoneBanner = true,  -- the zone's name as you enter one: ours, in the quest arrow's place and look
     npcDialog = true,   -- talking to an NPC (quests, gossip) as subtitles low in the middle, Spoken's voice with it
+    dialogStopVoice = true, -- closing an NPC dialog stops the voice still speaking (off: it finishes)
     xp = true,          -- the experience as a ring round the player frame
     pad = true,         -- the gamepad bar as Hogwarts Legacy's spell diamonds, bottom right
     recentLoot = true, -- your last four loots as tiles beside the bags' one, flying in from the loot window
     recentLootKey = false, -- the binding's controller press (RecentLoot.lua)
     padStyle = "diamond", -- its tiles: "diamond", "square" (rows and columns) or "circle" (GamepadBar.lua)
     padX = 0, padY = 0, padScale = 100, -- the action bar's place (px right, px up) and size (%)
+    padPeek = true,     -- holding L2 / R2: small tiles on each tile with the other sets' cooldowns on the same slot (GamepadBar.lua)
+    tooltipOurs = true, -- the world tooltip drawn as ours, fading in right of your character (Tooltip.lua)
     padSame = false,    -- the D-pad's tiles as big as the face buttons' (read as it loads: after a reload)
     partyX = 0, partyY = 0, -- the party cards' place, px right / up
     headerScale = 100,  -- the header's size (%)
