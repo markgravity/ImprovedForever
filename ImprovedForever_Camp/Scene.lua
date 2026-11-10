@@ -1024,6 +1024,34 @@ local function MapHidden(hide)
     end
 end
 
+-- The game's own HUD, for those without our Immersion pieces (or with some of them off): faded the
+-- same way (an animation of ours), only the ones shown and not already faded by someone else, and
+-- only those we faded are given back
+local GAME_HUD = { "PlayerFrame", "TargetFrame", "FocusFrame", "PetFrame", "PartyFrame", "CompactPartyFrame",
+    "BuffFrame", "DebuffFrame", "ChatFrame1", "GeneralDockManager", "ChatFrame1EditBox", "GamepadMainActionBarFrame",
+    "MicroMenuContainer", "StatusTrackingBarManager", "MainStatusTrackingBarContainer", "EssentialCooldownViewer",
+    "UtilityCooldownViewer", "ExtraAbilityContainer", "EncounterBar", "TalkingHeadFrame" }
+local gameFaded = {}
+local function GameHud(a)
+    if a >= 1 then
+        for f in pairs(gameFaded) do IF.Focus.Fade(f, false) end
+        wipe(gameFaded)
+        return
+    end
+    for _, name in ipairs(GAME_HUD) do
+        local f = rawget(_G, name)
+        if f and not gameFaded[f] then
+            local ok, shown = pcall(f.IsShown, f)
+            local playing = IF.Focus.Faded(f)
+            local alpha = ok and shown and f.GetAlpha and f:GetAlpha() or 0
+            if shown and not playing and not (issecretvalue and issecretvalue(alpha)) and alpha > 0.05 then
+                gameFaded[f] = true
+            end
+        end
+    end
+    for f in pairs(gameFaded) do IF.Focus.Fade(f, true, a) end
+end
+
 -- (force: set again, frames shown since)
 local function HUD(a, force)
     a = math.floor(a * 20 + 0.5) / 20
@@ -1032,6 +1060,7 @@ local function HUD(a, force)
     for _, f in ipairs(Regions()) do
         if a >= 1 then IF.Focus.Fade(f, false) else IF.Focus.Fade(f, true, a) end
     end
+    GameHud(a)
     local hide = a < 0.5
     MapHidden(hide)
     if hide ~= modelsHidden or force then
