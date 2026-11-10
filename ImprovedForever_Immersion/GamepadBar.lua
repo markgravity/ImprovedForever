@@ -118,7 +118,7 @@ local GAP = 34          -- (between the two groups)
 local holder = CreateFrame("Frame", "ImprovedForeverGamepadBar", UIParent)
 holder:SetFrameStrata("LOW")
 holder:SetSize(1, 1)
-holder:SetPoint("BOTTOMRIGHT", UIParent, "BOTTOMRIGHT", -MARGIN_X, IN.BOTTOM)
+holder:SetPoint("BOTTOMRIGHT", UIParent, "BOTTOMRIGHT", -(MARGIN_X + IN.Inset()), IN.BOTTOM)
 holder:Hide()
 -- (the keyboard and mouse bar shown, not the pad's: KeyTiles below)
 local keyMode = false
@@ -2122,8 +2122,17 @@ end
 -- EDGE px to spare (and back out when there is room again).
 local EDGE = 8
 local fit = 0
+-- (the holder at the screen's right edge, in by the HUD width setting's inset: IN.Inset)
+function GB.Reanchor()
+    if InCombatLockdown() then return end
+    holder:ClearAllPoints()
+    holder:SetPoint("BOTTOMRIGHT", UIParent, "BOTTOMRIGHT", -(MARGIN_X + IN.Inset() + fit), IN.BOTTOM)
+end
+local lastInset = 0
 local function Fit()
     if not holder:IsShown() or InCombatLockdown() then return end
+    local inset = IN.Inset()
+    if inset ~= lastInset then lastInset = inset; GB.Reanchor() end
     local _, _, r = GB.Rect()
     if not r then return end
     local over = r - (UIParent:GetWidth() * UIParent:GetEffectiveScale() - EDGE)
@@ -2131,7 +2140,6 @@ local function Fit()
     local want = math.max(0, fit + over / k)
     if math.abs(want - fit) < 0.5 then return end
     fit = want
-    holder:ClearAllPoints()
-    holder:SetPoint("BOTTOMRIGHT", UIParent, "BOTTOMRIGHT", -(MARGIN_X + fit), IN.BOTTOM)
+    GB.Reanchor()
 end
 IN.Watcher("gamepad bar fit", 0.5, Fit)

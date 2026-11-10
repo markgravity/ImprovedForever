@@ -128,8 +128,9 @@ PIECES.chat = function(layout)
     local x = 35
     if anchor and anchor.point == "BOTTOMLEFT" and anchor.relativePoint == "BOTTOMLEFT"
         and type(anchor.offsetX) == "number" then
-        x = anchor.offsetX
+        x = anchor.offsetX - (IN.Settings().hudInset or 0)
     end
+    x = x + IN.Inset()
     chat.anchorInfo = Anchor("BOTTOMLEFT", "BOTTOMLEFT", x, IN.UnitFrames.PLAYER_TOP + EDIT_BOX_ROOM)
     chat.isInDefaultPosition = false
     return true
@@ -265,6 +266,7 @@ function HL.Apply()
             done[#done + 1] = piece
         end
     end
+    for _, piece in ipairs(done) do if piece == "chat" then s.hudInset = IN.Inset() end end
     if #done == 0 then return end
     C_EditMode.SaveLayouts(info)
     -- (made the active one again: the game places its frames from it now)

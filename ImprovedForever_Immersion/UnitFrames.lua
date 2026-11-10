@@ -379,7 +379,7 @@ local PLAYER_X, PLAYER_Y = 20, IN.BOTTOM
 local GOLD = { 1, 0.82, 0 }
 local GREY = { 0.45, 0.45, 0.45 }
 local player = UnitButton("ImprovedForeverPlayerFrame", "player", AVATAR_W, AVATAR_H)
-player:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", PLAYER_X, PLAYER_Y)
+player:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", PLAYER_X + IN.Inset(), PLAYER_Y)
 player:Hide()
 
 do
@@ -578,7 +578,7 @@ function UF.Place()
     local scale = math.max(0.5, math.min(1.5, (tonumber(s.playerScale) or 100) / 100))
     player:SetScale(scale)
     player:ClearAllPoints()
-    player:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", (PLAYER_X + (s.playerX or 0)) / scale,
+    player:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", (PLAYER_X + IN.Inset() + (s.playerX or 0)) / scale,
         (PLAYER_Y + (s.playerY or 0)) / scale)
     local hx, hy = HS.Offset()
     target:ClearAllPoints()

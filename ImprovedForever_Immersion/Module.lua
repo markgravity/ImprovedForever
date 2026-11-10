@@ -127,6 +127,7 @@ local DEFAULTS = {
     recentLoot = true, -- your last four loots as tiles beside the bags' one, flying in from the loot window
     recentLootKey = false, -- the binding's controller press (RecentLoot.lua)
     padStyle = "diamond", -- its tiles: "diamond", "square" (rows and columns) or "circle" (GamepadBar.lua)
+    hudWidth = "off",   -- the HUD kept inside a screen ratio on an ultrawide: "off", "16:9" or "21:9" (IN.Inset)
     tourDone = false,   -- the first-time tour has been shown (Onboarding.lua)
     partyPad = false,   -- L1 ours: + the D-pad picks a party spell, + a face button casts it on party 1 to 4 (an experiment)
 }
@@ -135,6 +136,17 @@ local DEFAULTS = {
 -- in chat: an error each tick would flood the game's error handler, whose
 -- popup then runs from our stack and taints the controller's focus
 -- (SetPreferredGamepadInteractTarget forbidden).
+-- The room left empty at each side of the screen so the HUD fits the ratio of the setting hudWidth
+-- (UIParent's units; 0 when off or the screen is no wider): the pieces anchored to the screen's
+-- left and right edges move in by it
+IN.WIDTHS = { off = false, ["16:9"] = 16 / 9, ["21:9"] = 21 / 9 }
+function IN.Inset()
+    if not IF.db then return 0 end
+    local ratio = IN.WIDTHS[IN.Settings().hudWidth or "off"]
+    if not ratio then return 0 end
+    return math.max(0, math.floor((UIParent:GetWidth() - UIParent:GetHeight() * ratio) / 2 + 0.5))
+end
+
 function IN.Watcher(name, every, fn)
     local f = CreateFrame("Frame")
     local since = 0

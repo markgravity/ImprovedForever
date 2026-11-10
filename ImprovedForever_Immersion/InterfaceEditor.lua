@@ -17,6 +17,9 @@ end
 
 local STYLE_NAMES = { diamond = "Diamonds", square = "Squares", circle = "Circles" }
 
+local WIDTH_ORDER = { "off", "16:9", "21:9" }
+local WIDTH_NAMES = { off = "Full screen", ["16:9"] = "16:9", ["21:9"] = "21:9" }
+
 local FOCUS_ORDER = { "auto", "tank", "healer", "off" }
 local FOCUS_NAMES = { auto = "Automatic", tank = "Tank", healer = "Healer", off = "Off" }
 
@@ -187,6 +190,25 @@ local ITEMS = {
         for _, key in ipairs(BOTTOM) do if s[key] then return true end end
         return false
     end, BottomHud, "Player frame")),
+    Item({
+        key = "hudWidth", group = "bottom", section = "Player frame", label = "Screen width",
+        tip = "On an ultrawide screen, keeps the player frame, chat, buffs and action bar inside a 16:9 or 21:9 "
+            .. "part in the middle, so they are not at the far edges. Full screen: to the screen's edges.",
+        value = function() return IN.Settings().hudWidth end,
+        text = function() return WIDTH_NAMES[IN.Settings().hudWidth] or "" end,
+        options = function()
+            local list = {}
+            for _, key in ipairs(WIDTH_ORDER) do list[#list + 1] = { action = key, name = WIDTH_NAMES[key] } end
+            return list
+        end,
+        choose = function(action)
+            local s = IN.Settings()
+            s.hudWidth = action
+            -- (the game's pieces placed again for the new edges)
+            s.hudPlaced = nil
+            ApplyBottom()
+        end,
+    }),
     Place("playerX", "Player frame: right", "Moves the player frame (with its pet and party cards) to the right "
         .. "(left with a minus), in pixels. Out of combat only.", -200, 1400, 10),
     Place("playerY", "Player frame: up", "Moves the player frame up (down with a minus), in pixels.", -50, 700, 10),
