@@ -412,8 +412,9 @@ do
     -- (at the name's right end, its room kept always: the frame is secure,
     -- so in combat only alpha changes, no show or placing)
     p.combat:SetPoint("BOTTOMRIGHT", p.health.box, "TOPRIGHT", -2, 1)
+    -- (centred over the card: the same room each side, the combat icon over the name's right end)
     p.name:SetPoint("BOTTOMLEFT", p.health.box, "TOPLEFT", 2, 1)
-    p.name:SetPoint("BOTTOMRIGHT", p.health.box, "TOPRIGHT", -(CARD_NAME_H + 4), 1)
+    p.name:SetPoint("BOTTOMRIGHT", p.health.box, "TOPRIGHT", -2, 1)
 end
 
 function player:Refresh(event)
