@@ -216,6 +216,19 @@ function GD.QuestName(questID)
     return QuestField(questID, "name")
 end
 
+-- The NPC that gives the quest (the first creature in startedBy), nil when an object or item does
+function GD.QuestGiverNpc(questID)
+    local by = QuestField(questID, "startedBy")
+    local creatures = type(by) == "table" and by[1]
+    return type(creatures) == "table" and creatures[1] or nil
+end
+
+-- The quest's objective lines as the data has them ({ "Kill 10 Kobolds" }), nil when none
+function GD.QuestObjectivesText(questID)
+    local v = QuestField(questID, "objectivesText")
+    return type(v) == "table" and #v > 0 and v or nil
+end
+
 -- QuestieDB's race masks (its Enum.raceMaskById when installed): one bit a
 -- race, the Skyborne past 32 bits (no 32-bit bit ops: plain arithmetic)
 local RACE_MASK = { [1] = 1, [2] = 2, [3] = 4, [4] = 8, [5] = 16, [6] = 32, [7] = 64, [8] = 128,

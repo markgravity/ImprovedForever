@@ -1,6 +1,6 @@
 -- The game's world tooltip (the unit or object under the mouse or the soft target, anchored
--- bottom right over the action bar) drawn again as ours: to the right of your character in the
--- 3D world, between it and the quest tracker, as a card in the Immersion look (Card.lua: the
+-- bottom right over the action bar) drawn again as ours: to the at the screen's top left in the
+-- 3D world, as a card in the Immersion look (Card.lua: the
 -- diamond with the mob's portrait, the gold line, the words, the cinematic in and out). The
 -- game's stays alive but drawn at 0 (IF.Focus.Fade, an animation of ours: a property of the
 -- game's frames set from addon code taints them); ours only reads its lines (text and colour).
@@ -12,15 +12,12 @@ local IN = IF.Interface
 local TT = {}
 IN.Tooltip = TT
 
-local OFFSET_X, OFFSET_Y = 230, -40     -- (from the screen's middle: right of your character)
-
 local function Secret(v)
     return type(issecretvalue) == "function" and issecretvalue(v)
 end
 
 local card = IN.Card.New("ImprovedForeverTooltip", { seamless = true, grace = 0.15 })
-card.panel:SetPoint("TOPLEFT", UIParent, "CENTER", OFFSET_X, OFFSET_Y + 30)
-TT.card = card     -- (the buff notice sits under it while it shows: AuraNotice.lua)
+TT.card = card     -- (the buff notice sits under it while it shows: Card.Dock)
 
 -- (the portrait: the tooltip's unit's; for an object (a herb, a chest) the cursor the game draws
 -- for it (SetUnitCursorTexture: its herb, its lock), as the interact tile does; else a plain mark)
@@ -164,5 +161,6 @@ ticker:SetScript("OnUpdate", function(_, elapsed)
         if level then lines = WithoutLevel(lines) end
         content = { key = lines[1].lt or "", sig = Signature(lines) .. "#" .. (level and level.text or ""), lines = lines, portrait = Portrait, level = level }
     end
+    card:Dock({ IN.QuestPeek and IN.QuestPeek.card })
     card:Update(elapsed, content)
 end)

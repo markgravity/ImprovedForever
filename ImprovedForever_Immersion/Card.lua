@@ -175,6 +175,7 @@ function Card:Layout(lines)
         r.has = false
         if snap then r.a = 0 end
     end
+    self.count = #lines
     self.tw = math.min(MAX_W, width)
     self.th = math.max(-y + PAD_Y, self.across + 24)
     if snap or not self.height then
@@ -203,8 +204,11 @@ function Card:Draw(T)
     tile:SetPoint("CENTER", self.panel, "TOPLEFT", across / 2 / scale, -across / 2 / scale)
     tile:SetAlpha(pop)
     self.line:SetHeight(math.max(0.001, self.lineH * Ease(T, 0.2, 0.75)))
+    -- (each line a beat after the one before, the last one still in before the timeline ends:
+    -- the beat shrinks for a long card)
+    local beat = math.min(0.07, 0.3 / math.max(1, (self.count or 1) - 1))
     for i, r in ipairs(self.rows) do
-        local from = 0.3 + 0.07 * (i - 1)
+        local from = 0.3 + beat * (i - 1)
         r.y = Toward(r.y or 0, r.ty or 0, k)
         r.a = Toward(r.a or 0, r.has and 1 or 0, k)
         local e = Ease(T, from, from + 0.4) * r.a
@@ -256,6 +260,27 @@ function Card:Apply(content)
         self.arrow:Hide()
     end
     self.key, self.sig = content.key, content.sig
+end
+
+-- Where the cards sit: the screen's top left corner, the top this far down (a share of the
+-- screen's height), one under another when several show. card:Dock(above): above = the cards
+-- over it, in order; it goes under the lowest one showing, else in the corner. Call each frame.
+local CORNER_X, CORNER_TOP, STACK_GAP = 40, 0.15, 14
+
+function Card:Dock(above)
+    local anchor
+    for i = #above, 1, -1 do
+        if above[i] and above[i]:Active() then anchor = above[i] break end
+    end
+    local h = UIParent:GetHeight()
+    if anchor == self.dockAnchor and h == self.dockHeight then return end
+    self.dockAnchor, self.dockHeight = anchor, h
+    self.panel:ClearAllPoints()
+    if anchor then
+        self.panel:SetPoint("TOPLEFT", anchor.panel, "BOTTOMLEFT", 0, -STACK_GAP)
+    else
+        self.panel:SetPoint("TOPLEFT", UIParent, "TOPLEFT", CORNER_X, -h * CORNER_TOP)
+    end
 end
 
 -- Is it showing anything (in, or on its way out)?

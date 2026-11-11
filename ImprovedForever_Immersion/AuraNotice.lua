@@ -1,5 +1,5 @@
--- A buff or debuff you gain, announced as a card in the Immersion look (Card.lua) on the right of
--- your character (under the world tooltip while that shows) in the 3D world, the world tooltip's mirror (Tooltip.lua): the diamond with its
+-- A buff or debuff you gain, announced as a card in the Immersion look (Card.lua) at the screen's
+-- top left (under the world tooltip while that shows) in the 3D world, the world tooltip's mirror (Tooltip.lua): the diamond with its
 -- icon, the line (gold for a buff, red for a debuff), its name and kind, its time, its words.
 -- Several at once come one after another. Only out of combat: in a fight Forever throws on
 -- every aura read from addon code, so a gain then is not announced (and not told afterwards:
@@ -10,8 +10,6 @@ local IN = IF.Interface
 local AN = {}
 IN.AuraNotice = AN
 
-local OFFSET_X, OFFSET_Y = 230, -40     -- (from the screen's middle: right of your character, as the world tooltip)
-local GAP = 14                        -- (under the world tooltip while it shows)
 local HOLD, HOLD_QUEUED = 3.5, 2.2      -- (seconds shown, alone or with others waiting)
 local BUFF, DEBUFF = { 1, 0.82, 0.45 }, { 0.9, 0.3, 0.25 }
 local DESC_WIDTH, DESC_LINES = 44, 5      -- (the words (the stats) in lines this wide, this many)
@@ -23,21 +21,7 @@ local function Secret(v)
 end
 
 local card = IN.Card.New("ImprovedForeverAuraNotice")
--- (the same side as the world tooltip: its place, or under it while that shows)
-local under
-local function Place()
-    local tip = IN.Tooltip and IN.Tooltip.card
-    local below = tip and tip:Active() or false
-    if below == under then return end
-    under = below
-    card.panel:ClearAllPoints()
-    if below then
-        card.panel:SetPoint("TOPLEFT", tip.panel, "BOTTOMLEFT", 0, -GAP)
-    else
-        card.panel:SetPoint("TOPLEFT", UIParent, "CENTER", OFFSET_X, OFFSET_Y + 30)
-    end
-end
-Place()
+AN.card = card
 
 -- (what is on you: id -> true, per kind; nil until a first look)
 local known
@@ -232,6 +216,6 @@ ticker:SetScript("OnUpdate", function(_, elapsed)
     if IF.db and IN.Settings().auraNotice == false then
         current, queue = nil, {}
     end
-    Place()
+    card:Dock({ IN.QuestPeek and IN.QuestPeek.card, IN.Tooltip and IN.Tooltip.card })
     card:Update(elapsed, current)
 end)

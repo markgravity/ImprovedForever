@@ -26,6 +26,7 @@ XPBar.lua
 GamepadBar.lua
 Card.lua
 Tooltip.lua
+QuestPeek.lua
 AuraNotice.lua
 RecentLoot.lua
 HudLayout.lua
