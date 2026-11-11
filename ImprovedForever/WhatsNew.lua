@@ -639,21 +639,46 @@ function WN.Replay()
     Start(items, true)
 end
 
--- /if whatsnew demo: a player with no version tracked: every module's every
--- page in one list, a section for each (nothing is noted as seen)
--- /if whatsnew [module]: a module's latest pages again (Core's by default)
+-- /if whatsnew demo: what a player sees after installing the new release with
+-- no version tracked: every module's every change in the data, even those
+-- of versions not installed yet (nothing is noted as seen);
+-- /if whatsnew demo update: a player who had the version installed now:
+-- only the changes of versions newer than it (what this release adds)
+-- /if whatsnew [module]: a module's latest changes again (Core's by default)
+local function Versions(name)
+    local list = {}
+    for _, v in ipairs(WN.data[name] or {}) do list[#list + 1] = v.version end
+    table.sort(list, function(a, b) return Compare(a, b) > 0 end)
+    return list
+end
+
 IF.AddCommand("whatsnew", function(args)
     local want = args and args[1]
     if want and want:lower() == "demo" then
-        local items = {}
+        local update = args[2] and args[2]:lower() == "update"
+        local list = {}
         for _, name in ipairs(WN.Names()) do
-            local pages, version = PagesFor(name, nil, Installed(name), true)
-            if #pages > 0 then
-                items[#items + 1] = { module = name, pages = pages, version = version, all = true }
+            local versions = Versions(name)
+            local newest = versions[1]
+            if newest then
+                if update then
+                    -- (the modules this release brings new changes to: newer than installed)
+                    local now = Installed(name)
+                    local before = now or versions[2] or "0"
+                    local pages = (not now or Compare(newest, now) > 0) and PagesFor(name, before, newest) or {}
+                    if #pages > 0 then
+                        list[#list + 1] = { module = name, pages = pages, version = newest, seen = before }
+                    end
+                else
+                    local pages = PagesFor(name, nil, newest, true)
+                    if #pages > 0 then
+                        list[#list + 1] = { module = name, pages = pages, version = newest, all = true }
+                    end
+                end
             end
         end
-        if #items == 0 then return IF.Print("What's new: no pages") end
-        return Start(items, true)
+        if #list == 0 then return IF.Print("What's new: no pages") end
+        return Start(list, true)
     end
     local module
     for name in pairs(WN.data) do
@@ -669,4 +694,4 @@ IF.AddCommand("whatsnew", function(args)
     if #pages == 0 then pages, version = PagesFor(module) end
     if #pages == 0 then return IF.Print("What's new: no pages for " .. module) end
     Start({ { module = module, pages = pages, version = version } }, true)
-end, "[module | demo]: play a module's what's new again, or every module's pages in one list")
+end, "[module | demo [update]]: play a module's what's new again, or what a player sees after installing the new release (demo: with no version tracked; demo update: from the version before)")
