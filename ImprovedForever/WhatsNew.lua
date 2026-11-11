@@ -344,6 +344,24 @@ local LEGEND = {
 }
 local legend = IF.InputLegend(root)
 
+-- (with the mouse and keyboard: the game's X at the top right, no legend)
+local close
+do
+    local ok, b = pcall(CreateFrame, "Button", nil, root, "UIPanelCloseButton")
+    if ok and b then
+        close = b
+    else
+        close = CreateFrame("Button", nil, root)
+        close:SetSize(24, 24)
+        local x = close:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+        x:SetPoint("CENTER")
+        x:SetText("X")
+    end
+    close:SetFrameLevel(root:GetFrameLevel() + 10)
+    close:ClearAllPoints()
+    close:SetPoint("TOPRIGHT", root, "TOPRIGHT", 6, 8)
+end
+
 -- Where everything sits: the header, the revealed cards one under another,
 -- the reveal button under them, then Close; the panel as tall as that, in
 -- the sidebar's corner
@@ -409,11 +427,11 @@ local function Layout()
     root:SetHeight(HEAD_H + viewH)
     scrollMax = math.max(0, contentH - viewH)
     Scrolled()
+    local pad = IF.Input.Pad()
     legend:ClearAllPoints()
     legend:SetPoint("TOPLEFT", root, "BOTTOMLEFT", 0, -8)
-    legend.row:ClearAllPoints()
-    legend.row:SetPoint("TOPLEFT", root, "BOTTOMLEFT", 0, -8)
-    legend:Set(LEGEND)
+    legend:Set(pad and LEGEND or nil)
+    close:SetShown(not pad)
     local x, top, scale = Corner()
     root:SetScale(scale)
     root:ClearAllPoints()
@@ -477,9 +495,7 @@ local function Press(key)
         Finish()
     end
 end
-legend:SetPress(function(key, down)
-    if not down then Press(key) end
-end)
+close:SetScript("OnClick", function() Press("PAD2") end)
 
 ---------------------------------------------------------------------------
 -- The pad: taken only while it is up
