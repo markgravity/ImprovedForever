@@ -4,9 +4,9 @@
 -- the module's name in Morpheus, then a card for each page, one under
 -- another: the spell diamond with the page's picture, a gold line running
 -- down from it, the page's name and two lines to the right. The cards play
--- in as the quest cards do, one at a time: click, the diamond under the
--- last or A reveals the next; up / down (the D-pad) pick one (a module's
--- example of it, when it gave one, to the right); Close, B or Esc end it.
+-- in as the quest cards do, one after another, all of them shown; up / down
+-- (the D-pad) pick one (a module's example of it, when it gave one, to the
+-- right); the game's button legend under them: Close, B or Esc end it.
 -- * The pages live here, in WhatsNewData.lua, per module and version
 --   (IF.WhatsNew.Add); a module may add a live example of its own by key
 --   (IF.WhatsNew.Example(key, build(stageFrame))).
@@ -28,6 +28,7 @@ local NEXT_DELAY = 1.2                  -- (between two modules' tours)
 local FADE = 0.35
 
 -- (the sidebar's cards, as Immersion's Card.lua has them)
+local CARD_BEAT = 0.25                 -- (seconds between one card starting and the next)
 local IN_TIME = 0.6                     -- (seconds a card takes to play in)
 local ROW_SLIDE = 12                    -- (each line comes in from this far left)
 local PAD_Y, STACK_GAP = 6, 14
@@ -283,41 +284,6 @@ local function FillEntry(f, p)
     f.line:SetHeight(0.001)
 end
 
--- (the reveal button: a small diamond under the last card, bobbing and
--- pulsing so it is seen)
-local more = CreateFrame("Button", nil, root)
-more:SetSize(TILE, TILE)
-local moreTile = Tile(more, TILE - 6)
-moreTile.border:SetVertexColor(GOLD[1], GOLD[2], GOLD[3])
-moreTile.icon:SetColorTexture(0.6, 0.38, 0.05, 1)
-moreTile.icon:SetSize(moreTile.across, moreTile.across)
-local ARROW = "LevelUp-Icon-Arrow"
-if IF.HasAtlas and IF.HasAtlas(ARROW) then
-    local arrow = moreTile:CreateTexture(nil, "OVERLAY", nil, 2)
-    arrow:SetSize(moreTile.across * 0.5 * 30 / 34, moreTile.across * 0.5)
-    arrow:SetPoint("CENTER", moreTile, "CENTER", 0, -1)
-    arrow:SetColorTexture(1, 1, 1, 1)
-    local cut = moreTile:CreateMaskTexture()
-    cut:SetAtlas(ARROW)
-    cut:SetAllPoints(arrow)
-    cut:SetRotation(math.pi)
-    arrow:AddMaskTexture(cut)
-else
-    local v = Text(moreTile, FONT, 18, 1, 1, 1)
-    v:SetDrawLayer("OVERLAY", 2)
-    v:SetPoint("CENTER", moreTile, "CENTER", 0, 1)
-    v:SetText("v")
-end
-local moreGlow = moreTile:CreateTexture(nil, "OVERLAY", nil, 3)
-moreGlow:SetAtlas("gamepad-actionbar-squareslot-border-normal")
-moreGlow:SetPoint("CENTER")
-moreGlow:SetRotation(TILE_TURN)
-moreGlow:SetBlendMode("ADD")
-moreGlow:SetVertexColor(GOLD[1], GOLD[2], GOLD[3])
-more:SetScript("OnEnter", function() moreTile.border:SetVertexColor(1, 1, 1) end)
-more:SetScript("OnLeave", function() moreTile.border:SetVertexColor(GOLD[1], GOLD[2], GOLD[3]) end)
-local moreKey = Text(root, bodyFont, 14, 1, 1, 1)
-
 -- (a module's example of a page, to the right of the sidebar)
 local stage = CreateFrame("Frame", nil, root)
 stage:SetSize(STAGE_W, STAGE_H)
@@ -339,52 +305,33 @@ local function ShowExample(key)
     end
 end
 
-local function Word(size, r, g, b, glyph)
-    local btn = CreateFrame("Button", nil, root)
-    btn:SetHeight(size + 8)
-    btn.text = Text(btn, bodyFont, size, r, g, b)
-    btn.text:SetPoint("LEFT")
-    btn.color = { r, g, b }
-    btn:SetScript("OnEnter", function(self) self.text:SetTextColor(1, 1, 1) end)
-    btn:SetScript("OnLeave", function(self) self.text:SetTextColor(self.color[1], self.color[2], self.color[3]) end)
-    function btn:Set(word)
-        self.text:SetText((IF.Input.Pad() and (IF.GlyphText(glyph, size) .. " ") or "") .. word)
-        self:SetWidth(self.text:GetStringWidth())
-    end
-    return btn
-end
-local closeButton = Word(17, 0.7, 0.7, 0.7, "PAD2")
-local browse = Text(root, bodyFont, 14, 1, 1, 1)
+-- The buttons: the game's legend (the pad's prompts; with the mouse its
+-- Close button), under the cards
+local LEGEND = {
+    { "PAD2", "PAD2", "Close" },
+    { glyph = "DPAD_UD", text = "Browse", pad = true },
+}
+local legend = IF.InputLegend(root)
 
 -- Where everything sits: the header, the revealed cards one under another,
 -- the reveal button under them, then Close; the panel as tall as that, in
 -- the sidebar's corner
 local function Layout()
-    local pad = IF.Input.Pad()
-    moreKey:SetText(pad and IF.GlyphText("PAD1", 18) or "")
-    browse:SetText(pad and (IF.GlyphText("DPAD_UD", 18) .. " Browse") or "")
-    closeButton:Set(pad and "Close" or "Close  (Esc)")
     local y = -(NAME_SIZE + SMALL_SIZE + 4 + 18)
     for i, f in ipairs(entries) do
-        f:SetShown(i <= #PAGES and i <= reached)
-        if i <= #PAGES and i <= reached then
+        f:SetShown(i <= #PAGES)
+        if i <= #PAGES then
             f:ClearAllPoints()
             f:SetPoint("TOPLEFT", root, "TOPLEFT", 0, y)
-            f.top = y
             y = y - f.h - STACK_GAP
         end
     end
-    more.y = nil
-    if reached < #PAGES then
-        more.y = y - 4
-        y = y - TILE - 12
-    end
-    closeButton:ClearAllPoints()
-    closeButton:SetPoint("TOPLEFT", root, "TOPLEFT", 0, y - 4)
-    browse:ClearAllPoints()
-    browse:SetPoint("LEFT", closeButton, "RIGHT", 24, 0)
-    y = y - 4 - 25
-    root:SetHeight(-y + 6)
+    root:SetHeight(-y)
+    legend:ClearAllPoints()
+    legend:SetPoint("TOPLEFT", root, "BOTTOMLEFT", 0, -8)
+    legend.row:ClearAllPoints()
+    legend.row:SetPoint("TOPLEFT", root, "BOTTOMLEFT", 0, -8)
+    legend:Set(LEGEND)
     local x, top, scale = Corner()
     root:SetScale(scale)
     root:ClearAllPoints()
@@ -405,7 +352,7 @@ local function Finish()
     goal = 0
     page = 1
     -- (seen: this version is noted, so the module's next update shows again)
-    if tour and IF.db and tour.version then
+    if tour and IF.db and tour.version and not tour.demo then
         IF.db.whatsNew = IF.db.whatsNew or {}
         local now = Installed(tour.module)
         IF.db.whatsNew[tour.module] = now or tour.version
@@ -414,20 +361,11 @@ local function Finish()
     if #queue > 0 then C_Timer.After(NEXT_DELAY, StartNext) end
 end
 
--- (a card revealed: it plays in from now)
-local function Reveal(n)
-    for i = reached + 1, n do
-        if entries[i] then entries[i].born = GetTime() end
-    end
-    reached = math.max(reached, n)
-end
-
 function Go(n)
     if n > #PAGES then return Finish() end
     if n < 1 then return end
     local changed = n ~= page
     page = n
-    Reveal(n)
     ShowExample(PAGES[n].example)
     Layout()
     if changed and goal == 1 then PlaySound(SOUNDKIT and SOUNDKIT.IG_QUEST_LIST_SELECT or 856) end
@@ -435,9 +373,7 @@ end
 
 local function Press(key)
     if goal ~= 1 then return end
-    if key == "PAD1" then
-        if reached < #PAGES then Go(reached + 1) end
-    elseif key == "UP" then
+    if key == "UP" then
         if page > 1 then Go(page - 1) end
     elseif key == "DOWN" then
         if page < reached then Go(page + 1) end
@@ -445,10 +381,8 @@ local function Press(key)
         Finish()
     end
 end
-more:SetScript("OnClick", function() Press("PAD1") end)
-closeButton:SetScript("OnClick", function() Press("PAD2") end)
-root:SetScript("OnMouseUp", function(_, button)
-    if button == "LeftButton" then Press("PAD1") end
+legend:SetPress(function(key, down)
+    if not down then Press(key) end
 end)
 
 ---------------------------------------------------------------------------
@@ -456,7 +390,6 @@ end)
 ---------------------------------------------------------------------------
 local catcher = CreateFrame("Frame", nil, UIParent)
 catcher:SetScript("OnGamePadButtonDown", function(_, button)
-    if button == "PAD1" then Press(button) end
     if button == "PADDUP" then Press("UP") end
     if button == "PADDDOWN" then Press("DOWN") end
 end)
@@ -534,19 +467,6 @@ local function Step(elapsed)
     for i, f in ipairs(entries) do
         if f:IsShown() then Play(f, i, now) end
     end
-    local beat = (now % 1.2) / 1.2
-    more:SetShown(more.y ~= nil)
-    moreKey:SetShown(more.y ~= nil)
-    if more.y then
-        more:ClearAllPoints()
-        more:SetPoint("CENTER", root, "TOPLEFT", ACROSS / 2, more.y - TILE / 2 + 3 * math.sin(now * 5))
-        local size = (TILE - 6) * 64 / 46 * (1 + 0.8 * beat)
-        moreGlow:SetSize(size, size)
-        moreGlow:SetAlpha(0.95 * (1 - beat) ^ 1.3)
-        moreTile:SetScale(1 + 0.06 * math.sin(now * 5))
-        moreKey:ClearAllPoints()
-        moreKey:SetPoint("LEFT", more, "RIGHT", 10, 0)
-    end
 end
 
 local driver = CreateFrame("Frame")
@@ -566,7 +486,7 @@ end)
 -- Starting
 ---------------------------------------------------------------------------
 -- A tour of `pages` for a module, from the first page
-local function Start(module, pages, version, seen)
+local function Start(module, pages, version, seen, demo)
     broken = nil
     PAGES = pages
     for i, p in ipairs(PAGES) do
@@ -574,14 +494,15 @@ local function Start(module, pages, version, seen)
         FillEntry(f, p)
     end
     for i = #PAGES + 1, #entries do entries[i]:Hide() end
-    tour = { module = module, version = version, born = GetTime() }
+    tour = { module = module, version = version, born = GetTime(), demo = demo }
     headName:SetText(Title(module))
     headSmall:SetText(seen and ("What's new since " .. seen .. ": version " .. tostring(version))
         or ("What's new in version " .. tostring(version)))
     goal = 1
-    reached = 0
+    -- (every card at once, one after another a beat apart)
+    reached = #PAGES
     page = 0
-    entries[1].born = GetTime()
+    for i = 1, #PAGES do entries[i].born = GetTime() + (i - 1) * CARD_BEAT end
     local ok, err = pcall(Go, 1)
     if not ok then
         goal = 0
@@ -596,7 +517,7 @@ function StartNext()
         table.insert(queue, 1, item)
         return C_Timer.After(5, StartNext)
     end
-    Start(item.module, item.pages, item.version, item.seen)
+    Start(item.module, item.pages, item.version, item.seen, item.demo)
 end
 
 -- Modules updated since they were last seen
@@ -646,26 +567,47 @@ IF.OnLogin(function()
     end)
 end)
 
--- /if whatsnew [module]: a module's latest pages again (Core's by default,
--- else the first with pages)
+-- /if whatsnew [module]: a module's latest pages again (Core's by default);
+-- /if whatsnew demo: every module with pages one after another, as when
+-- several were updated at once (nothing is noted as seen)
+local function Names()
+    local names = {}
+    for name in pairs(WN.data) do names[#names + 1] = name end
+    table.sort(names, function(a, b)
+        if a == "Core" or b == "Core" then return a == "Core" end
+        return a < b
+    end)
+    return names
+end
+
 IF.AddCommand("whatsnew", function(args)
     local want = args and args[1]
+    if want and want:lower() == "demo" then
+        queue = {}
+        for _, name in ipairs(Names()) do
+            local pages, version = PagesFor(name, nil, Installed(name))
+            if #pages == 0 then pages, version = PagesFor(name) end
+            if #pages > 0 then
+                queue[#queue + 1] = { module = name, pages = pages, version = version, demo = true }
+            end
+        end
+        if #queue == 0 then return IF.Print("What's new: no pages") end
+        goal = 0
+        return StartNext()
+    end
     local module
     for name in pairs(WN.data) do
         if want and name:lower() == want:lower() then module = name end
     end
     if not module and not want then module = WN.data.Core and "Core" or next(WN.data) end
     if not module then
-        local names = {}
-        for name in pairs(WN.data) do names[#names + 1] = name end
-        table.sort(names)
         IF.Print("What's new: " .. (want and ("no pages for \"" .. want .. "\"") or "no pages")
-            .. ". Modules with pages: " .. table.concat(names, ", "))
+            .. ". Modules with pages: " .. table.concat(Names(), ", ") .. ", or demo")
         return
     end
     local pages, version = PagesFor(module, nil, Installed(module))
     if #pages == 0 then pages, version = PagesFor(module) end
     if #pages == 0 then return IF.Print("What's new: no pages for " .. module) end
     queue = {}
-    Start(module, pages, version)
-end, "[module]: play a module's what's new tour again")
+    Start(module, pages, version, nil, true)
+end, "[module | demo]: play a module's what's new tour again, or all modules' one after another")
