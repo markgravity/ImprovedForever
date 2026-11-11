@@ -325,10 +325,22 @@ end
 --   { name, icon, tab, spellID }
 function IF.GetSpellbookSpells()
     local spells, seen = {}, {}
-    local function add(name, icon, tab, spellID)
-        if name and not seen[name] then
-            seen[name] = true
-            spells[#spells + 1] = { name = name, icon = icon, tab = tab, spellID = spellID }
+    local function add(name, icon, tab, spellID, rank)
+        if not name then return end
+        if rank == "" then rank = nil end
+        local at = seen[name]
+        if at then
+            -- (another rank of it, the book listing them low to high: the highest known one stands
+            -- for the spell, in the place of its first; every rank kept in `ranks`)
+            local spell = spells[at]
+            if spellID then
+                spell.spellID, spell.icon = spellID, icon or spell.icon
+                spell.ranks[#spell.ranks + 1] = { id = spellID, rank = rank }
+            end
+        else
+            spells[#spells + 1] = { name = name, icon = icon, tab = tab, spellID = spellID,
+                ranks = { { id = spellID, rank = rank } } }
+            seen[name] = #spells
         end
     end
     if GetNumSpellTabs and GetSpellBookItemInfo then
@@ -337,7 +349,8 @@ function IF.GetSpellbookSpells()
             for index = (offset or 0) + 1, (offset or 0) + (numSlots or 0) do
                 local itemType, spellID = GetSpellBookItemInfo(index, "spell")
                 if itemType == "SPELL" and not (IsPassiveSpell and IsPassiveSpell(index, "spell")) then
-                    add(GetSpellBookItemName(index, "spell"), GetSpellBookItemTexture(index, "spell"), tabName, spellID)
+                    local name, rank = GetSpellBookItemName(index, "spell")
+                    add(name, GetSpellBookItemTexture(index, "spell"), tabName, spellID, rank)
                 end
             end
         end
@@ -349,7 +362,7 @@ function IF.GetSpellbookSpells()
                 for index = info.itemIndexOffset + 1, info.itemIndexOffset + info.numSpellBookItems do
                     local item = C_SpellBook.GetSpellBookItemInfo(index, bank)
                     if item and item.itemType == Enum.SpellBookItemType.Spell and not item.isPassive then
-                        add(item.name, item.iconID, info.name, item.spellID)
+                        add(item.name, item.iconID, info.name, item.spellID, item.subName)
                     end
                 end
             end
@@ -378,7 +391,8 @@ local function SpellEntries()
                 entries[#entries + 1] = { header = spell.tab or "Spells" }
                 lastTab = spell.tab
             end
-            entries[#entries + 1] = { action = "spell:" .. spell.spellID, name = spell.name, icon = spell.icon }
+            entries[#entries + 1] = { action = "spell:" .. spell.spellID, name = spell.name, icon = spell.icon,
+                ranks = #spell.ranks > 1 and spell.ranks or nil }
         end
     end
     return entries

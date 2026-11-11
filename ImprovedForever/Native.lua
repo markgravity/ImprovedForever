@@ -74,6 +74,26 @@ local function BarOffset(held)
     if #bars == 2 and bars[1] ~= bars[2] then return 3 end
 end
 
+-- The bar the modifiers held now pick (1 left, 2 right, 3 both), or nil when none is held
+function N.HeldBar()
+    if not (N.Available() and IsKeyDown) then return nil end
+    local left, right
+    for key, bar in pairs(Keys().bar) do
+        if IsKeyDown(key) then
+            if bar == 1 then left = true else right = true end
+        end
+    end
+    return (left and right and 3) or (left and 1) or (right and 2) or nil
+end
+
+-- The bar a press runs on (0 top, 1 left, 2 right, 3 both), or nil: not a crossbar press
+function N.BarOfSpec(spec)
+    if not (spec and N.Available()) then return nil end
+    local held, pressed, double = IF.Binds.Parse(spec)
+    if double or not ButtonIndex(pressed) then return nil end
+    return BarOffset(held)
+end
+
 -- A button the crossbar holds for a modifier (its left / right bar)
 function N.IsModifier(key)
     return N.Available() and BarOffset(key) ~= nil and key ~= nil

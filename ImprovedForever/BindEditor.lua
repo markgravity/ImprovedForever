@@ -186,6 +186,12 @@ local function ActionPresses()
     return map
 end
 
+local function KeyOfAction(action)
+    for key, a in pairs(IF.Override.KeySettings()) do
+        if a == action then return key end
+    end
+end
+
 -- A card's presses: a binding's own, an action's where it is
 local function PressesOf(e, map)
     if not e then return {} end
@@ -197,7 +203,24 @@ local function PressesOf(e, map)
         for _, press in ipairs((map or ActionPresses())[e.def.id] or {}) do list[#list + 1] = press end
         return list
     end
-    return (map or ActionPresses())[e.action] or {}
+    map = map or ActionPresses()
+    -- (a spell with ranks: the presses of whichever rank is on them)
+    if e.ranks then
+        local list = {}
+        for _, r in ipairs(e.ranks) do
+            for _, press in ipairs(map["spell:" .. r.id] or {}) do list[#list + 1] = press end
+        end
+        return list
+    end
+    return map[e.action] or {}
+end
+
+-- The rank of a spell card that is bound ("Rank 2"), or nil
+local function BoundRank(e, map)
+    if not (e and e.ranks) then return nil end
+    for i, r in ipairs(e.ranks) do
+        if (map["spell:" .. r.id] or {})[1] or KeyOfAction("spell:" .. r.id) then return r.rank or ("Rank " .. i) end
+    end
 end
 
 -- A card's keyboard / mouse press: a binding's, an action's key; or nil
@@ -206,6 +229,11 @@ local function KeyOf(e)
     if e.def then return B.KeyBind(e.def) end
     for key, action in pairs(IF.Override.KeySettings()) do
         if action == e.action then return key end
+        if e.ranks then
+            for _, r in ipairs(e.ranks) do
+                if action == "spell:" .. r.id then return key end
+            end
+        end
     end
 end
 
@@ -289,6 +317,7 @@ local function WithPresses(entries)
         if press then e.press = PressText(press, 14) end
         local key = not e.header and KeyOf(e)
         e.key = key and B.KeyText(key) or nil
+        e.rank = not e.header and BoundRank(e, map) or nil
         e.takesKey = TakesKey(e)
     end
     return entries
@@ -339,8 +368,9 @@ function P:OpenPicker()
         current = function() return P.selAction end,
         -- (the keyboard's drawing: its keyboard / mouse press)
         right = function(e)
-            if not (KeyView() or KeysOnly()) then return e.press end
-            return e.key or "|cff6f6452—|r"
+            local rank = e.rank and ("|cffb8a97a" .. e.rank .. "|r  ") or ""
+            if not (KeyView() or KeysOnly()) then return e.press and (rank .. e.press) or e.press end
+            return e.key and (rank .. e.key) or "|cff6f6452—|r"
         end,
         bound = function(e) return e.press ~= nil or e.key ~= nil end,
         status = function()
@@ -602,6 +632,8 @@ function P:Build(parent)
     for i = 1, 2 do
         d.hints[i] = K.Hint(d.hintRow, function(press) P:Press(press) end)
     end
+    d:EnableMouseWheel(true)
+    d:SetScript("OnMouseWheel", function(_, delta) P:RankStep(delta > 0 and -1 or 1) end)
     d:Hide()
     self.dialog = d
     f.mid:SetScript("OnSizeChanged", function() P:Layout() end)
@@ -631,6 +663,23 @@ function P:Layout()
     f.over:SetPoint("CENTER", f.group, "TOP", 0, -(ART_TOP + height / 2))
 end
 
+-- The layer the keys drawing shows ("ALT-CTRL-"), for the bar under it to follow; nil when
+-- the editor's keys aren't up
+function P:KeyLayer()
+    if not (self.frame and self.frame:IsShown() and KeyView()) then return nil end
+    return ModPrefix()
+end
+
+-- The crossbar's bar (1 left, 2 right, 3 both) the L2 / R2 held pick, for the pad's bar to
+-- show while a press is recorded on the controller; nil otherwise
+function P:PadBar()
+    if not (self.frame and self.frame:IsShown()) or KeyView() then return nil end
+    -- (only while a press is being recorded: Square)
+    if not (IF.Recorder and IF.Recorder.IsActive()) then return nil end
+    local N = IF.Native
+    return N and N.HeldBar and N.HeldBar() or nil
+end
+
 function P:Show()
     self:OpenPicker()
     self:Layout()
@@ -639,6 +688,7 @@ end
 
 -- The left stick (Menu.lua): up / down the cards
 function P:StickStep(dir)
+    if self.popup then return self:RankStep(dir) end
     self.picker:Press(dir < 0 and "UP" or "DOWN")
 end
 
@@ -664,6 +714,7 @@ function P:Confirm(text, onAccept)
     if IF.InCombat() then return end
     self.popup = { onAccept = onAccept }
     local d = self.dialog
+    d:SetTitle("Replace binding?")
     d.text:SetText(text)
     local x = 0
     for i, hint in ipairs({ K.H({ "A" }, "Replace", "A"), K.H({ "B" }, "Cancel", "B") }) do
@@ -783,6 +834,66 @@ end
 function P:Bind()
     local e = self:Entry()
     if not e or IF.InCombat() then return end
+    -- (a spell with several ranks: which one first, then the binding as for any card)
+    if e.ranks and #e.ranks > 1 then
+        return self:ChooseRank(e, function(id)
+            local copy = {}
+            for k, v in pairs(e) do copy[k] = v end
+            copy.action, copy.ranks = "spell:" .. id, nil
+            self:BindEntry(copy)
+        end)
+    end
+    self:BindEntry(e)
+end
+
+-- A spell's ranks in the box over the page: the highest on top (the first, picked), up / down
+-- (the stick, the wheel) move, Cross takes the one lit, Circle backs out
+function P:ChooseRank(e, onPick)
+    -- (Rank 1, Rank 2... then Highest, the top rank known now, picked first)
+    local list = {}
+    for i, r in ipairs(e.ranks) do list[i] = { id = r.id, rank = r.rank or ("Rank " .. i) } end
+    list[#list + 1] = { id = e.ranks[#e.ranks].id, rank = "Highest" }
+    local popup = { ranks = list, sel = #list, name = e.name }
+    -- (the box is gone by the time it answers: the table kept here)
+    popup.onAccept = function() onPick(list[popup.sel].id) end
+    self.popup = popup
+    self:DrawRanks()
+end
+
+function P:DrawRanks()
+    local popup, d = self.popup, self.dialog
+    if not (popup and popup.ranks) then return end
+    local lines = { "|cffffffff" .. (popup.name or "") .. "|r: which rank?", "" }
+    for i, r in ipairs(popup.ranks) do
+        local label = r.rank
+        lines[#lines + 1] = (i == popup.sel and "|cffffd100>  " .. label .. "|r" or "   " .. label)
+    end
+    d:SetTitle("Spell rank")
+    d.text:SetText(table.concat(lines, "\n"))
+    local x = 0
+    for i, hint in ipairs({ K.H({ "A" }, "Choose", "A"), K.H({ "B" }, "Cancel", "B") }) do
+        local h = d.hints[i]
+        h:Set(hint)
+        h:ClearAllPoints()
+        h:SetPoint("LEFT", d.hintRow, "LEFT", x, 0)
+        x = x + h:GetWidth() + 28
+    end
+    d.hintRow:SetWidth(math.max(1, x - 28))
+    d:SetHeight(math.max(150, d.text:GetStringHeight() + 112))
+    d:Show()
+    menu.Render()
+end
+
+-- Up / down in the rank box
+function P:RankStep(dir)
+    local popup = self.popup
+    if not (popup and popup.ranks) then return false end
+    popup.sel = math.max(1, math.min(#popup.ranks, popup.sel + dir))
+    self:DrawRanks()
+    return true
+end
+
+function P:BindEntry(e)
     local def = e.def
     IF.Recorder.Start({
         title = "Bind " .. (e.name or ""), chord = true, double = true,
@@ -973,6 +1084,7 @@ function P:Press(name)
     -- A confirmation up: Cross replaces, Circle backs out, the rest wait
     if self.popup then
         if name == "A" or name == "B" then self:AnswerPopup(name == "A") end
+        if name == "UP" then self:RankStep(-1) elseif name == "DOWN" then self:RankStep(1) end
         return true
     end
     -- (Circle closes: the panel's)
@@ -996,6 +1108,9 @@ end
 
 function P:Help()
     local H = K.H
+    if self.popup and self.popup.ranks then
+        return { H({ "DPAD" }, "Move"), H({ "A" }, "Choose", "A"), H({ "B" }, "Cancel", "B") }
+    end
     if self.popup then return { H({ "A" }, "Replace", "A"), H({ "B" }, "Cancel", "B") } end
     local hints = { H({ "DPAD" }, "Move"), H({ "LB", "RB" }, "List"), H({ "X" }, "Bind", "X") }
     if self.key or self.keyed then

@@ -1363,6 +1363,10 @@ end
 -- The keys held now as a key's prefix ("ALT-CTRL-"). Over the bar: none, whatever is held:
 -- Shift picks a spell up there (the game's pick-up key), it isn't a layer
 local function ModsHeld()
+    -- (the Bindings editor's keys up: the layer it shows, the chips' too)
+    local editor = IF.Binds and IF.Binds.Editor
+    local layer = editor and editor.KeyLayer and editor:KeyLayer()
+    if layer then return layer end
     if BarHovered() then return "" end
     return (IsAltKeyDown() and "ALT-" or "") .. (IsControlKeyDown() and "CTRL-" or "")
         .. (IsShiftKeyDown() and "SHIFT-" or "")
@@ -1819,6 +1823,13 @@ local function Watch()
     PlaceCatchers(keys)
     if not on then return end
     local bar = pu.activeBar
+    -- (the Bindings editor up on the pad: the bar of the press picked, as if its L2 / R2 were held)
+    local editor = IF.Binds and IF.Binds.Editor
+    local offset = editor and editor.PadBar and editor:PadBar()
+    if offset and pu.actionBars then
+        local bars = pu.actionBars
+        bar = ({ [0] = bars.topBar, bars.leftBar, bars.rightBar, bars.bottomBar })[offset] or bar
+    end
     local picking = Picking()
     swap.want = picking and 1 or 0
     local top = pu.actionBars and pu.actionBars.topBar
