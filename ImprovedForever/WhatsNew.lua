@@ -698,6 +698,23 @@ IF.OnLogin(function()
     end)
 end)
 
+-- Every module's latest pages again, in one list (the General tab's button;
+-- nothing is noted as seen)
+function WN.Replay()
+    local items = {}
+    for _, name in ipairs(WN.Names()) do
+        if Installed(name) then
+            local pages, version = PagesFor(name, nil, Installed(name))
+            if #pages == 0 then pages, version = PagesFor(name) end
+            if #pages > 0 then
+                items[#items + 1] = { module = name, pages = pages, version = version }
+            end
+        end
+    end
+    if #items == 0 then return IF.Print("What's new: no pages") end
+    Start(items, true)
+end
+
 -- /if whatsnew demo: a player with no version tracked: every module's every
 -- page in one list, a section for each (nothing is noted as seen)
 -- /if whatsnew [module]: a module's latest pages again (Core's by default)

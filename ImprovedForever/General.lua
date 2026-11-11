@@ -36,10 +36,19 @@ local ITEMS = {
         end,
         confirm = true, confirmText = "Reset every binding to its default?",
     }),
+    Item({
+        key = "whatsNew", group = "updates", label = "What's new",
+        tip = "Shows what the latest version of each Improved Forever module changed, again: the list that "
+            .. "appears after an update. Nothing is noted as seen by it.",
+    }, {
+        button = "Show",
+        run = function() IF.WhatsNew.Replay() end,
+    }),
 }
 
 local GROUPS = {
     { key = "gamepad", label = "Gamepad" },
+    { key = "updates", label = "Updates" },
 }
 
 IF.GeneralEditor = IF.SettingsPage({ key = "general", label = "General", icon = IF.TEX .. "ic_mod_general", order = 5 },
