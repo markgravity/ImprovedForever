@@ -71,6 +71,16 @@ WN.Add("Immersion", "0.11.0", {
                 "Swipe to open the focused quest; L1 + R1 + D-pad Up on the pad." },
         },
         {
+            name = "Sidebar", icon = ICON .. "INV_Misc_Note_01",
+            lines = { "The cards at the top left (quests, the world tooltip, buff notices) are the sidebar.",
+                "Move it down and resize it in the Body tab: Sidebar top padding and size." },
+        },
+        {
+            name = "Spell tracker", icon = ICON .. "Spell_Holy_HolyBolt",
+            lines = { "Pick a mode for each spell you track: told when it is ready again,",
+                "or a card with its time running down from the cast until it is." },
+        },
+        {
             name = "Cooldowns", icon = ICON .. "Spell_Fire_FlameBolt",
             lines = { "Cooldowns in the buff timeline are round tiles with rings, like the gamepad bar's.",
                 "Each tile peeks the cooldowns of the same slot in your other bar sets." },
