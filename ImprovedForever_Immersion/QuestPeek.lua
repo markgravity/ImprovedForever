@@ -18,7 +18,7 @@ local ICON = "Interface\\GossipFrame\\ActiveQuestIcon"
 local MAX_CARDS = 2     -- (the focused quest's, and one group of the others')
 local cards, above = {}, {}
 for i = 1, MAX_CARDS do
-    cards[i] = IN.Card.New("ImprovedForeverQuestPeek" .. i, { seamless = true, always = true })
+    cards[i] = IN.Card.New("ImprovedForeverQuestPeek" .. i, { seamless = true, always = true, strata = "LOW" })
     above[i] = {}
     for j = 1, i - 1 do above[i][j] = cards[j] end
 end
@@ -70,7 +70,9 @@ local RESERVE, BOTTOM, LINE_H, CHROME, MIN_STORY = 330, 40, 17, 40, 2
 local CARD_STEP = 80
 local function MaxLines()
     local h = UIParent:GetHeight()
-    local avail = h * (1 - IN.Card.CORNER_TOP) - RESERVE - BOTTOM
+    -- (the cards' scale makes a line that much of the screen)
+    local scale = IN.Card.Scale()
+    local avail = h * (1 - IN.Card.Top()) / scale - RESERVE - BOTTOM
     return math.max(4, math.floor((avail - CHROME) / LINE_H))
 end
 
@@ -82,6 +84,7 @@ local function Demo()
 end
 
 local WHITE = { 1, 1, 1 }
+local DIST = { 0.45, 0.9, 0.8 }     -- (the yards left: teal, apart from the gold, the blue and the greys)
 local OPEN = { 0.55, 0.85, 1 }   -- (an open objective in the detail: light blue, apart from the story's grey and the title's gold)
 local BLANK = " "
 
@@ -143,11 +146,16 @@ local function Build(id, focused, expanded, budget)
     local head = { { lt = name, lr = GOLD[1], lg = GOLD[2], lb = GOLD[3] } }
     local QA = IN.QuestArrow
     local way = focused and QA and QA.Info and QA.Info() or nil
-    if way and way.words then
-        head[#head + 1] = { lt = way.words, lr = GOLD[1], lg = GOLD[2], lb = GOLD[3] }
-        sig[#sig + 1] = way.words
+    -- (the yards left under the name, the waypoint's words under them)
+    if way then
+        local text = IN_GAME_NAVIGATION_RANGE and IN_GAME_NAVIGATION_RANGE:format(way.short) or (way.short .. " yds")
+        head[#head + 1] = { lt = text, lr = DIST[1], lg = DIST[2], lb = DIST[3] }
+        sig[#sig + 1] = way.short
+        if way.words then
+            head[#head + 1] = { lt = way.words, lr = GOLD[1], lg = GOLD[2], lb = GOLD[3] }
+            sig[#sig + 1] = way.words
+        end
     end
-    if way then sig[#sig + 1] = way.short end
     local goals = Objectives(id, expanded, sig)
     local story = {}
     if expanded then
@@ -173,18 +181,16 @@ local function Build(id, focused, expanded, budget)
     for _, group in ipairs({ head, story, goals }) do
         for _, l in ipairs(group) do lines[#lines + 1] = l end
     end
-    -- (the diamond holds the way's arrow (QuestArrow.lua) and the badge the yards left while there's
-    -- a way to show; else the giver's portrait (the quest mark when an object or item gives it, or
-    -- its look is unknown) and the quest's level)
+    -- (the diamond holds the way's arrow (QuestArrow.lua) while there's a way to show, else the giver's
+    -- portrait (the quest mark when an object or item gives it, or its look is unknown); the badge
+    -- the quest's level)
     local level
-    if not way and info and info.level then
+    if info and info.level then
         local c = GetQuestDifficultyColor and GetQuestDifficultyColor(info.level) or GOLD
         level = { text = tostring(info.level), color = { c.r or c[1], c.g or c[2], c.b or c[3] } }
-    elseif way then
-        level = { text = way.short, color = { 1, 1, 1 } }
     end
     return {
-        key = tostring(id), sig = table.concat(sig, "|") .. (way and "" or "|nolevel" .. tostring(info and info.level)),
+        key = tostring(id), sig = table.concat(sig, "|") .. (way and "|way" or "|noway") .. "|" .. tostring(info and info.level),
         lines = lines, tint = GOLD, level = level, ids = { id }, rowOf = { [id] = 1 }, endOf = { [id] = #lines },
         portrait = function(icon)
             if way then
@@ -287,7 +293,9 @@ local function PlaceLegend()
     local h = UIParent:GetHeight()
     for _, f in ipairs({ legend, legend.row }) do
         f:ClearAllPoints()
-        f:SetPoint("BOTTOMLEFT", UIParent, "TOPLEFT", IN.Card.CORNER_X - 6, -h * IN.Card.CORNER_TOP + 18)
+        local scale = IN.Card.Scale()
+        f:SetScale(scale)
+        f:SetPoint("BOTTOMLEFT", UIParent, "TOPLEFT", (IN.Card.CORNER_X - 6) / scale, (-h * IN.Card.Top() + 18) / scale)
     end
 end
 PlaceLegend()
@@ -518,7 +526,7 @@ ticker:SetScript("OnUpdate", function(_, elapsed)
         built.expanded, built.on = expanded, on
         local quests = on and Quests(focus) or {}
         -- (the group takes what height is left under the focused quest's card)
-        local avail = UIParent:GetHeight() * (1 - IN.Card.CORNER_TOP) - RESERVE - BOTTOM
+        local avail = UIParent:GetHeight() * (1 - IN.Card.Top()) / IN.Card.Scale() - RESERVE - BOTTOM
         local first = quests[1] and Build(quests[1], quests[1] == focus, quests[1] == expanded, MaxLines()) or nil
         built[1] = first
         local left = math.floor((avail - (first and (#first.lines * LINE_H + CHROME + 14) or 0) - CHROME) / LINE_H)

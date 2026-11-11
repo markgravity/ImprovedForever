@@ -16,7 +16,7 @@ local function Secret(v)
     return type(issecretvalue) == "function" and issecretvalue(v)
 end
 
-local card = IN.Card.New("ImprovedForeverTooltip", { seamless = true, grace = 0.15 })
+local card = IN.Card.New("ImprovedForeverTooltip", { seamless = true, grace = 0.15, always = true, strata = "LOW" })
 TT.card = card     -- (the buff notice sits under it while it shows: Card.Dock)
 
 -- (the portrait: the tooltip's unit's; for an object (a herb, a chest) the cursor the game draws

@@ -34,7 +34,8 @@ function Card.New(name, opts)
     self.opts = opts or {}
     local G = HS.GOLD
     local panel = CreateFrame("Frame", name, UIParent)
-    panel:SetFrameStrata("TOOLTIP")
+    -- (opts.strata: under the game's windows, as the game's own quest tracker is (LOW); else over all)
+    panel:SetFrameStrata(self.opts.strata or "TOOLTIP")
     panel:EnableMouse(false)
     panel:Hide()
     self.panel = panel
@@ -266,7 +267,20 @@ end
 -- screen's height), one under another when several show. card:Dock(above): above = the cards
 -- over it, in order; it goes under the lowest one showing, else in the corner. Call each frame.
 local CORNER_X, CORNER_TOP, STACK_GAP = 40, 0.15, 14
-Card.CORNER_TOP, Card.CORNER_X = CORNER_TOP, CORNER_X
+Card.CORNER_X = CORNER_X
+-- The sidebar (these cards, top left): its top padding (a share of the screen's height) and its scale,
+-- the player's own (the Body tab's Sidebar: sidebarTop %, sidebarScale %)
+local sidebarRev = 0
+function Card.Top()
+    local s = IF.db and IN.Settings()
+    return math.max(0, math.min(60, tonumber(s and s.sidebarTop) or CORNER_TOP * 100)) / 100
+end
+function Card.Scale()
+    local s = IF.db and IN.Settings()
+    return math.max(0.5, math.min(1.5, (tonumber(s and s.sidebarScale) or 100) / 100))
+end
+Card.CORNER_TOP = CORNER_TOP     -- (the default)
+function Card.ApplySidebar() sidebarRev = sidebarRev + 1 end
 
 function Card:Dock(above)
     local anchor
@@ -274,13 +288,16 @@ function Card:Dock(above)
         if above[i] and above[i]:Active() then anchor = above[i] break end
     end
     local h = UIParent:GetHeight()
-    if anchor == self.dockAnchor and h == self.dockHeight then return end
-    self.dockAnchor, self.dockHeight = anchor, h
+    if anchor == self.dockAnchor and h == self.dockHeight and self.dockRev == sidebarRev then return end
+    self.dockAnchor, self.dockHeight, self.dockRev = anchor, h, sidebarRev
+    local scale = Card.Scale()
+    self.panel:SetScale(scale)
     self.panel:ClearAllPoints()
     if anchor then
         self.panel:SetPoint("TOPLEFT", anchor.panel, "BOTTOMLEFT", 0, -STACK_GAP)
     else
-        self.panel:SetPoint("TOPLEFT", UIParent, "TOPLEFT", CORNER_X, -h * CORNER_TOP)
+        -- (offsets in the card's own scale)
+        self.panel:SetPoint("TOPLEFT", UIParent, "TOPLEFT", CORNER_X / scale, -h * Card.Top() / scale)
     end
 end
 

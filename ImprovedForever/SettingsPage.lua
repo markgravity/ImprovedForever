@@ -500,15 +500,56 @@ function IF.SettingsPage(tab, GROUPS, ITEMS, hooks)
         local key = GROUPS[self.group].key
         local list = {}
         for _, item in ipairs(ITEMS) do
-            if item.group == key and not Resolve(item.hidden) then list[#list + 1] = item end
+            if item.group == key and not Resolve(item.hidden)
+                and (not (tab.tree and self.section) or item.section == self.section) then
+                list[#list + 1] = item
+            end
         end
         return list
     end
 
+    -- A category's place in the memory of where each list was (and, in a tree, its section's)
+    function G:Key()
+        return self.group .. (tab.tree and self.section and ("/" .. self.section) or "")
+    end
+
+    -- (tab.tree: the sections of the chosen category are its sub-categories in the side list, under it)
+    function G:Sections()
+        local key, out, seen = GROUPS[self.group].key, {}, {}
+        for _, item in ipairs(ITEMS) do
+            if item.group == key and item.section and not seen[item.section] and not Resolve(item.hidden) then
+                seen[item.section] = true
+                out[#out + 1] = item.section
+            end
+        end
+        return out
+    end
+
+    -- The side list's nodes: every category, and under the chosen one its sections
+    function G:Nodes()
+        local nodes = {}
+        for gi, g in ipairs(GROUPS) do
+            nodes[#nodes + 1] = { label = g.label, group = gi }
+            if tab.tree and gi == self.group then
+                for _, sec in ipairs(self:Sections()) do
+                    nodes[#nodes + 1] = { label = "    " .. sec, group = gi, section = sec }
+                end
+            end
+        end
+        return nodes
+    end
+
+    function G:NodeIndex(nodes)
+        for i, n in ipairs(nodes) do
+            if n.group == self.group and n.section == self.section then return i end
+        end
+        return 1
+    end
+
     function G:Item()
         local fields = self:Fields()
-        local i = math.max(1, math.min(#fields, self.index[self.group] or 1))
-        self.index[self.group] = i
+        local i = math.max(1, math.min(#fields, self.index[self:Key()] or 1))
+        self.index[self:Key()] = i
         return fields[i], i, fields
     end
 
@@ -521,7 +562,12 @@ function IF.SettingsPage(tab, GROUPS, ITEMS, hooks)
 
         -- Left: the categories
         f.side = UI.SideList(f, SIDE_W, 17, function(i)
-            G:SetGroup(i)
+            if tab.tree then
+                local node = G:Nodes()[i]
+                if node then G:SetGroup(node.group, node.section) end
+            else
+                G:SetGroup(i)
+            end
             menu.Render()
         end)
         f.side:SetPoint("TOPLEFT", 8, -8)
@@ -584,7 +630,7 @@ function IF.SettingsPage(tab, GROUPS, ITEMS, hooks)
         local lines, drawn = self.lines, self.drawn or 0
         if not lines or #lines == 0 then return end
         self.top = self.top or {}
-        local top = self.top[self.group] or 1
+        local top = self.top[self:Key()] or 1
         if dir > 0 and top + drawn - 1 >= #lines then return end
         top = math.max(1, math.min(#lines, top + dir))
         local _, index = self:Item()
@@ -596,14 +642,14 @@ function IF.SettingsPage(tab, GROUPS, ITEMS, hooks)
         local last = top + math.max(1, drawn - 1) - 1
         if at and at < top then
             for n = top, #lines do
-                if lines[n].slot then self.index[self.group] = lines[n].slot break end
+                if lines[n].slot then self.index[self:Key()] = lines[n].slot break end
             end
         elseif at and at > last then
             for n = last, top, -1 do
-                if lines[n].slot then self.index[self.group] = lines[n].slot break end
+                if lines[n].slot then self.index[self:Key()] = lines[n].slot break end
             end
         end
-        self.top[self.group] = top
+        self.top[self:Key()] = top
         menu.Disarm()
         menu.Render()
     end
@@ -614,7 +660,7 @@ function IF.SettingsPage(tab, GROUPS, ITEMS, hooks)
         local w = f.list:GetWidth()
         if not w or w <= 0 then w = 760 end
         local function Focus(slot)
-            G.index[G.group], G.zone = slot, "fields"
+            G.index[G:Key()], G.zone = slot, "fields"
             return (G:Item())
         end
         local r = FieldRow(f.list, w, function(slot, button)
@@ -634,7 +680,7 @@ function IF.SettingsPage(tab, GROUPS, ITEMS, hooks)
             local item = Focus(slot)
             local sl = item.slider
             value = math.floor(value / (sl.step or 1) + 0.5) * (sl.step or 1)
-            if sl and value ~= sl.get() and not Resolve(item.disabled) then sl.set(value) end
+            if sl and value ~= sl.get() and not Resolve(item.disabled) then sl.set(value) menu.Peek() end
             menu.Render()
         end)
         r.onReset = function(slot)
@@ -645,7 +691,7 @@ function IF.SettingsPage(tab, GROUPS, ITEMS, hooks)
         -- (the mouse over a field: the focus, its help on the right)
         r:HookScript("OnEnter", function(self)
             if self.slot and not IF.Input.Pad() and G.zone == "fields"
-                and self.slot ~= G.index[G.group] then
+                and self.slot ~= G.index[G:Key()] then
                 Focus(self.slot)
                 menu.Render()
             end
@@ -700,8 +746,10 @@ function IF.SettingsPage(tab, GROUPS, ITEMS, hooks)
         menu.Render()
     end
 
-    function G:SetGroup(i)
+    function G:SetGroup(i, section)
         self.group = (i - 1) % #GROUPS + 1
+        -- (a section only in a tree: the category's own, or none for all of its fields)
+        self.section = tab.tree and section or nil
         self.zone = "fields"
         menu.Disarm()
     end
@@ -709,6 +757,11 @@ function IF.SettingsPage(tab, GROUPS, ITEMS, hooks)
     -- The left stick, up / down (Menu.lua): the categories
     function G:StickStep(dir)
         if self.zone == "dropdown" then return end
+        if tab.tree then
+            local nodes = self:Nodes()
+            local node = nodes[(self:NodeIndex(nodes) - 1 + dir) % #nodes + 1]
+            return self:SetGroup(node.group, node.section)
+        end
         self:SetGroup(self.group + dir)
     end
 
@@ -733,14 +786,14 @@ function IF.SettingsPage(tab, GROUPS, ITEMS, hooks)
         if item.slider then
             local s = item.slider
             local v = math.max(s.min, math.min(s.max, s.get() + dir * (s.step or 1)))
-            if v ~= s.get() then s.set(v) end
+            if v ~= s.get() then s.set(v) menu.Peek() end
             return
         end
         local actions, at = Steps(item)
         if not actions then return end
         -- (a toggle: left off, right on; a dropdown: round from the ends)
         local next = item.onoff and (dir > 0 and "on" or "off") or actions[(at - 1 + dir) % #actions + 1]
-        if next ~= item.value() then item.choose(next) end
+        if next ~= item.value() then item.choose(next) menu.Peek() end
     end
 
     -- A slider put back to its default (X on the pad, the row's reset button)
@@ -748,7 +801,7 @@ function IF.SettingsPage(tab, GROUPS, ITEMS, hooks)
         local s = item and item.slider
         if not s or s.default == nil or Resolve(item.disabled) then return end
         if s.get() ~= s.default then
-            s.set(s.default)
+            s.set(s.default) menu.Peek()
             menu.Toast(item.label .. ": " .. (s.format and s.format(s.default) or tostring(s.default)))
         end
     end
@@ -782,7 +835,7 @@ function IF.SettingsPage(tab, GROUPS, ITEMS, hooks)
         local item = self:Item()
         local e = item.options()[self.cursor]
         if not (e and e.action) then return end
-        item.choose(e.action)
+        item.choose(e.action) menu.Peek()
         if not menu.armed then self.zone = "fields" end
     end
 
@@ -792,7 +845,7 @@ function IF.SettingsPage(tab, GROUPS, ITEMS, hooks)
         if not item or Resolve(item.disabled) then return end
         local kind = Kind(item)
         if kind == "toggle" then
-            item.choose(item.value() == "on" and "off" or "on")
+            item.choose(item.value() == "on" and "off" or "on") menu.Peek()
         elseif kind == "dropdown" then
             self:OpenDropdown(item)
         elseif kind == "button" then
@@ -929,7 +982,7 @@ function IF.SettingsPage(tab, GROUPS, ITEMS, hooks)
             return true
         end
         if name == "UP" or name == "DOWN" then
-            self.index[self.group] = math.max(1, math.min(#fields, i + (name == "UP" and -1 or 1)))
+            self.index[self:Key()] = math.max(1, math.min(#fields, i + (name == "UP" and -1 or 1)))
             menu.Disarm()
         elseif name == "LEFT" or name == "RIGHT" then
             self:Step(item, name == "LEFT" and -1 or 1)
@@ -1033,14 +1086,20 @@ function IF.SettingsPage(tab, GROUPS, ITEMS, hooks)
     function G:Render()
         local f = self.frame
         if not f or #GROUPS == 0 then return end
-        local entries = {}
-        for i, g in ipairs(GROUPS) do entries[i] = { label = g.label } end
+        local entries, selected = {}, self.group
+        if tab.tree then
+            local nodes = self:Nodes()
+            for i, n in ipairs(nodes) do entries[i] = { label = n.label } end
+            selected = self:NodeIndex(nodes)
+        else
+            for i, g in ipairs(GROUPS) do entries[i] = { label = g.label } end
+        end
         f.side:Render((IF.Input.Pad() and (IF.GlyphText("LS", 18) .. " ") or "") .. "Category", entries,
-            self.group, self.zone ~= "dropdown")
+            selected, self.zone ~= "dropdown")
 
         local item, index, fields = self:Item()
         local group = GROUPS[self.group]
-        f.status:SetText(group.label .. (group.note and ("  ·  " .. Resolve(group.note)) or "")
+        f.status:SetText(group.label .. (tab.tree and self.section and (" > " .. self.section) or "") .. (group.note and ("  ·  " .. Resolve(group.note)) or "")
             .. "  ·  " .. #fields .. (#fields == 1 and " setting" or " settings"))
 
         -- The fields, each as tall as its description, under their
@@ -1077,11 +1136,11 @@ function IF.SettingsPage(tab, GROUPS, ITEMS, hooks)
         local want = at[index] or 1
         local first = (lines[want - 1] and lines[want - 1].head) and want - 1 or want
         self.top = self.top or {}
-        local top = math.max(1, math.min(self.top[self.group] or 1, first))
+        local top = math.max(1, math.min(self.top[self:Key()] or 1, first))
         while top < want and Span(top, want) > h do top = top + 1 end
         -- (pulled back up while the rows under the last still leave room)
         while top > 1 and Span(top - 1, #lines) <= h do top = top - 1 end
-        self.top[self.group] = top
+        self.top[self:Key()] = top
         local y, shown, heads, drawn = 0, 0, 0, 0
         for n = top, #lines do
             if y + heights[n] > h and n > top then break end

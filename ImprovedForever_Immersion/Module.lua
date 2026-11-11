@@ -131,8 +131,10 @@ local DEFAULTS = {
     padX = 0, padY = 0, padScale = 100, -- the action bar's place (px right, px up) and size (%)
     hideAuraTip = true, -- on the pad, the game's own buff tooltip (shown by itself) drawn at 0 (Tooltip.lua)
     auraNotice = true,  -- a buff or debuff you gain announced as a card left of your character (AuraNotice.lua)
+    spellTracker = true, -- your chosen spells as cards right of your character: on cooldown, or their buff used up (SpellTracker.lua)
     tooltipOurs = true, -- the world tooltip drawn as ours, fading in right of your character (Tooltip.lua)
     questPeek = true,   -- the tracked quests as tooltip rows at the top left in place of the quest tracker; swipe the touchpad left to right to open the focused one (QuestPeek.lua)
+    sidebarTop = 15, sidebarScale = 100, -- the top left cards' top padding (% of the screen's height) and size (%) (Card.lua)
     padSame = false,    -- the D-pad's tiles as big as the face buttons' (read as it loads: after a reload)
     partyX = 0, partyY = 0, -- the party cards' place, px right / up
     headerScale = 100,  -- the header's size (%)

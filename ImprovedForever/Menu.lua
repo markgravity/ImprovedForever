@@ -177,7 +177,7 @@ local function Build()
     f.hintRow:SetPoint("CENTER", f.legend, "CENTER", 0, 0)
     f.hints = {}
 
-    f:SetScript("OnUpdate", function() menu.OnUpdate() end)
+    f:SetScript("OnUpdate", function(_, elapsed) menu.OnUpdate(elapsed) end)
     -- The panel takes both sticks while it is open (the camera and the
     -- character stay still): a page may point with one (the wheel editor),
     -- else the right one moves through the tabs, the left one the page's lists
@@ -251,6 +251,8 @@ function menu.Render()
     end
     for i = #hints + 1, #f.hints do f.hints[i]:Hide() end
     local rowW = math.max(1, x - 16)
+    -- (the row as wide as its hints: it is centred on the legend, and they start at its left)
+    f.hintRow:SetWidth(rowW)
     f.legend:SetWidth(math.max(500, rowW + 40))
 
     -- (a page showing the message itself, ShowsToast: none over the legend)
@@ -391,7 +393,23 @@ local function Sticks(now)
     end
 end
 
-function menu.OnUpdate()
+-- A setting changed: the window fades to see the HUD behind it (its own alpha: our frame), back
+-- when nothing has changed for a moment
+local PEEK_ALPHA, PEEK_HOLD = 0.2, 1.2
+function menu.Peek()
+    menu.peekUntil = GetTime() + PEEK_HOLD
+end
+
+function menu.OnUpdate(elapsed)
+    if frame then
+        local want = (menu.peekUntil and GetTime() < menu.peekUntil) and PEEK_ALPHA or 1
+        local a = frame:GetAlpha()
+        if math.abs(a - want) > 0.01 then
+            frame:SetAlpha(a + (want - a) * math.min(1, (elapsed or 0.016) * (want < a and 14 or 6)))
+        elseif a ~= want then
+            frame:SetAlpha(want)
+        end
+    end
     if menu.heldKeys and next(menu.heldKeys) and not InCombatLockdown() then
         for key in pairs(menu.heldKeys) do
             if not IsKeyDown(key) then

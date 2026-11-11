@@ -20,7 +20,7 @@ local function Secret(v)
     return type(issecretvalue) == "function" and issecretvalue(v)
 end
 
-local card = IN.Card.New("ImprovedForeverAuraNotice")
+local card = IN.Card.New("ImprovedForeverAuraNotice", { always = true, strata = "LOW" })
 AN.card = card
 AN.above = {}     -- (the cards over it, refilled each frame: Card.Dock)
 

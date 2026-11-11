@@ -15,6 +15,11 @@ local function Toggle(key, label, after)
     end, label)
 end
 
+-- (a check on a getter and setter of our own, not a setting's key)
+local function Toggle2(get, set)
+    return OnOff(get, set, "")
+end
+
 local STYLE_NAMES = { diamond = "Diamonds", square = "Squares", circle = "Circles" }
 
 local WIDTH_ORDER = { "off", "16:9", "21:9" }
@@ -127,6 +132,11 @@ local ITEMS = {
     WithReset(Place("headerX", "Header: right", "Moves the header (the target, quest arrow, zone names, banners) to the "
         .. "right (left with a minus), in pixels.", -900, 900, 10)),
     Place("headerY", "Header: up", "Moves the header up (down with a minus), in pixels.", -700, 100, 10),
+    Slide("sidebarTop", "body", "Sidebar", "Sidebar: top padding", "How far down the cards at the screen's top left (your "
+        .. "quests, the unit / object tooltip, buffs and debuffs) start, as a share of the screen's height.",
+        0, 50, 1, Percent, function() IN.Card.ApplySidebar() end),
+    Slide("sidebarScale", "body", "Sidebar", "Sidebar: size", "How big those cards are.",
+        50, 150, 5, Percent, function() IN.Card.ApplySidebar() end),
     Slide("headerScale", "top", "Header position", "Header: size", "How big the header is (the target, quest arrow, "
         .. "zone names, banners), in percent. Out of combat only.", 50, 150, 5, Percent,
         function() IN.HeaderSlot.ApplyScale() end),
@@ -490,7 +500,51 @@ local ITEMS = {
             format = function(n) return tostring(n) end,
         },
     },
+    Item({
+        key = "spellTracker", group = "body", section = "Spell tracker", label = "Spell tracker",
+        tip = "The spells you pick below shown as cards to the right of your character: one while its spell is "
+            .. "on cooldown, one when its buff is used up (Lightning Shield's charges gone). In a fight the "
+            .. "cooldowns run from your cast; a buff used up in a fight is told when it ends.",
+    }, Toggle("spellTracker", "Spell tracker", function() end)),
 }
+
+-- (the spells: every spell of your spellbook a row with a check, the ticked ones tracked. The rows are
+-- made ahead, each showing the spellbook's nth spell (its name and icon are set when the page asks
+-- whether the row is shown); a row past the end of the book is hidden)
+local book, bookAt
+local function Book()
+    local now = GetTime()
+    if not book or now - bookAt > 1 then
+        book, bookAt = {}, now
+        for _, spell in ipairs(IF.GetSpellbookSpells and IF.GetSpellbookSpells() or {}) do
+            if spell.spellID then book[#book + 1] = spell end
+        end
+    end
+    return book
+end
+
+for i = 1, 120 do
+    local row
+    row = Item({
+        key = "spellRow" .. i, group = "body", section = "Tracked spells", label = "",
+        tip = "Tick a spell to track it: a card shows while it is on cooldown, and when its buff (Lightning "
+            .. "Shield's charges) is used up.",
+        hidden = function()
+            local spell = Book()[i]
+            if spell then
+                row.label = (spell.icon and ("|T" .. spell.icon .. ":16|t ") or "") .. spell.name
+            end
+            return spell == nil
+        end,
+    }, Toggle2(function()
+        local spell = Book()[i]
+        return spell ~= nil and IN.SpellTracker.IsTracked(spell.name)
+    end, function(on)
+        local spell = Book()[i]
+        if spell then IN.SpellTracker.Track(spell, on) end
+    end))
+    ITEMS[#ITEMS + 1] = row
+end
 
 local GROUPS = {
     { key = "top", label = "Header" },
@@ -498,5 +552,5 @@ local GROUPS = {
     { key = "bottom", label = "Footer" },
 }
 
-IF.InterfaceEditor = IF.SettingsPage({ key = "interface", label = "Immersion", module = "interface", order = 35 },
+IF.InterfaceEditor = IF.SettingsPage({ key = "interface", label = "Immersion", module = "interface", order = 35, tree = true },
     GROUPS, ITEMS)
