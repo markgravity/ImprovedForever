@@ -1,21 +1,14 @@
--- The focused (super-tracked) quest's way, as a film's guide would show it,
--- in the header's place under the top of the screen (HeaderSlot.lua) in the
--- look of the camp's summary header (the Camp module's Scene.lua): the
--- gold rule fading out to both sides, under it the quest's name big in its
--- Morpheus, the yards left small and white under that (another zone's way
--- in: the waypoint's words small in gold last), and standing on the rule
--- the arrow: a cut gem lying on its side, seen from low behind (in
--- perspective, its faces lit, its edges the cast line's diamond's: a line
--- and a wider glow), hovering, turning as you do toward where the quest
--- leads next (its next waypoint, else its place on your zone's map, else
--- on its own zone's), coloured by how far off that way you're headed
--- (green on it, yellow, orange, red turned away). Brighter while you're
--- headed its way. In a fight only the gem, small and plain, so the
--- fight has your eyes (the same while the game names a zone you enter);
--- the target, a zone's name or a level up take its place in turn
--- (HeaderSlot.lua); gone when there's nothing to point at (no
--- focused quest, another continent, an instance), on a flight, while an
--- NPC talks (NpcDialog.lua), and once you're there (at its point, or
+-- The focused (super-tracked) quest's way, as a film's guide would show it, as the head of
+-- the quest summary card (QuestPeek.lua): over the card, in the look of the camp's summary
+-- header (the Camp module's Scene.lua): the arrow, a cut gem lying on its side, seen from low
+-- behind (in perspective, its faces lit, its edges the
+-- cast line's diamond's: a line and a wider glow), hovering, turning as you do toward where
+-- the quest leads next (its next waypoint, else its place on your zone's map, else on its
+-- own zone's), coloured by how far off that way you're headed (green on it, yellow, orange,
+-- red turned away). Brighter while you're headed its way. In a fight only the gem, small and
+-- plain. It shows and hides with the card (QA.wanted, set by QuestPeek.lua); gone when
+-- there's nothing to point at (no focused quest, another continent, an instance), on a
+-- flight, while an NPC talks (NpcDialog.lua), and once you're there (at its point, or
 -- inside its area on the map).
 -- Only read: the quest log's waypoints and map POIs, the player's map
 -- position and facing. The game's own in-world marker (SuperTrackedFrame)
@@ -69,9 +62,10 @@ end
 ---------------------------------------------------------------------------
 -- The frame: under the top, in the middle
 ---------------------------------------------------------------------------
-local frame = CreateFrame("Frame", "ImprovedForeverQuestArrow", UIParent)
+local peekCard = IN.QuestPeek and IN.QuestPeek.card
+local frame = CreateFrame("Frame", "ImprovedForeverQuestArrow", peekCard and peekCard.panel or UIParent)
 frame:SetSize(260, 120)
-frame:SetFrameStrata("LOW")
+frame:SetFrameLevel((peekCard and peekCard.panel:GetFrameLevel() or 1) + 6)
 frame:EnableMouse(false)
 frame:SetAlpha(0)
 frame:Hide()
@@ -160,8 +154,15 @@ local TOP, BOTTOM = 5, 6
 local world, screen = {}, {}
 for i = 1, 6 do world[i], screen[i] = {}, {} end
 
--- (its middle on the rule)
-frame:SetPoint("CENTER", HS.Origin, "CENTER")
+-- The arrow in the card's diamond (where the portrait would be): its middle on the diamond's middle
+-- (the gem hovers RAISE above its middle: put lower by as much), small enough to lie inside it
+local ICON_SCALE = 0.5
+local function Place(size)
+    if not peekCard then return end
+    local across = peekCard.across
+    frame:ClearAllPoints()
+    frame:SetPoint("CENTER", peekCard.panel, "TOPLEFT", across / 2, -across / 2 - RAISE * size)
+end
 
 -- The diamond turned `angle` (clockwise from straight ahead), `bob` up
 -- (screen), `bright` 0 to 1 (headed its way), in `color`, `size` times as
@@ -253,30 +254,10 @@ end
 if not canBend then shadow:Hide() end
 
 ---------------------------------------------------------------------------
--- The header: the diamond standing on the rule (the slot's,
--- HeaderSlot.lua); under it the quest's name big, the yards small and white
--- under that, then the waypoint's words (another zone's way in) small in
--- gold
+-- What the card says: the yards left (short, in the diamond's badge), another zone's waypoint words
 ---------------------------------------------------------------------------
--- (its parts, each with its own alpha: gone in a fight, and while
--- another has the header's place)
-local headerParts = {}
-
-local function Text(font, size, r, g, b)
-    local s = HS.Text(frame, font, size, r, g, b)
-    headerParts[#headerParts + 1] = { region = s, alpha = 1 }
-    return s
-end
-
-local title = Text(FONT, NAME_SIZE, HEADER_GOLD[1], HEADER_GOLD[2], HEADER_GOLD[3])
-title:SetPoint("TOP", frame, "CENTER", 0, -NAME_GAP)
-title:SetWidth(2 * RULE_W)
-local distance = Text(GameFontHighlight and GameFontHighlight:GetFont(), YARDS_SIZE, 1, 1, 1)
-distance:SetPoint("TOP", title, "BOTTOM", 0, -4)
-local words = Text(GameFontNormal and GameFontNormal:GetFont(), WORDS_SIZE, 1, 0.82, 0)
-words:SetPoint("TOP", distance, "BOTTOM", 0, -4)
-words:SetWidth(2 * RULE_W)
-
+local info      -- { short = "142", words = "..." } or nil
+function QA.Info() return info end
 
 ---------------------------------------------------------------------------
 -- Where the quest leads: its next waypoint (maybe in another zone), else
@@ -412,16 +393,13 @@ local goalAngle, yards
 local demoWay
 
 local function Read()
-    goalAngle, yards = nil, nil
+    goalAngle, yards, info = nil, nil, nil
     if demoWay then
         goalAngle, yards = demoWay.angle, demoWay.yards
-        title:SetText(demoWay.name)
-        words:SetText(demoWay.text)
-        distance:SetText(IN_GAME_NAVIGATION_RANGE and IN_GAME_NAVIGATION_RANGE:format(tostring(demoWay.yards))
-            or (demoWay.yards .. " yds"))
+        info = { short = tostring(demoWay.yards), words = demoWay.text }
         return
     end
-    if not IN.Settings().questArrow or Quiet() then return end
+    if not QA.wanted or not IN.Settings().questArrow or Quiet() then return end
     local t = Target()
     if not t then return end
     local east, north = Way(t)
@@ -441,11 +419,11 @@ local function Read()
     -- (there: at its point, or inside its area (the shape the map and the
     -- minimap draw round it): nothing more to point at)
     if yards < ARRIVED or inside then goalAngle = nil end
-    title:SetText(t.name or "")
-    words:SetText(t.text or "")
-    local yd = math.floor(yards + 0.5)
+    if not goalAngle then return end
+    -- (the yards to the nearest 5: the card isn't laid out again at every step)
+    local yd = math.floor(yards / 5 + 0.5) * 5
     local text = yd < 1000 and tostring(yd) or (AbbreviateNumbers and AbbreviateNumbers(yd) or tostring(yd))
-    distance:SetText(IN_GAME_NAVIGATION_RANGE and IN_GAME_NAVIGATION_RANGE:format(text) or (text .. " yds"))
+    info = { short = text, words = t.text }
 end
 
 -- (the colour `off` radians off the way: between the colours, 0 to pi)
@@ -458,15 +436,6 @@ local function WayColor(off)
     local a, b = WAY_COLORS[i], WAY_COLORS[i + 1]
     for k = 1, 3 do wayColor[k] = a[k] + (b[k] - a[k]) * f end
     return wayColor
-end
-
--- (the game's zone or subzone name across the top as you enter one: read,
--- never touched)
-local function ZoneText()
-    for _, f in ipairs({ ZoneTextFrame, SubZoneTextFrame }) do
-        if f and f:IsVisible() and f:GetAlpha() > 0.05 then return true end
-    end
-    return false
 end
 
 -- (a to b the short way round)
@@ -500,28 +469,18 @@ frame:SetScript("OnUpdate", function(_, elapsed)
     end
     -- (in a fight: plain and small, the header gone, eased)
     local fight = IF.InCombat() and 1 or 0
-    -- (the header's place ours or not (HeaderSlot.lua): spinning down to
-    -- nothing as another comes, back after)
-    local banner = IN.ZoneBanner
-    -- (plain too while the game's own zone name shows over it)
-    local plain = (fight == 1 or (ZoneText() and not (banner and banner.On()))) and 1 or 0
+    local plain = fight
     local calm = shown.calm + (plain - shown.calm) * k
     if math.abs(calm - plain) < 0.005 then calm = plain end
     shown.calm = calm
-    local present = HS.Presence("quest")
+    -- (in with the card)
+    local present = peekCard and peekCard.T or 0
     local gem = present
-    local parts = (1 - calm) * present
-    if parts ~= shown.parts then
-        shown.parts = parts
-        for _, part in ipairs(headerParts) do
-            part.region:SetAlpha(part.alpha * parts)
-            part.region:SetShown(parts > 0.01)
-        end
-    end
     if shown.angle then
         local breath = math.sin(GetTime() * 2.5) * (1 - calm)
         local off = math.abs((shown.angle + math.pi) % (2 * math.pi) - math.pi)
-        local size = (1 + (CALM_SIZE - 1) * calm) * math.max(0.001, gem)
+        local size = ICON_SCALE * (1 + (CALM_SIZE - 1) * calm) * math.max(0.001, gem)
+        Place(size)
         Draw(shown.angle + (1 - gem) * math.pi, BOB * breath, shown.on * (0.8 + 0.2 * breath), WayColor(off),
             size, calm)
     end
@@ -535,17 +494,11 @@ end)
 -- The tour's stand-in way on or off (Onboarding.lua)
 function QA.Demo(on)
     demoWay = on and { name = "A Threat Within", text = "Speak with Marshal McBride", yards = 142, angle = 0.5 } or nil
+    QA.demo = on and true or false
     frame:SetShown(on or IN.Settings().questArrow and true or false)
     since = POLL
     dirty = true
 end
-
--- (the header's place: wanted while there's a way to show, its rule while
--- not plain)
-HS.Add("quest", 1, {
-    wants = function() return frame:IsShown() and goalAngle ~= nil end,
-    rule = function() return shown.calm < 0.5 end,
-})
 
 ---------------------------------------------------------------------------
 -- On with the setting; ticking only while on

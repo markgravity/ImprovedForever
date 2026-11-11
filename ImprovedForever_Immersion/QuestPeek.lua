@@ -48,6 +48,13 @@ end
 
 local MAX_STORY = 30    -- (lines)
 
+-- (the tour's stand-in quest, while the arrow's demo runs: Onboarding.lua)
+local function Demo()
+    return { key = "demo", sig = "demo", tint = GOLD,
+        lines = { { lt = "A Threat Within", lr = GOLD[1], lg = GOLD[2], lb = GOLD[3] } },
+        portrait = function(icon) IN.Card.Icon(icon, ICON) end }
+end
+
 local function Content(id)
     local index = C_QuestLog.GetLogIndexForQuestID(id)
     local info = index and C_QuestLog.GetInfo(index)
@@ -65,6 +72,15 @@ local function Content(id)
         sig[#sig + 1] = "story"
         lines[#lines + 1] = { lt = " " }
     end
+    -- (the way: another zone's waypoint words under the title in gold; the yards left in the
+    -- diamond's badge, in place of the level)
+    local QA = IN.QuestArrow
+    local way = QA and QA.Info and QA.Info()
+    if way and way.words then
+        table.insert(lines, 2, { lt = way.words, lr = GOLD[1], lg = GOLD[2], lb = GOLD[3] })
+        sig[#sig + 1] = way.words
+    end
+    if way then sig[#sig + 1] = way.short end
     local first = #lines + 1
     local complete = C_QuestLog.IsComplete(id)
     for _, o in ipairs(C_QuestLog.GetQuestObjectives(id) or {}) do
@@ -85,11 +101,24 @@ local function Content(id)
         lines[#lines + 1] = { lt = _G.QUEST_WATCH_QUEST_READY or "Ready to turn in", lr = DONE[1], lg = DONE[2], lb = DONE[3] }
         sig[#sig + 1] = "done"
     end
-    local color = info.level and GetQuestDifficultyColor and GetQuestDifficultyColor(info.level) or GOLD
+    -- (the diamond holds the way's arrow (QuestArrow.lua) and the badge the yards left while there's
+    -- a way to show; else the giver's portrait (the quest mark when an object or item gives it, or
+    -- its look is unknown) and the quest's level)
+    local level
+    if not way and info.level then
+        local c = GetQuestDifficultyColor and GetQuestDifficultyColor(info.level) or GOLD
+        level = { text = tostring(info.level), color = { c.r or c[1], c.g or c[2], c.b or c[3] } }
+    elseif way then
+        level = { text = way.short, color = { 1, 1, 1 } }
+    end
     return {
-        key = tostring(id), sig = table.concat(sig, "|"), lines = lines, tint = GOLD,
-        -- (the giver's portrait; the quest mark when an object or item gives it, or its look is unknown)
+        key = tostring(id), sig = table.concat(sig, "|") .. (way and "" or "|nolevel" .. tostring(info.level)),
+        lines = lines, tint = GOLD, level = level,
         portrait = function(icon)
+            if way then
+                icon:SetTexture(nil)
+                return
+            end
             local npc = IF.GameData and IF.GameData.QuestGiverNpc and IF.GameData.QuestGiverNpc(id)
             if npc and IF.Book and IF.Book.Portrait(npc, icon) then
                 icon:SetTexCoord(0, 1, 0, 1)
@@ -97,7 +126,6 @@ local function Content(id)
                 IN.Card.Icon(icon, ICON)
             end
         end,
-        level = info.level and { text = tostring(info.level), color = { color.r or color[1], color.g or color[2], color.b or color[3] } } or nil,
     }
 end
 
@@ -128,5 +156,12 @@ ticker:SetScript("OnUpdate", function(_, elapsed)
     if on then WatchSwipe() else peek = false end
     local id = C_SuperTrack and C_SuperTrack.GetSuperTrackedQuestID and C_SuperTrack.GetSuperTrackedQuestID()
     card:Dock({})
-    card:Update(elapsed, peek and id and id ~= 0 and Content(id) or nil)
+    local content = peek and id and id ~= 0 and Content(id) or nil
+    local QA = IN.QuestArrow
+    if QA then
+        -- (the arrow reads the way only while the card shows; the tour's stand-in shows it too)
+        QA.wanted = content ~= nil or QA.demo
+        if QA.demo and not content then content = Demo() end
+    end
+    card:Update(elapsed, content)
 end)

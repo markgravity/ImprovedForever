@@ -5,8 +5,8 @@
 -- bar a ring round the player frame (XPBar.lua), the gamepad
 -- bar as two diamonds bottom right (GamepadBar.lua), the chat as only its
 -- lines while not in use (ChatView.lua, ChatFade.lua), set up in its tab
--- (InterfaceEditor.lua), the focused quest's way as a header near the top
--- with a diamond arrow on its rule (QuestArrow.lua), the zone's name in
+-- (InterfaceEditor.lua), the focused quest's way (its yards and a diamond arrow)
+-- inside its summary card (QuestPeek.lua, QuestArrow.lua), the zone's name in
 -- its place as you enter one (ZoneBanner.lua), your level ups there too
 -- (LevelBanner.lua), quest progress (QuestProgress.lua), the target
 -- (TargetHeader.lua), all taking turns (HeaderSlot.lua). The chat isn't moved: its place is Edit Mode's,
@@ -117,7 +117,7 @@ local DEFAULTS = {
     castRange = true,   -- the target header greyed while an enemy is out of your reach
     hpLine = true,      -- your health as a bar over the power line
     mpLine = true,      -- your power (mana, rage, energy...) as a bar along the screen's bottom edge
-    questArrow = true,  -- the focused quest's way: a header near the top (its name, the yards left), a diamond arrow on its rule
+    questArrow = true,  -- the focused quest's way: its name, the yards left and a diamond arrow over its summary card (QuestPeek.lua)
     levelBanner = true, -- your level ups: ours, in the header's place and look
     questProgress = true, -- quest progress in the header's place a moment, the game's other notices under it (ours)
     zoneBanner = true,  -- the zone's name as you enter one: ours, in the quest arrow's place and look

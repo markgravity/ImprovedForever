@@ -211,9 +211,14 @@ local ITEMS = {
     },
     Item({
         key = "questArrow", group = "top", section = "Quests", label = "Quest arrow",
-        tip = "The way to your focused quest near the top: its name, the yards left, and a diamond arrow "
-            .. "that turns green as you head its way. Gives its place to the target, zone names and notices.",
+        tip = "The way to your focused quest over its summary card (swipe the touchpad left to right): its name, "
+            .. "the yards left, and a diamond arrow that turns green as you head its way.",
     }, Toggle("questArrow", "Quest arrow", function() IN.QuestArrow.Apply() end)),
+    Item({
+        key = "questPeek", group = "top", section = "Global Tooltips", label = "Quest",
+        tip = "Swipe the touchpad left to right to show your focused quest as a card at the screen's top "
+            .. "left: its way (name, yards, arrow), its story and its objectives. Swipe left to right again to hide it.",
+    }, Toggle("questPeek", "Quest", function() end)),
     Item({
         key = "questProgress", group = "top", section = "Quests", label = "Quest progress",
         tip = "Quest progress (\"Crystal Fragment: 6/12\") as a header for a few seconds. /if progresstest "
@@ -346,21 +351,21 @@ local ITEMS = {
         tip = "The D-pad's four tiles the same size as the face buttons' four. Takes effect after a /reload.",
     }, Toggle("padSame", "Same size", function() IF.Print("the action bar's tiles are the same size after a /reload.") end)),
     Item({
-        key = "tooltipOurs", group = "bottom", section = "Action bar", label = "World tooltip in our look",
+        key = "tooltipOurs", group = "top", section = "Global Tooltips", label = "Unit / Object",
         tip = "The tooltip of a unit or object in the world (the game shows it bottom right, over the action "
-            .. "bar) drawn as ours instead: to the right of your character, fading in, in the HUD's look. Off, "
+            .. "bar) drawn as ours instead: a card at the screen's top left, fading in, in the HUD's look. Off, "
             .. "the game's own shows, moved just above the action bar so it doesn't cover it.",
-    }, Toggle("tooltipOurs", "World tooltip in our look", function() end)),
+    }, Toggle("tooltipOurs", "Unit / Object", function() end)),
     Item({
         key = "gcd", group = "bottom", section = "Action bar", label = "Global cooldown",
         tip = "A swipe over the action bar's tiles while the global cooldown runs (after any spell), so you "
             .. "see when the next one can go. Off by default; the tiles show real cooldowns only.",
     }, Toggle("gcd", "Global cooldown", function() IN.GamepadBar.Apply() end)),
     Item({
-        key = "auraNotice", group = "bottom", section = "Buffs & cooldowns", label = "Announce buffs and debuffs you gain",
-        tip = "A buff or debuff you gain shows as a card to the left of your character: its icon, name, "
+        key = "auraNotice", group = "top", section = "Global Tooltips", label = "Buff / Debuff",
+        tip = "A buff or debuff you gain shows as a card at the screen's top left: its icon, name, "
             .. "kind, time and words. Several come one after another. Out of combat only.",
-    }, Toggle("auraNotice", "Announce buffs and debuffs you gain", function() end)),
+    }, Toggle("auraNotice", "Buff / Debuff", function() end)),
     Item({
         key = "hideAuraTip", group = "bottom", section = "Buffs & cooldowns", label = "Hide the game's buff tooltip on the pad",
         tip = "With the controller on, the game shows a buff's tooltip by itself (its focus on the buff frame). "

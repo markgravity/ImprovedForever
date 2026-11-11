@@ -3,8 +3,7 @@
 -- a name big in Morpheus under it, small lines under that. They take it
 -- in turn, the first that wants it: a level up (LevelBanner.lua), quest
 -- progress (QuestProgress.lua), the zone's name as you enter one
--- (ZoneBanner.lua), the target (TargetHeader.lua), the focused quest's way
--- (QuestArrow.lua). One goes out before the next comes in: each owner
+-- (ZoneBanner.lua), the target (TargetHeader.lua). One goes out before the next comes in: each owner
 -- draws itself from its presence, 0 to 1 (going out: 1 to 0; coming in: 0
 -- to 1). The gold rule is the slot's own, shown while the owner in it
 -- uses it (the target's is its health), so it stays through a swap
@@ -116,7 +115,7 @@ end
 
 -- The header's size (the Immersion tab's slider, a percent): each piece of it scaled, about the header's
 -- origin (they hang off it). Out of combat only (the target's button is secure).
-local HEADER_FRAMES = { "ImprovedForeverTargetHeader", "ImprovedForeverQuestArrow", "ImprovedForeverZoneBanner",
+local HEADER_FRAMES = { "ImprovedForeverTargetHeader", "ImprovedForeverZoneBanner",
     "ImprovedForeverHeaderRule", "ImprovedForeverLevelBanner", "ImprovedForeverQuestProgress" }
 function HS.ApplyScale()
     if InCombatLockdown() or not IF.db then return end
