@@ -1,5 +1,29 @@
 # Changelog
 
+## Core 0.18.0
+
+- **What's new**: after an update, a list of what changed in each Improved Forever module you have, a card per module with its changes, at the top left. Someone who has never seen it gets every change there is. B or Esc closes it; the General tab's "What's new" button (under Updates) shows it again.
+- The settings are a tree of categories with sections inside them, and can be filtered by section. A setting with something to see peeks its effect on screen as you change it.
+- The bind editor shows the rank of the spell you bound on its action cards, with a rank picker (mouse wheel or the stick).
+
+## Immersion 0.11.0
+
+- **Quest cards**: your quests are cards at the screen's top left, the focused one first and the others together under it; swipe to open the focused quest in full, or L1 + R1 + D-pad Up on the pad. The old tracker is out of sight while they show.
+- **Sidebar** (the cards at the top left: quests, the world tooltip, buff notices): move it down and resize it in the Body tab.
+- **Cooldowns** in the buff timeline are round tiles with rings, like the gamepad bar's. Each tile of the gamepad bar peeks the cooldowns of the same slot in your other bar sets, and an action out of range greys out.
+- The world tooltip and the buff and debuff notices are one cinematic card; the game's pad buff tooltip is hidden. Cards go away while a window is open.
+- **Spell tracker**: a mode for each spell (told when it is ready again, or a card counting down until it is) instead of one switch.
+- Nameplates of what you don't target are muted, so your target stands out.
+- Your health and power lines along the bottom edge are in the fishing skill line's look: a thin frame, twenty compartments, a graded fill with a soft glow at its end, and the two lines touch.
+
+## Auction 0.9.1
+
+- Fixed: after a buy, looking the item up again no longer gets lost when the client's own list refresh comes first.
+
+## QuestTracker 0.6.6
+
+- The tracker's pad cursor and sort prompt stay away while Immersion's quest cards are the tracker.
+
 ## Core 0.17.0
 
 - Every slider with a default has a reset icon (a circular arrow) right of its title; X on the pad. A reset-all icon sits at the right end of a section's title.
