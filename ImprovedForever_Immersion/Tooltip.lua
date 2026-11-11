@@ -20,6 +20,7 @@ end
 
 local card = IN.Card.New("ImprovedForeverTooltip", { seamless = true, grace = 0.15 })
 card.panel:SetPoint("TOPLEFT", UIParent, "CENTER", OFFSET_X, OFFSET_Y + 30)
+TT.card = card     -- (the buff notice sits under it while it shows: AuraNotice.lua)
 
 -- (the portrait: the tooltip's unit's; for an object (a herb, a chest) the cursor the game draws
 -- for it (SetUnitCursorTexture: its herb, its lock), as the interact tile does; else a plain mark)

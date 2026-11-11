@@ -22,7 +22,15 @@ local NAME_SIZE = 17
 local TITLE_SIZE = 12
 local TITLE_COLOR = { 0.85, 0.82, 0.7 }   -- (the NPC's job, <Warrior Trainer>: softer than the name)
 local STEP = 0.1
-local OTHER_SCALE, OTHER_ALPHA = 0.8, 0.85
+local OTHER_SCALE, OTHER_ALPHA = 0.8, 0.6
+local OTHER_MUTE, OTHER_DIM = 0.55, 0.75   -- (a non-target's colours: this much toward grey, then this bright)
+
+-- A non-target's colour, muted so your target's plate stands out
+local function Mute(r, g, b)
+    local grey = 0.3 * r + 0.59 * g + 0.11 * b
+    local k = 1 - OTHER_MUTE
+    return (grey + (r - grey) * k) * OTHER_DIM, (grey + (g - grey) * k) * OTHER_DIM, (grey + (b - grey) * k) * OTHER_DIM
+end
 local BAR_GAP = 7                    -- (between the health line and what's over it)
 local PLATE_DROP = 34                -- (ours sits this far under the game's plate centre: closer to the head)
 local FADE_SPEED = 8                    -- (how fast alpha and size ease)
@@ -337,6 +345,7 @@ local function Refresh(p)
     local unit = p.unit
     if not unit then return end
     StyleName(p)
+    local target = Flag(IsTarget, unit)
     Try(p.name.SetText, p.name, IN.DisplayName(unit))
     Mark(p, unit)
     p.comboN = nil
@@ -345,6 +354,7 @@ local function Refresh(p)
         p.name:SetTextColor(0.5, 0.5, 0.5)
     else
         local r, g, b = NameColor(unit)
+        if not target then r, g, b = Mute(r, g, b) end
         p.name:SetTextColor(r, g, b)
     end
     -- (the health line off, for NPCs and players apart: the name alone)
@@ -396,6 +406,7 @@ local function Refresh(p)
         p.bar:SetValue(0)
     end
     local r, g, b = TH.NameplateColor(unit, IN.Settings().nameplateClassColors == false)
+    if not target then r, g, b = Mute(r, g, b) end
     p.bar:SetStatusBarColor(r, g, b)
     if showBar then
         Level(p, unit)
@@ -404,7 +415,6 @@ local function Refresh(p)
         p.level:SetText("")
     end
     -- (your target's at full size, the others softer: eased on a change)
-    local target = Flag(IsTarget, unit)
     p.goalAlpha = target and 1 or OTHER_ALPHA
     p.goalScale = target and 1 or OTHER_SCALE
     p:SetFrameLevel(target and 20 or 10)
