@@ -42,7 +42,12 @@ local ITEMS = {
             .. "appears after an update. Nothing is noted as seen by it.",
     }, {
         button = "Show",
-        run = function() IF.WhatsNew.Replay() end,
+        run = function()
+            -- (the config window closed first: the list shows in its place, the pad
+            -- handed back before the tour takes it)
+            if IF.Menu and IF.Menu.Close then IF.Menu.Close() end
+            C_Timer.After(0.2, function() IF.WhatsNew.Replay() end)
+        end,
     }),
 }
 
