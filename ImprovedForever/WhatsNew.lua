@@ -24,7 +24,6 @@ local WN = {}
 IF.WhatsNew = WN
 
 local START_DELAY = 8                   -- (seconds after login, then once out of a fight)
-local NEXT_DELAY = 1.2                  -- (between two modules' tours)
 local FADE = 0.35
 
 -- (the sidebar's cards, as Immersion's Card.lua has them)
@@ -102,9 +101,10 @@ local function Compare(a, b)
     return 0
 end
 
--- The pages of a module's versions in (seen, now], the newest version first
--- (all of the latest when `seen` is nil)
-local function PagesFor(module, seen, now)
+-- The pages of a module's versions in (seen, now], the newest version first;
+-- with no `seen`: only the latest version's, or every version's with `all`
+-- (a player with no version tracked). Each page tagged with its version.
+local function PagesFor(module, seen, now, all)
     local versions = {}
     for _, v in ipairs(WN.data[module] or {}) do
         if (not seen or Compare(v.version, seen) > 0) and (not now or Compare(v.version, now) <= 0) then
@@ -112,10 +112,13 @@ local function PagesFor(module, seen, now)
         end
     end
     table.sort(versions, function(a, b) return Compare(a.version, b.version) > 0 end)
-    if not seen then versions = { versions[1] } end
+    if not seen and not all then versions = { versions[1] } end
     local pages = {}
     for _, v in ipairs(versions) do
-        for _, p in ipairs(v.pages) do pages[#pages + 1] = p end
+        for _, p in ipairs(v.pages) do
+            pages[#pages + 1] = { name = p.name, icon = p.icon, lines = p.lines, example = p.example,
+                version = v.version }
+        end
     end
     return pages, versions[1] and versions[1].version
 end
@@ -224,13 +227,15 @@ local headSmall = Text(root, bodyFont, SMALL_SIZE, 1, 1, 1)
 headSmall:SetPoint("TOPLEFT", headName, "BOTTOMLEFT", 0, -4)
 
 -- (the current tour)
-local PAGES = {}
+local PAGES = {}                        -- (every page of every module, in order)
+local secs = {}                         -- (a module's section: { module, version, seen, all, first, last })
 local entries = {}
+local headers = {}
 local page, goal = 1, 0
 local reached = 1
 local broken
 local Go
-local tour                              -- { module, version }
+local tour                              -- { items, demo, born }
 
 -- A page's card: the diamond with its picture, the gold line running down
 -- from it, the name, the words to the right
@@ -251,6 +256,7 @@ local function Entry(i)
         f.line:SetVertexColor(GOLD[1], GOLD[2], GOLD[3], 0.6)
     end
     f.name = Text(f, FONT, 22, 1, 1, 1)
+    f.ver = Text(f, bodyFont, 11, 0.55, 0.55, 0.55)
     f.l1 = Text(f, bodyFont, SMALL_SIZE, 1, 1, 1)
     f.l2 = Text(f, bodyFont, SMALL_SIZE, 1, 0.82, 0)
     for _, s in ipairs({ f.l1, f.l2 }) do
@@ -270,6 +276,7 @@ local function FillEntry(f, p)
     f.tile.icon:SetTexture(p.icon or "Interface\\Icons\\INV_Misc_Note_01")
     f.tile.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
     f.name:SetText(p.name or "")
+    f.ver:SetText(p.version or "")
     f.l1:SetText(p.lines and p.lines[1] or "")
     f.l2:SetText(p.lines and p.lines[2] or "")
     local y = -(ACROSS / 2 - 10)
@@ -316,16 +323,46 @@ local legend = IF.InputLegend(root)
 -- Where everything sits: the header, the revealed cards one under another,
 -- the reveal button under them, then Close; the panel as tall as that, in
 -- the sidebar's corner
+-- A module's section header: its name, the versions beside it, a rule under
+local SEC_H = 34
+local function Header(k)
+    local f = CreateFrame("Frame", nil, root)
+    f:SetSize(PANEL_W, SEC_H)
+    f.title = Text(f, FONT, 20, GOLD[1], GOLD[2], GOLD[3])
+    f.title:SetPoint("TOPLEFT")
+    f.info = Text(f, bodyFont, 12, 0.6, 0.6, 0.6)
+    f.info:SetPoint("TOPRIGHT", f, "TOPRIGHT", 0, -6)
+    local rule = f:CreateTexture(nil, "ARTWORK")
+    rule:SetHeight(1)
+    rule:SetPoint("TOPLEFT", f, "TOPLEFT", 0, -28)
+    rule:SetPoint("TOPRIGHT", f, "TOPRIGHT", 0, -28)
+    rule:SetColorTexture(1, 1, 1, 1)
+    if not pcall(rule.SetGradient, rule, "HORIZONTAL", CreateColor(GOLD[1], GOLD[2], GOLD[3], 0.7),
+        CreateColor(GOLD[1], GOLD[2], GOLD[3], 0)) then
+        rule:SetVertexColor(GOLD[1], GOLD[2], GOLD[3], 0.4)
+    end
+    headers[k] = f
+    return f
+end
+
 local function Layout()
     local y = -(NAME_SIZE + SMALL_SIZE + 4 + 18)
-    for i, f in ipairs(entries) do
-        f:SetShown(i <= #PAGES)
-        if i <= #PAGES then
+    for k, sec in ipairs(secs) do
+        local h = headers[k] or Header(k)
+        h:Show()
+        h:ClearAllPoints()
+        h:SetPoint("TOPLEFT", root, "TOPLEFT", 0, y)
+        y = y - SEC_H - 10
+        for i = sec.first, sec.last do
+            local f = entries[i]
+            f:Show()
             f:ClearAllPoints()
             f:SetPoint("TOPLEFT", root, "TOPLEFT", 0, y)
             y = y - f.h - STACK_GAP
         end
     end
+    for k = #secs + 1, #headers do headers[k]:Hide() end
+    for i = #PAGES + 1, #entries do entries[i]:Hide() end
     root:SetHeight(-y)
     legend:ClearAllPoints()
     legend:SetPoint("TOPLEFT", root, "BOTTOMLEFT", 0, -8)
@@ -345,20 +382,17 @@ local escape = CreateFrame("Frame", "ImprovedForeverWhatsNewEscape", UIParent)
 escape:Hide()
 IF.Focus.EscapeClose(escape)
 
-local queue = {}
-local StartNext
-
 local function Finish()
     goal = 0
     page = 1
-    -- (seen: this version is noted, so the module's next update shows again)
-    if tour and IF.db and tour.version and not tour.demo then
+    -- (seen: each module's version is noted, so its next update shows again)
+    if tour and IF.db and not tour.demo then
         IF.db.whatsNew = IF.db.whatsNew or {}
-        local now = Installed(tour.module)
-        IF.db.whatsNew[tour.module] = now or tour.version
+        for _, item in ipairs(tour.items) do
+            IF.db.whatsNew[item.module] = Installed(item.module) or item.version
+        end
     end
     escape:Hide()
-    if #queue > 0 then C_Timer.After(NEXT_DELAY, StartNext) end
 end
 
 function Go(n)
@@ -436,6 +470,9 @@ local function Play(f, i, now)
     f.tile:SetPoint("CENTER", f, "TOPLEFT", ACROSS / 2 / scale, -ACROSS / 2 / scale)
     f.tile:SetAlpha(pop)
     f.line:SetHeight(math.max(0.001, (f.h - (ACROSS + 4)) * Ease(T, 0.2, 0.75)))
+    f.ver:ClearAllPoints()
+    f.ver:SetPoint("TOPRIGHT", f, "TOPLEFT", ACROSS + 10 + TEXT_W, f.nameY - 8)
+    f.ver:SetAlpha(Ease(T, 0.3, 0.7))
     local rows = { { f.name, f.nameY }, { f.l1, f.l1Y }, { f.l2, f.l2Y } }
     for r, row in ipairs(rows) do
         local from = 0.3 + 0.1 * (r - 1)
@@ -464,6 +501,12 @@ local function Step(elapsed)
     root:SetAlpha(Ease(presence, 0, 1))
     local now = GetTime()
     band:SetAlpha(Ease(math.min(1, (now - (tour and tour.born or 0)) / IN_TIME), 0, 0.5))
+    for k, sec in ipairs(secs) do
+        local h, first = headers[k], entries[sec.first]
+        if h and first then
+            h:SetAlpha(Ease((now - (first.born or 0)) / IN_TIME, 0, 0.4))
+        end
+    end
     for i, f in ipairs(entries) do
         if f:IsShown() then Play(f, i, now) end
     end
@@ -485,23 +528,31 @@ end)
 ---------------------------------------------------------------------------
 -- Starting
 ---------------------------------------------------------------------------
--- A tour of `pages` for a module, from the first page
-local function Start(module, pages, version, seen, demo)
+-- A tour of the modules' items: { module, pages, version, seen?, all? },
+-- one list, a section for each module
+local function Start(items, demo)
     broken = nil
-    PAGES = pages
-    for i, p in ipairs(PAGES) do
-        local f = entries[i] or Entry(i)
-        FillEntry(f, p)
+    PAGES, secs = {}, {}
+    for _, item in ipairs(items) do
+        local first = #PAGES + 1
+        for _, p in ipairs(item.pages) do PAGES[#PAGES + 1] = p end
+        secs[#secs + 1] = { module = item.module, version = item.version, seen = item.seen, all = item.all,
+            first = first, last = #PAGES }
     end
-    for i = #PAGES + 1, #entries do entries[i]:Hide() end
-    tour = { module = module, version = version, born = GetTime(), demo = demo }
-    headName:SetText(Title(module))
-    headSmall:SetText(seen and ("What's new since " .. seen .. ": version " .. tostring(version))
-        or ("What's new in version " .. tostring(version)))
+    for i, p in ipairs(PAGES) do FillEntry(entries[i] or Entry(i), p) end
+    for k, sec in ipairs(secs) do
+        local h = headers[k] or Header(k)
+        h.title:SetText(Title(sec.module))
+        h.info:SetText(sec.seen and (sec.seen .. "  >  " .. tostring(sec.version))
+            or ((sec.all and "up to " or "") .. tostring(sec.version)))
+    end
+    tour = { items = items, born = GetTime(), demo = demo }
+    headName:SetText("What's new")
+    headSmall:SetText(demo and "Demo: nothing is noted as seen." or "Since the version you had.")
     goal = 1
-    -- (every card at once, one after another a beat apart)
     reached = #PAGES
     page = 0
+    -- (every card at once, one after another a beat apart)
     for i = 1, #PAGES do entries[i].born = GetTime() + (i - 1) * CARD_BEAT end
     local ok, err = pcall(Go, 1)
     if not ok then
@@ -510,37 +561,29 @@ local function Start(module, pages, version, seen, demo)
     end
 end
 
-function StartNext()
-    local item = table.remove(queue, 1)
-    if not item then return end
+-- (a moment after login, once out of a fight)
+local function Begin(items, demo)
     if IF.InCombat() or UnitIsDeadOrGhost("player") or goal == 1 then
-        table.insert(queue, 1, item)
-        return C_Timer.After(5, StartNext)
+        return C_Timer.After(5, function() Begin(items, demo) end)
     end
-    Start(item.module, item.pages, item.version, item.seen, item.demo)
+    Start(items, demo)
 end
 
--- Modules updated since they were last seen
+-- Modules updated since they were last seen, as items
 local function Pending()
     local db = IF.db
     local first = db.whatsNew == nil
     db.whatsNew = db.whatsNew or {}
     local found = {}
-    local modules = {}
-    for module in pairs(WN.data) do modules[#modules + 1] = module end
-    table.sort(modules, function(a, b)
-        if a == "Core" or b == "Core" then return a == "Core" end
-        return a < b
-    end)
-    for _, module in ipairs(modules) do
+    for _, module in ipairs(WN.Names()) do
         local now = Installed(module)
         local seen = db.whatsNew[module]
         if now then
             if first and not IF.freshInstall then
-                -- (an update from before this existed: its latest pages, once)
-                local pages, version = PagesFor(module, nil, now)
+                -- (no version tracked: every page there is, up to this version)
+                local pages, version = PagesFor(module, nil, now, true)
                 if #pages > 0 then
-                    found[#found + 1] = { module = module, pages = pages, version = version }
+                    found[#found + 1] = { module = module, pages = pages, version = version, all = true }
                 else
                     db.whatsNew[module] = now
                 end
@@ -560,17 +603,7 @@ local function Pending()
     return found
 end
 
-IF.OnLogin(function()
-    C_Timer.After(START_DELAY, function()
-        queue = Pending()
-        StartNext()
-    end)
-end)
-
--- /if whatsnew [module]: a module's latest pages again (Core's by default);
--- /if whatsnew demo: every module with pages one after another, as when
--- several were updated at once (nothing is noted as seen)
-local function Names()
+function WN.Names()
     local names = {}
     for name in pairs(WN.data) do names[#names + 1] = name end
     table.sort(names, function(a, b)
@@ -580,20 +613,28 @@ local function Names()
     return names
 end
 
+IF.OnLogin(function()
+    C_Timer.After(START_DELAY, function()
+        local items = Pending()
+        if #items > 0 then Begin(items) end
+    end)
+end)
+
+-- /if whatsnew demo: a player with no version tracked: every module's every
+-- page in one list, a section for each (nothing is noted as seen)
+-- /if whatsnew [module]: a module's latest pages again (Core's by default)
 IF.AddCommand("whatsnew", function(args)
     local want = args and args[1]
     if want and want:lower() == "demo" then
-        queue = {}
-        for _, name in ipairs(Names()) do
-            local pages, version = PagesFor(name, nil, Installed(name))
-            if #pages == 0 then pages, version = PagesFor(name) end
+        local items = {}
+        for _, name in ipairs(WN.Names()) do
+            local pages, version = PagesFor(name, nil, Installed(name), true)
             if #pages > 0 then
-                queue[#queue + 1] = { module = name, pages = pages, version = version, demo = true }
+                items[#items + 1] = { module = name, pages = pages, version = version, all = true }
             end
         end
-        if #queue == 0 then return IF.Print("What's new: no pages") end
-        goal = 0
-        return StartNext()
+        if #items == 0 then return IF.Print("What's new: no pages") end
+        return Start(items, true)
     end
     local module
     for name in pairs(WN.data) do
@@ -602,12 +643,11 @@ IF.AddCommand("whatsnew", function(args)
     if not module and not want then module = WN.data.Core and "Core" or next(WN.data) end
     if not module then
         IF.Print("What's new: " .. (want and ("no pages for \"" .. want .. "\"") or "no pages")
-            .. ". Modules with pages: " .. table.concat(Names(), ", ") .. ", or demo")
+            .. ". Modules with pages: " .. table.concat(WN.Names(), ", ") .. ", or demo")
         return
     end
     local pages, version = PagesFor(module, nil, Installed(module))
     if #pages == 0 then pages, version = PagesFor(module) end
     if #pages == 0 then return IF.Print("What's new: no pages for " .. module) end
-    queue = {}
-    Start(module, pages, version, nil, true)
-end, "[module | demo]: play a module's what's new tour again, or all modules' one after another")
+    Start({ { module = module, pages = pages, version = version } }, true)
+end, "[module | demo]: play a module's what's new again, or every module's pages in one list")

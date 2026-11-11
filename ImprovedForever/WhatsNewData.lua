@@ -8,6 +8,21 @@ local IF = ImprovedForever
 local WN = IF.WhatsNew
 local ICON = "Interface\\Icons\\"
 
+WN.Add("Core", "0.17.0", {
+    pages = {
+        {
+            name = "Reset icons", icon = ICON .. "INV_Misc_Gear_01",
+            lines = { "Every slider with a default has a reset icon right of its title (X on the pad).",
+                "A reset-all icon sits at the right end of a section's title." },
+        },
+        {
+            name = "More tabs", icon = ICON .. "INV_Misc_Map_01",
+            lines = { "The side tabs' \"more tabs\" marker is a gold arrow bobbing toward them.",
+                "A click or the wheel scrolls; the tooltip has the number." },
+        },
+    },
+})
+
 WN.Add("Core", "0.18.0", {
     pages = {
         {
@@ -19,6 +34,31 @@ WN.Add("Core", "0.18.0", {
             name = "Bind editor", icon = ICON .. "INV_Misc_Book_09",
             lines = { "Action cards show the rank of the spell you bound.",
                 "Pick another rank with the mouse wheel or the stick." },
+        },
+    },
+})
+
+WN.Add("Immersion", "0.10.0", {
+    pages = {
+        {
+            name = "Raid markers", icon = ICON .. "Ability_Hunter_SniperShot",
+            lines = { "Skull, cross, moon... on the nameplates and the target header,",
+                "in the quest arrow's look." },
+        },
+        {
+            name = "Combo points", icon = ICON .. "Ability_Rogue_Eviscerate",
+            lines = { "Small cut gems in a V over the target diamond and its nameplate name.",
+                "They pop in when gained and flare outward when spent." },
+        },
+        {
+            name = "Last names", icon = ICON .. "Achievement_Character_Human_Male",
+            lines = { "A player's last name after the first on the player card, party cards,",
+                "target header and nameplates (off by default)." },
+        },
+        {
+            name = "Screen width", icon = ICON .. "INV_Misc_Gear_01",
+            lines = { "Keeps the player frame, chat, buffs and action bar inside 16:9 or 21:9",
+                "on an ultrawide screen." },
         },
     },
 })
