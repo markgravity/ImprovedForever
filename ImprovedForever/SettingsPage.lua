@@ -495,6 +495,12 @@ function IF.SettingsPage(tab, GROUPS, ITEMS, hooks)
     -- (mouseLegend false: no legend with the mouse, every press has a click)
     local G = { zone = "fields", group = 1, index = {}, mouseLegend = false }
 
+    -- A setting of a page with tab.peek (that shows on the screen: the HUD) changed: the window fades to
+    -- see it (item.peek = false: this one shows nothing)
+    local function Peek(item)
+        if tab.peek and item and item.peek ~= false then menu.Peek() end
+    end
+
     -- The current category's fields
     function G:Fields()
         local key = GROUPS[self.group].key
@@ -680,7 +686,7 @@ function IF.SettingsPage(tab, GROUPS, ITEMS, hooks)
             local item = Focus(slot)
             local sl = item.slider
             value = math.floor(value / (sl.step or 1) + 0.5) * (sl.step or 1)
-            if sl and value ~= sl.get() and not Resolve(item.disabled) then sl.set(value) menu.Peek() end
+            if sl and value ~= sl.get() and not Resolve(item.disabled) then sl.set(value) Peek(item) end
             menu.Render()
         end)
         r.onReset = function(slot)
@@ -786,14 +792,14 @@ function IF.SettingsPage(tab, GROUPS, ITEMS, hooks)
         if item.slider then
             local s = item.slider
             local v = math.max(s.min, math.min(s.max, s.get() + dir * (s.step or 1)))
-            if v ~= s.get() then s.set(v) menu.Peek() end
+            if v ~= s.get() then s.set(v) Peek(item) end
             return
         end
         local actions, at = Steps(item)
         if not actions then return end
         -- (a toggle: left off, right on; a dropdown: round from the ends)
         local next = item.onoff and (dir > 0 and "on" or "off") or actions[(at - 1 + dir) % #actions + 1]
-        if next ~= item.value() then item.choose(next) menu.Peek() end
+        if next ~= item.value() then item.choose(next) Peek(item) end
     end
 
     -- A slider put back to its default (X on the pad, the row's reset button)
@@ -801,7 +807,7 @@ function IF.SettingsPage(tab, GROUPS, ITEMS, hooks)
         local s = item and item.slider
         if not s or s.default == nil or Resolve(item.disabled) then return end
         if s.get() ~= s.default then
-            s.set(s.default) menu.Peek()
+            s.set(s.default) Peek(item)
             menu.Toast(item.label .. ": " .. (s.format and s.format(s.default) or tostring(s.default)))
         end
     end
@@ -835,7 +841,7 @@ function IF.SettingsPage(tab, GROUPS, ITEMS, hooks)
         local item = self:Item()
         local e = item.options()[self.cursor]
         if not (e and e.action) then return end
-        item.choose(e.action) menu.Peek()
+        item.choose(e.action) Peek(item)
         if not menu.armed then self.zone = "fields" end
     end
 
@@ -845,7 +851,7 @@ function IF.SettingsPage(tab, GROUPS, ITEMS, hooks)
         if not item or Resolve(item.disabled) then return end
         local kind = Kind(item)
         if kind == "toggle" then
-            item.choose(item.value() == "on" and "off" or "on") menu.Peek()
+            item.choose(item.value() == "on" and "off" or "on") Peek(item)
         elseif kind == "dropdown" then
             self:OpenDropdown(item)
         elseif kind == "button" then

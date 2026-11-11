@@ -15,11 +15,6 @@ local function Toggle(key, label, after)
     end, label)
 end
 
--- (a check on a getter and setter of our own, not a setting's key)
-local function Toggle2(get, set)
-    return OnOff(get, set, "")
-end
-
 local STYLE_NAMES = { diamond = "Diamonds", square = "Squares", circle = "Circles" }
 
 local WIDTH_ORDER = { "off", "16:9", "21:9" }
@@ -469,7 +464,7 @@ local ITEMS = {
             .. "DialogueUI installed, it keeps the talking and this stays off.",
     }, Toggle("npcDialog", "NPC dialog as subtitles", function() IN.NpcDialog.Apply() end)),
     Item({
-        key = "dialogStopVoice", group = "body", section = "NPC dialog", label = "Stop the voice when the dialog closes",
+        key = "dialogStopVoice", peek = false, group = "body", section = "NPC dialog", label = "Stop the voice when the dialog closes",
         tip = "With Spoken installed: closing the NPC dialog (or walking away) stops the voice at once. "
             .. "Off, the line finishes by itself.",
     }, Toggle("dialogStopVoice", "Stop the voice when the dialog closes", function() end)),
@@ -501,10 +496,10 @@ local ITEMS = {
         },
     },
     Item({
-        key = "spellTracker", group = "body", section = "Spell tracker", label = "Spell tracker",
-        tip = "The spells you pick below shown as cards to the right of your character: one while its spell is "
-            .. "on cooldown, one when its buff is used up (Lightning Shield's charges gone). In a fight the "
-            .. "cooldowns run from your cast; a buff used up in a fight is told when it ends.",
+        key = "spellTracker", peek = false, group = "body", section = "Spell tracker", label = "Spell tracker",
+        tip = "Notices to the right of your character for the spells you set below. When ready: a notice when "
+            .. "the spell's cooldown is over. When in cooldown: its card with the time running down, until it is "
+            .. "ready. When missing: a notice when its buff is gone (Lightning Shield's charges used up).",
     }, Toggle("spellTracker", "Spell tracker", function() end)),
 }
 
@@ -523,12 +518,18 @@ local function Book()
     return book
 end
 
+local SPELL_MODES = {
+    { action = "off", name = "Off" },
+    { action = "ready", name = "When ready" },
+    { action = "until", name = "When in cooldown" },
+    { action = "missing", name = "When missing" },
+}
+local SPELL_MODE_NAMES = { off = "Off", ready = "When ready", ["until"] = "When in cooldown", missing = "When missing" }
+
 for i = 1, 120 do
     local row
     row = Item({
-        key = "spellRow" .. i, group = "body", section = "Tracked spells", label = "",
-        tip = "Tick a spell to track it: a card shows while it is on cooldown, and when its buff (Lightning "
-            .. "Shield's charges) is used up.",
+        key = "spellRow" .. i, peek = false, group = "body", section = "Spell tracker", label = "",
         hidden = function()
             local spell = Book()[i]
             if spell then
@@ -536,13 +537,20 @@ for i = 1, 120 do
             end
             return spell == nil
         end,
-    }, Toggle2(function()
-        local spell = Book()[i]
-        return spell ~= nil and IN.SpellTracker.IsTracked(spell.name)
-    end, function(on)
-        local spell = Book()[i]
-        if spell then IN.SpellTracker.Track(spell, on) end
-    end))
+        value = function()
+            local spell = Book()[i]
+            return spell and IN.SpellTracker.Mode(spell.name) or "off"
+        end,
+        text = function()
+            local spell = Book()[i]
+            return SPELL_MODE_NAMES[spell and IN.SpellTracker.Mode(spell.name) or "off"]
+        end,
+        options = function() return SPELL_MODES end,
+        choose = function(action)
+            local spell = Book()[i]
+            if spell then IN.SpellTracker.SetMode(spell, action) end
+        end,
+    })
     ITEMS[#ITEMS + 1] = row
 end
 
@@ -552,5 +560,5 @@ local GROUPS = {
     { key = "bottom", label = "Footer" },
 }
 
-IF.InterfaceEditor = IF.SettingsPage({ key = "interface", label = "Immersion", module = "interface", order = 35, tree = true },
+IF.InterfaceEditor = IF.SettingsPage({ key = "interface", label = "Immersion", module = "interface", order = 35, tree = true, peek = true },
     GROUPS, ITEMS)

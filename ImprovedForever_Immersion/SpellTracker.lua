@@ -1,10 +1,12 @@
--- The spells you chose (the Immersion tab's Spell tracker: your list, per character), shown as cards
--- in the Immersion look (Card.lua) to the right of your character, under one another: one while its
--- spell is on cooldown (its time running down), one when its buff is used up (Lightning Shield's
--- charges gone: the aura is gone, and you had it; it stays till you cast it again, or 10 seconds).
--- In a fight Forever keeps auras and cooldown numbers secret: a cooldown then runs on our own timer
--- from your cast (readable), its length the one read out of a fight, else the spell's base one; a buff
--- used up in a fight is told when it ends. Setting spellTracker; the list in IF.charDB.spellTracker.
+-- The spells you chose (the Immersion tab's Spell tracker: your list, per character, each tracked as it
+-- is set: "ready" or "until"): a notice, a card in
+-- the Immersion look (Card.lua) to the right of your character, when one of them is ready again (its
+-- cooldown over) or its buff is used up (Lightning Shield's charges gone: the aura is gone, and you had
+-- it); or, tracked "until", the spell's own card from its cast, its time running down, till it is ready.
+-- A few seconds, one under another. In a fight Forever keeps auras and cooldown numbers secret: a
+-- cooldown then runs on our own timer from your cast (readable), its length the one read out of a
+-- fight, else the spell's base one; a buff used up in a fight is told when it ends. Setting
+-- spellTracker; the list in IF.charDB.spellTracker.
 local IF = ImprovedForever
 local IN = IF.Interface
 
@@ -15,8 +17,8 @@ local OFFSET_X, OFFSET_Y = 230, -10      -- (from the screen's middle: right of 
 local GAP = 10
 local MAX_SPELLS, MAX_CARDS = 30, 4
 local GCD_MAX = 1.6                      -- (a cooldown no longer than this is the global one)
-local GONE_HOLD = 10                     -- (seconds a used up buff stays)
-local COOL, GONE = { 1, 0.62, 0.2 }, { 0.9, 0.3, 0.25 }
+local HOLD = 4                          -- (seconds a notice stays)
+local READY, GONE, COOL = { 0.45, 0.9, 0.5 }, { 0.9, 0.3, 0.25 }, { 1, 0.62, 0.2 }
 
 local function Secret(v)
     return type(issecretvalue) == "function" and issecretvalue(v)
@@ -49,21 +51,33 @@ local function SpellIcon(id)
     return ok and icon or select(3, GetSpellInfo(id))
 end
 
--- Is the spell (by name) tracked
-function ST.IsTracked(name)
+-- How a spell (by name) is tracked: nil (not), "ready" (a notice when it is ready again), "until" (its
+-- card from the cast, its time running down, till it is ready) or "missing" (a notice when its buff is
+-- gone: Lightning Shield's charges used up)
+function ST.Mode(name)
     for _, id in ipairs(ST.Ids()) do
-        if SpellName(id) == name then return true end
+        if SpellName(id) == name then
+            local modes = IF.charDB and IF.charDB.spellTracker and IF.charDB.spellTracker.modes
+            return modes and modes[name] or "ready"
+        end
     end
-    return false
+    return nil
 end
 
--- Tick or untick a spellbook spell ({ name, spellID })
-function ST.Track(spell, on)
+-- Set how a spellbook spell ({ name, spellID }) is tracked: "off", "ready", "until" or "missing"
+function ST.SetMode(spell, mode)
     local ids = ST.Ids()
     for i = #ids, 1, -1 do
         if SpellName(ids[i]) == spell.name then table.remove(ids, i) end
     end
-    if on and #ids < MAX_SPELLS then ids[#ids + 1] = spell.spellID end
+    local d = IF.charDB.spellTracker
+    d.modes = d.modes or {}
+    if mode == "off" then
+        d.modes[spell.name] = nil
+    elseif #ids < MAX_SPELLS then
+        ids[#ids + 1] = spell.spellID
+        d.modes[spell.name] = mode
+    end
 end
 
 ---------------------------------------------------------------------------
@@ -115,6 +129,18 @@ local function Helpful()
     return names
 end
 
+-- The notices showing: { name, id, kind = "ready" | "gone", until }. A spell's cooldown over, or its buff
+-- used up, is told once, a few seconds, one card each, one under another. The same again replaces it.
+local notices = {}
+local function Push(name, id, kind)
+    local now = GetTime()
+    for i = #notices, 1, -1 do
+        if notices[i].name == name then table.remove(notices, i) end
+    end
+    notices[#notices + 1] = { name = name, id = id, kind = kind, untilAt = now + HOLD }
+    while #notices > MAX_CARDS do table.remove(notices, 1) end
+end
+
 local function LookAuras()
     local names = Helpful()
     if not names then return end
@@ -128,18 +154,10 @@ local function LookAuras()
             elseif s.present then
                 -- (you had it, it is gone: used up)
                 s.present, s.goneAt = false, now
+                if ST.Mode(name) == "missing" then Push(name, id, "gone") end
             end
         end
     end
-end
-
--- (PROBE, remove: what happens, into IF.db.spellLog)
-local logN = 0
-local function Log(text)
-    if not IF.db or logN >= 200 then return end
-    if logN == 0 then IF.db.spellLog = {} end
-    logN = logN + 1
-    IF.db.spellLog[logN] = string.format("%.2f %s", GetTime() % 1000, text)
 end
 
 local events = CreateFrame("Frame")
@@ -158,16 +176,17 @@ events:SetScript("OnEvent", function(_, event, _, _, spellID)
     end
     if Secret(spellID) or type(spellID) ~= "number" then return end
     local name = SpellName(spellID)
-    Log("cast " .. tostring(spellID) .. " " .. tostring(name) .. " tracked=" .. #ST.Ids() .. " on=" .. tostring(IF.db and IN.Settings().spellTracker))
     if not name then return end
     for _, id in ipairs(ST.Ids()) do
         if SpellName(id) == name then
             local s = Get(name, id)
             s.goneAt = nil      -- (cast again: it is back)
+            for i = #notices, 1, -1 do
+                if notices[i].name == name then table.remove(notices, i) end
+            end
             -- (its length: read whole out of a fight, else learnt before, else the spell's base one)
             local start, duration = ReadCooldown(spellID)
             local length = (duration and duration > GCD_MAX and duration) or lengths[name] or BaseLength(spellID)
-            Log("match " .. name .. " length=" .. tostring(length) .. " read=" .. tostring(duration) .. " base=" .. tostring(BaseLength(spellID)))
             if length then
                 lengths[name] = length
                 s.cd = { start = (duration and duration > GCD_MAX) and start or GetTime(), length = length }
@@ -187,56 +206,60 @@ local function Left(t)
     return math.ceil(t) .. " sec"
 end
 
-local function Content(name, s, kind, left)
-    local icon = SpellIcon(s.id)
-    local c = kind == "gone" and GONE or COOL
+local function Content(item)
+    local c = item.kind == "ready" and READY or (item.kind == "gone" and GONE or COOL)
     local lines
-    if kind == "gone" then
+    if item.kind == "cd" then
         lines = {
-            { lt = name, lr = c[1], lg = c[2], lb = c[3] },
-            { lt = "Used up", lr = 0.78, lg = 0.78, lb = 0.78 },
+            { lt = item.name, lr = c[1], lg = c[2], lb = c[3], rt = Left(item.left), rr = 0.8, rg = 0.8, rb = 0.8 },
+            { lt = "Cooldown", lr = 0.78, lg = 0.78, lb = 0.78 },
         }
     else
         lines = {
-            { lt = name, lr = c[1], lg = c[2], lb = c[3], rt = Left(left), rr = 0.8, rg = 0.8, rb = 0.8 },
-            { lt = "Cooldown", lr = 0.78, lg = 0.78, lb = 0.78 },
+            { lt = item.name, lr = c[1], lg = c[2], lb = c[3] },
+            { lt = item.kind == "ready" and "Ready" or "Missing", lr = 0.78, lg = 0.78, lb = 0.78 },
         }
     end
     return {
-        key = name .. "|" .. kind,
-        sig = name .. "|" .. kind .. "|" .. (left and math.ceil(left) or ""),
+        key = item.name .. "|" .. item.kind,
+        sig = item.name .. "|" .. item.kind .. "|" .. (item.left and math.ceil(item.left) or ""),
         lines = lines, tint = c,
-        portrait = function(tex) IN.Card.Icon(tex, icon) end,
+        portrait = function(tex) IN.Card.Icon(tex, SpellIcon(item.id)) end,
     }
 end
 
+-- The cards now: the notices still within their time, and (a spell tracked "until") each cooldown running.
+-- A cooldown ends as it runs out (ours, from your cast; out of a fight the game's own word, a reset or a
+-- shorter one ends it too): told Ready ("ready"), or its card just goes ("until")
+local list = {}
 local function Active()
-    local now, list = GetTime(), {}
+    local now = GetTime()
+    wipe(list)
+    for i = #notices, 1, -1 do
+        if notices[i].untilAt <= now then table.remove(notices, i) end
+    end
+    for _, n in ipairs(notices) do list[#list + 1] = n end
     for _, id in ipairs(ST.Ids()) do
         local name = SpellName(id)
         local s = name and state[name]
-        if s then
-            -- (out of a fight the game's own word: a reset or a shorter one ends ours)
-            if s.cd then
-                local start, duration = ReadCooldown(id)
-                if start and duration then
-                    if duration > GCD_MAX then
-                        s.cd = { start = start, length = duration }
-                    elseif now - s.cd.start > 1 then
-                        s.cd = nil
-                    end
+        if s and s.cd then
+            local start, duration = ReadCooldown(id)
+            if start and duration then
+                if duration > GCD_MAX then
+                    s.cd = { start = start, length = duration }
+                elseif now - s.cd.start > 1 then
+                    s.cd.start = -1e9       -- (over)
                 end
             end
-            if s.cd and s.cd.start + s.cd.length <= now then s.cd = nil end
-            if s.goneAt and now - s.goneAt > GONE_HOLD then s.goneAt = nil end
-            if s.goneAt then list[#list + 1] = { name = name, s = s, kind = "gone", at = s.goneAt - 1e6 } end
-            if s.cd then
-                local left = s.cd.start + s.cd.length - now
-                list[#list + 1] = { name = name, s = s, kind = "cd", left = left, at = left }
+            local left = s.cd.start + s.cd.length - now
+            if left <= 0 then
+                s.cd = nil
+                if ST.Mode(name) == "ready" then Push(name, id, "ready") end
+            elseif ST.Mode(name) == "until" then
+                list[#list + 1] = { name = name, id = id, kind = "cd", left = left }
             end
         end
     end
-    table.sort(list, function(a, b) return a.at < b.at end)
     return list
 end
 
@@ -250,15 +273,12 @@ ticker:SetScript("OnUpdate", function(_, elapsed)
         since = 0
         if IF.db and IN.Settings().spellTracker ~= false then pcall(LookAuras) end
     end
+    if IF.db and IF.db.spellLog then IF.db.spellLog = nil end     -- (the probe's log, cleared once)
     local list = (IF.db and IN.Settings().spellTracker ~= false) and Active() or {}
-    if #list ~= (ST.lastN or 0) then
-        ST.lastN = #list
-        Log("active " .. #list .. " open=" .. tostring(IF.Focus and IF.Focus.AnyOpen()))
-    end
     local above
     for i = 1, MAX_CARDS do
         local card, item = cards[i], list[i]
-        local content = item and Content(item.name, item.s, item.kind, item.left) or nil
+        local content = item and Content(item) or nil
         -- (under the one before it showing, else at the place right of your character)
         local want = above and above.panel or false
         if placed[i] ~= want then
