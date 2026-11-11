@@ -1,10 +1,12 @@
 -- What's new: when a module has been updated since you last saw it, a tour of
--- what changed, in the look of Immersion's first-time tour (Onboarding.lua):
--- a gold rule standing, one small diamond on it with the page's picture, the
--- pages' names left of it, and under the last one a diamond button that
--- reveals the next; the page's words (and, when a module gives one, an
--- example) in the middle of the screen. Click the right side or the diamond,
--- or A, to reveal more; up / down (the D-pad) pick; Close, B or Esc end it.
+-- what changed, in the look of Immersion's sidebar cards (Card.lua,
+-- QuestPeek.lua): at the screen's top left on the NPC dialog's dark band,
+-- the module's name in Morpheus, then a card for each page, one under
+-- another: the spell diamond with the page's picture, a gold line running
+-- down from it, the page's name and two lines to the right. The cards play
+-- in as the quest cards do, one at a time: click, the diamond under the
+-- last or A reveals the next; up / down (the D-pad) pick one (a module's
+-- example of it, when it gave one, to the right); Close, B or Esc end it.
 -- * The pages live here, in WhatsNewData.lua, per module and version
 --   (IF.WhatsNew.Add); a module may add a live example of its own by key
 --   (IF.WhatsNew.Example(key, build(stageFrame))).
@@ -25,21 +27,16 @@ local START_DELAY = 8                   -- (seconds after login, then once out o
 local NEXT_DELAY = 1.2                  -- (between two modules' tours)
 local FADE = 0.35
 
--- (the panel, and in it: the list's rule, the right side)
--- (its height wraps what is in it: the list's rows, or the example, the
--- words and Close, whichever is taller; Fit() works it out per tour)
-local W = 1200
-local RIGHT_W = 500
-local RULE_X = W / 2 - RIGHT_W / 2 - 70
-local RULE_TOP = 90
-local LIST_TOP = 190                    -- (the first row's top; the page's diamond above it)
-local ROW_STEP = 38
-local STAGE_W, STAGE_H = RIGHT_W, 240
-local STAGE_TOP = 100
-local TILE = 30
-local PAD_BOTTOM = 40
-local H = 540
-local wordsY = LIST_TOP                 -- (the words' top: under the example, else level with the list)
+-- (the sidebar's cards, as Immersion's Card.lua has them)
+local IN_TIME = 0.6                     -- (seconds a card takes to play in)
+local ROW_SLIDE = 12                    -- (each line comes in from this far left)
+local PAD_Y, STACK_GAP = 6, 14
+local TILE = 24
+local TEXT_W = 380
+local PANEL_W = 46 + TEXT_W
+local CORNER_X = 40
+local BAND_ALPHA, BAND_REACH = 0.6, 40
+local STAGE_W, STAGE_H = 500, 240
 
 local GOLD = { 1, 0.82, 0.45 }
 local GREY = { 0.5, 0.5, 0.5 }
@@ -51,7 +48,6 @@ local locale = GetLocale()
 local LATIN = not (locale == "ruRU" or locale == "koKR" or locale == "zhCN" or locale == "zhTW")
 local FONT = LATIN and "Fonts\\MORPHEUS.TTF" or STANDARD_TEXT_FONT
 local NAME_SIZE, SMALL_SIZE = 30, 13
-local RULE_W, RULE_Y, NAME_GAP = 260, 130, 30
 
 ---------------------------------------------------------------------------
 -- The data: WN.data[module] = { { version, title?, pages }, ... }
@@ -124,7 +120,7 @@ local function PagesFor(module, seen, now)
 end
 
 ---------------------------------------------------------------------------
--- Drawing helpers (Immersion's header look, as the tour draws it)
+-- Drawing helpers (Immersion's cards: Card.lua)
 ---------------------------------------------------------------------------
 local function Text(parent, font, size, r, g, b)
     local s = parent:CreateFontString(nil, "ARTWORK", nil, 0)
@@ -139,6 +135,12 @@ end
 local function Ease(x, a, b)
     local t = math.min(1, math.max(0, (x - (a or 0)) / ((b or 1) - (a or 0))))
     return t * t * (3 - 2 * t)
+end
+
+-- (a pop: past full a little, then back)
+local function Pop(t)
+    local c = 1.7
+    return 1 + (c + 1) * (t - 1) ^ 3 + c * (t - 1) ^ 2
 end
 
 -- (the spell diamonds' tile: the game's square slot turned, a picture cut to
@@ -170,46 +172,31 @@ local function Tile(parent, size)
     return tile
 end
 
--- A gold rule, fading out at both ends
-local function Rule(parent, length)
-    local f = CreateFrame("Frame", nil, parent)
-    f:SetSize(1, length)
-    f.parts = {}
-    function f.Resize(length)
-        f:SetHeight(length)
-        for _, r in ipairs(f.parts) do r:SetHeight(length / 2) end
-    end
-    local function Color(a) return CreateColor(GOLD[1], GOLD[2], GOLD[3], a) end
-    for _, first in ipairs({ true, false }) do
-        local r = f:CreateTexture(nil, "ARTWORK")
-        r:SetColorTexture(GOLD[1], GOLD[2], GOLD[3], 1)
-        r:SetSize(1, length / 2)
-        r:SetPoint(first and "BOTTOM" or "TOP", f, "CENTER")
-        f.parts[#f.parts + 1] = r
-        -- (vertical gradients run from the bottom to the top)
-        local ok = pcall(r.SetGradient, r, "VERTICAL", first and Color(0.8) or Color(0), first and Color(0) or Color(0.8))
-        if not ok then r:SetAlpha(0.6) end
-    end
-    return f
+local bodyFont = GameFontHighlight and GameFontHighlight:GetFont()
+local ACROSS = TILE * 1.2 * ROOT2           -- (a diamond's width, point to point)
+
+-- Where the sidebar is: Immersion's cards' corner, its top and scale (the
+-- Body tab's), else the same defaults
+local function Corner()
+    local C = IF.Interface and IF.Interface.Card
+    local top = C and C.Top and C.Top() or 0.15
+    local scale = C and C.Scale and C.Scale() or 1
+    return CORNER_X, top, scale
 end
 
-local bodyFont = GameFontHighlight and GameFontHighlight:GetFont()
-
 ---------------------------------------------------------------------------
--- The panel
+-- The panel: the module's name, then a card for each page revealed so far
 ---------------------------------------------------------------------------
 local root = CreateFrame("Frame", "ImprovedForeverWhatsNew", UIParent)
-root:SetSize(W, H)
+root:SetSize(PANEL_W, 200)
 root:SetFrameStrata("HIGH")
-root:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
 root:EnableMouse(true)
 root:Hide()
 
--- (the ground: the NPC dialog's band (Immersion's NpcDialog.lua): dark in
+-- (the ground: the NPC dialog's band (Immersion's NpcDialog.lua), dark in
 -- the middle, fading out to its sides)
-local BAND_ALPHA, BAND_REACH = 0.6, 40
 local band = CreateFrame("Frame", nil, root)
-band:SetPoint("TOPLEFT", -BAND_REACH, 10)
+band:SetPoint("TOPLEFT", -BAND_REACH, 14)
 band:SetPoint("BOTTOMRIGHT", BAND_REACH, -10)
 band:SetFrameLevel(math.max(0, root:GetFrameLevel() - 1))
 do
@@ -229,45 +216,77 @@ do
     Part({ { "TOPRIGHT" }, { "BOTTOMLEFT", band, "BOTTOMRIGHT", -fade, 0 } }, BAND_ALPHA, 0)
 end
 
-local sideRule = Rule(root, 380)
-sideRule:SetPoint("TOP", root, "TOPLEFT", RULE_X, -RULE_TOP)
+-- (the module's name in Morpheus, what changed small under it)
+local headName = Text(root, FONT, NAME_SIZE, GOLD[1], GOLD[2], GOLD[3])
+headName:SetPoint("TOPLEFT", root, "TOPLEFT", 0, 0)
+local headSmall = Text(root, bodyFont, SMALL_SIZE, 1, 1, 1)
+headSmall:SetPoint("TOPLEFT", headName, "BOTTOMLEFT", 0, -4)
 
 -- (the current tour)
 local PAGES = {}
-local rows = {}
-local page, shownAt, goal = 1, nil, 0
+local entries = {}
+local page, goal = 1, 0
 local reached = 1
 local broken
 local Go
 local tour                              -- { module, version }
 
-local function RowY(i)
-    return LIST_TOP + (i - 0.5) * ROW_STEP
+-- A page's card: the diamond with its picture, the gold line running down
+-- from it, the name, the words to the right
+local function Entry(i)
+    local f = CreateFrame("Button", nil, root)
+    f:SetWidth(PANEL_W)
+    f.tile = Tile(f, TILE)
+    f.tile:ClearAllPoints()
+    f.tile:SetPoint("CENTER", f, "TOPLEFT", ACROSS / 2, -ACROSS / 2)
+    f.tile.icon:SetSize(ACROSS * 0.72, ACROSS * 0.72)
+    f.tile.border:SetVertexColor(GOLD[1], GOLD[2], GOLD[3])
+    f.line = f:CreateTexture(nil, "ARTWORK")
+    f.line:SetWidth(1)
+    f.line:SetPoint("TOPLEFT", f, "TOPLEFT", ACROSS / 2, -(ACROSS + 4))
+    f.line:SetColorTexture(1, 1, 1, 1)
+    if not pcall(f.line.SetGradient, f.line, "VERTICAL", CreateColor(GOLD[1], GOLD[2], GOLD[3], 0),
+        CreateColor(GOLD[1], GOLD[2], GOLD[3], 0.9)) then
+        f.line:SetVertexColor(GOLD[1], GOLD[2], GOLD[3], 0.6)
+    end
+    f.name = Text(f, FONT, 22, 1, 1, 1)
+    f.l1 = Text(f, bodyFont, SMALL_SIZE, 1, 1, 1)
+    f.l2 = Text(f, bodyFont, SMALL_SIZE, 1, 0.82, 0)
+    for _, s in ipairs({ f.l1, f.l2 }) do
+        s:SetWordWrap(true)
+        s:SetJustifyH("LEFT")
+        s:SetWidth(TEXT_W)
+    end
+    f:SetScript("OnEnter", function(self) self.hover = true end)
+    f:SetScript("OnLeave", function(self) self.hover = nil end)
+    f:SetScript("OnClick", function() Go(i) end)
+    entries[i] = f
+    return f
 end
 
-local function Row(i)
-    local row = CreateFrame("Button", nil, root)
-    row:SetSize(RULE_X - 60, 30)
-    row.name = Text(row, bodyFont, 16, GREY[1], GREY[2], GREY[3])
-    row.name:SetAllPoints()
-    row.name:SetJustifyH("RIGHT")
-    row:SetScript("OnEnter", function(self) self.hover = true end)
-    row:SetScript("OnLeave", function(self) self.hover = nil end)
-    row:SetScript("OnClick", function() Go(i) end)
-    rows[i] = row
+-- (a card's words laid out: where each sits and how tall the card is)
+local function FillEntry(f, p)
+    f.tile.icon:SetTexture(p.icon or "Interface\\Icons\\INV_Misc_Note_01")
+    f.tile.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+    f.name:SetText(p.name or "")
+    f.l1:SetText(p.lines and p.lines[1] or "")
+    f.l2:SetText(p.lines and p.lines[2] or "")
+    local y = -(ACROSS / 2 - 10)
+    f.nameY = y
+    y = y - 24 - 5
+    f.l1Y = y
+    y = y - (f.l1:GetStringHeight() or 0) - 3
+    f.l2Y = y
+    y = y - ((p.lines and p.lines[2]) and f.l2:GetStringHeight() or 0)
+    f.h = math.max(-y + PAD_Y, ACROSS + 24)
+    f:SetHeight(f.h)
+    f.line:SetHeight(0.001)
 end
 
--- (the current page's picture in a diamond on the rule, above the names)
-local mark = Tile(root, TILE)
-mark:ClearAllPoints()
-mark:SetFrameLevel(sideRule:GetFrameLevel() + 5)
-mark.border:SetVertexColor(GOLD[1], GOLD[2], GOLD[3])
-mark.icon:SetSize(mark.across, mark.across)
-
--- (the reveal button: a diamond on the rule where the next name will be)
+-- (the reveal button: a small diamond under the last card, bobbing and
+-- pulsing so it is seen)
 local more = CreateFrame("Button", nil, root)
 more:SetSize(TILE, TILE)
-more:SetFrameLevel(sideRule:GetFrameLevel() + 5)
 local moreTile = Tile(more, TILE - 6)
 moreTile.border:SetVertexColor(GOLD[1], GOLD[2], GOLD[3])
 moreTile.icon:SetColorTexture(0.6, 0.38, 0.05, 1)
@@ -298,29 +317,13 @@ moreGlow:SetVertexColor(GOLD[1], GOLD[2], GOLD[3])
 more:SetScript("OnEnter", function() moreTile.border:SetVertexColor(1, 1, 1) end)
 more:SetScript("OnLeave", function() moreTile.border:SetVertexColor(GOLD[1], GOLD[2], GOLD[3]) end)
 local moreKey = Text(root, bodyFont, 14, 1, 1, 1)
-local browse = Text(root, bodyFont, 14, 1, 1, 1)
-browse:SetJustifyH("RIGHT")
 
----------------------------------------------------------------------------
--- The right side: the example (the middle of the screen), the words
----------------------------------------------------------------------------
-local right = CreateFrame("Frame", nil, root)
-right:SetSize(RIGHT_W, H)  -- (resized by Fit)
-right:SetPoint("TOP", root, "TOP", 0, 0)
-right:EnableMouse(true)
-
-local line1 = Text(right, bodyFont, SMALL_SIZE, 1, 1, 1)
-line1:SetWidth(RIGHT_W + 60)
-local line2 = Text(right, bodyFont, SMALL_SIZE, 1, 0.82, 0)
-line2:SetWidth(RIGHT_W + 60)
-line2:SetPoint("TOP", line1, "BOTTOM", 0, -4)
-
-local stage = CreateFrame("Frame", nil, right)
+-- (a module's example of a page, to the right of the sidebar)
+local stage = CreateFrame("Frame", nil, root)
 stage:SetSize(STAGE_W, STAGE_H)
-stage:SetPoint("TOP", right, "TOP", 0, -STAGE_TOP)
-local built = {}                        -- (an example's frame, built when first wanted)
+stage:SetPoint("LEFT", root, "TOPRIGHT", 60 + BAND_REACH, -STAGE_H / 2)
+local built = {}
 
--- (a page's example, or nothing: its words then sit where the stage is)
 local function ShowExample(key)
     for k, f in pairs(built) do f:SetShown(k == key) end
     if key and not built[key] and WN.examples[key] then
@@ -334,7 +337,6 @@ local function ShowExample(key)
             s:SetText("(example not drawn: " .. tostring(err):sub(1, 90) .. ")")
         end
     end
-    return key and built[key] ~= nil
 end
 
 local function Word(size, r, g, b, glyph)
@@ -352,55 +354,42 @@ local function Word(size, r, g, b, glyph)
     return btn
 end
 local closeButton = Word(17, 0.7, 0.7, 0.7, "PAD2")
+local browse = Text(root, bodyFont, 14, 1, 1, 1)
 
-local hasExample
-local anyExample
-
--- (the panel's height for the tour: the list down to its hint, or the right
--- side down to Close, whichever is taller, and a margin)
-local function Fit()
-    anyExample = false
-    for _, p in ipairs(PAGES) do
-        if p.example and WN.examples[p.example] then anyExample = true end
-    end
-    wordsY = anyExample and (STAGE_TOP + STAGE_H + 12) or LIST_TOP
-    local listBottom = LIST_TOP + #PAGES * ROW_STEP
-    H = math.max(listBottom + 60, wordsY + 58 + 25) + PAD_BOTTOM
-    root:SetHeight(H)
-    right:SetHeight(H)
-    stage:SetShown(anyExample)
-    sideRule:SetPoint("TOP", root, "TOPLEFT", RULE_X, -RULE_TOP)
-    sideRule.Resize(listBottom + 30 - RULE_TOP)
-end
-
+-- Where everything sits: the header, the revealed cards one under another,
+-- the reveal button under them, then Close; the panel as tall as that, in
+-- the sidebar's corner
 local function Layout()
     local pad = IF.Input.Pad()
     moreKey:SetText(pad and IF.GlyphText("PAD1", 18) or "")
     browse:SetText(pad and (IF.GlyphText("DPAD_UD", 18) .. " Browse") or "")
-    browse:ClearAllPoints()
-    browse:SetPoint("TOPRIGHT", root, "TOPLEFT", RULE_X - 52, -(RowY(#PAGES) + 30))
     closeButton:Set(pad and "Close" or "Close  (Esc)")
-    line1:ClearAllPoints()
-    line1:SetPoint("TOP", right, "TOP", 0, -wordsY)
+    local y = -(NAME_SIZE + SMALL_SIZE + 4 + 18)
+    for i, f in ipairs(entries) do
+        f:SetShown(i <= #PAGES and i <= reached)
+        if i <= #PAGES and i <= reached then
+            f:ClearAllPoints()
+            f:SetPoint("TOPLEFT", root, "TOPLEFT", 0, y)
+            f.top = y
+            y = y - f.h - STACK_GAP
+        end
+    end
+    more.y = nil
+    if reached < #PAGES then
+        more.y = y - 4
+        y = y - TILE - 12
+    end
     closeButton:ClearAllPoints()
-    closeButton:SetPoint("TOPLEFT", root, "TOP", -closeButton:GetWidth() / 2, -(wordsY + 58))
+    closeButton:SetPoint("TOPLEFT", root, "TOPLEFT", 0, y - 4)
+    browse:ClearAllPoints()
+    browse:SetPoint("LEFT", closeButton, "RIGHT", 24, 0)
+    y = y - 4 - 25
+    root:SetHeight(-y + 6)
+    local x, top, scale = Corner()
+    root:SetScale(scale)
+    root:ClearAllPoints()
+    root:SetPoint("TOPLEFT", UIParent, "TOPLEFT", x / scale, -UIParent:GetHeight() * top / scale)
 end
-
----------------------------------------------------------------------------
--- The name at the top (the header's: big in Morpheus, a small line under it)
----------------------------------------------------------------------------
-local head = CreateFrame("Frame", nil, UIParent)
-head:SetSize(2 * RULE_W, 80)
-head:SetFrameStrata("LOW")
-head:EnableMouse(false)
-head:SetPoint("TOP", UIParent, "TOP", 0, -(RULE_Y + NAME_GAP - 20))
-head:Hide()
-local headName = Text(head, FONT, NAME_SIZE, GOLD[1], GOLD[2], GOLD[3])
-headName:SetWidth(2 * RULE_W)
-headName:SetPoint("TOP")
-local headSmall = Text(head, bodyFont, SMALL_SIZE, 1, 1, 1)
-headSmall:SetWidth(2.2 * RULE_W)
-headSmall:SetPoint("TOP", headName, "BOTTOM", 0, -4)
 
 ---------------------------------------------------------------------------
 -- The pages
@@ -425,18 +414,22 @@ local function Finish()
     if #queue > 0 then C_Timer.After(NEXT_DELAY, StartNext) end
 end
 
+-- (a card revealed: it plays in from now)
+local function Reveal(n)
+    for i = reached + 1, n do
+        if entries[i] then entries[i].born = GetTime() end
+    end
+    reached = math.max(reached, n)
+end
+
 function Go(n)
     if n > #PAGES then return Finish() end
     if n < 1 then return end
-    local changed = n ~= page or not shownAt
-    page, shownAt = n, GetTime()
-    reached = math.max(reached, n)
-    local p = PAGES[n]
-    mark.icon:SetTexture(p.icon or "Interface\\Icons\\INV_Misc_Note_01")
-    hasExample = ShowExample(p.example)
+    local changed = n ~= page
+    page = n
+    Reveal(n)
+    ShowExample(PAGES[n].example)
     Layout()
-    line1:SetText(p.lines and p.lines[1] or "")
-    line2:SetText(p.lines and p.lines[2] or "")
     if changed and goal == 1 then PlaySound(SOUNDKIT and SOUNDKIT.IG_QUEST_LIST_SELECT or 856) end
 end
 
@@ -454,7 +447,7 @@ local function Press(key)
 end
 more:SetScript("OnClick", function() Press("PAD1") end)
 closeButton:SetScript("OnClick", function() Press("PAD2") end)
-right:SetScript("OnMouseUp", function(_, button)
+root:SetScript("OnMouseUp", function(_, button)
     if button == "LeftButton" then Press("PAD1") end
 end)
 
@@ -490,9 +483,33 @@ local function TakePad(on)
 end
 
 ---------------------------------------------------------------------------
--- Drawn
+-- Drawn: each card plays in as the quest cards do (the diamond pops up, the
+-- line draws down, the words slide in one after another)
 ---------------------------------------------------------------------------
 local presence = 0
+
+local function Play(f, i, now)
+    local T = math.min(1, (now - (f.born or 0)) / IN_TIME)
+    local pop = Ease(T, 0, 0.4)
+    local scale = math.max(0.01, 0.5 + 0.5 * Pop(pop))
+    f.tile:SetScale(scale)
+    f.tile:ClearAllPoints()
+    f.tile:SetPoint("CENTER", f, "TOPLEFT", ACROSS / 2 / scale, -ACROSS / 2 / scale)
+    f.tile:SetAlpha(pop)
+    f.line:SetHeight(math.max(0.001, (f.h - (ACROSS + 4)) * Ease(T, 0.2, 0.75)))
+    local rows = { { f.name, f.nameY }, { f.l1, f.l1Y }, { f.l2, f.l2Y } }
+    for r, row in ipairs(rows) do
+        local from = 0.3 + 0.1 * (r - 1)
+        local e = Ease(T, from, from + 0.4)
+        row[1]:ClearAllPoints()
+        row[1]:SetPoint("TOPLEFT", f, "TOPLEFT", ACROSS + 10 - ROW_SLIDE * (1 - e), row[2])
+        row[1]:SetAlpha(e)
+    end
+    -- (the page picked is lit; the others dimmer)
+    local on = i == page
+    f:SetAlpha(on and 1 or (f.hover and 0.85 or 0.55))
+    f.name:SetTextColor(on and GOLD[1] or 1, on and GOLD[2] or 1, on and GOLD[3] or 1)
+end
 
 local function Step(elapsed)
     local want = goal == 1 and not IF.InCombat()
@@ -501,41 +518,28 @@ local function Step(elapsed)
     TakePad(want and presence >= 0.5)
     if presence <= 0 then
         root:Hide()
-        head:Hide()
         return
     end
-    head:Show()
-    head:SetAlpha(Ease(presence, 0, 1))
     if not root:IsShown() then root:Show() end
     if want and not escape:IsShown() then escape:Show() end
     root:SetAlpha(Ease(presence, 0, 1))
     local now = GetTime()
-    local words = shownAt and Ease(now - shownAt, 0, 0.35) or 1
-    for _, s in ipairs({ line1, line2 }) do s:SetAlpha(words) end
-    stage:SetAlpha(0.35 + 0.65 * words)
-    -- (the picture's diamond sits above the first name)
-    mark:ClearAllPoints()
-    mark:SetPoint("CENTER", root, "TOPLEFT", RULE_X, -(RowY(1) - 44))
-    local nextSlot = reached + 1
+    band:SetAlpha(Ease(math.min(1, (now - (tour and tour.born or 0)) / IN_TIME), 0, 0.5))
+    for i, f in ipairs(entries) do
+        if f:IsShown() then Play(f, i, now) end
+    end
     local beat = (now % 1.2) / 1.2
-    more:SetShown(nextSlot <= #PAGES)
-    if nextSlot <= #PAGES then
+    more:SetShown(more.y ~= nil)
+    moreKey:SetShown(more.y ~= nil)
+    if more.y then
         more:ClearAllPoints()
-        more:SetPoint("CENTER", root, "TOPLEFT", RULE_X, -RowY(nextSlot) + 4 * math.sin(now * 5))
+        more:SetPoint("CENTER", root, "TOPLEFT", ACROSS / 2, more.y - TILE / 2 + 3 * math.sin(now * 5))
         local size = (TILE - 6) * 64 / 46 * (1 + 0.8 * beat)
         moreGlow:SetSize(size, size)
         moreGlow:SetAlpha(0.95 * (1 - beat) ^ 1.3)
         moreTile:SetScale(1 + 0.06 * math.sin(now * 5))
         moreKey:ClearAllPoints()
         moreKey:SetPoint("LEFT", more, "RIGHT", 10, 0)
-    end
-    moreKey:SetShown(nextSlot <= #PAGES)
-    for i, row in ipairs(rows) do
-        local on = i == page
-        local c = on and GOLD or (row.hover and { 1, 1, 1 } or GREY)
-        row.name:SetTextColor(c[1], c[2], c[3])
-        row.name:SetAlpha(i < reached and 1 or (i == reached and (i == page and words or 1) or 0))
-        row:EnableMouse(i <= reached)
     end
 end
 
@@ -546,7 +550,6 @@ driver:SetScript("OnUpdate", function(_, elapsed)
     if not ok then
         broken, goal = true, 0
         root:Hide()
-        head:Hide()
         escape:Hide()
         TakePad(false)
         IF.Print("What's new: the tour stopped after an error: " .. tostring(err))
@@ -560,22 +563,19 @@ end)
 local function Start(module, pages, version, seen)
     broken = nil
     PAGES = pages
-    Fit()
     for i, p in ipairs(PAGES) do
-        if not rows[i] then Row(i) end
-        rows[i].name:SetText(p.name or "")
-        rows[i]:ClearAllPoints()
-        rows[i]:SetPoint("RIGHT", root, "TOPLEFT", RULE_X - 52, -RowY(i))
-        rows[i]:Show()
+        local f = entries[i] or Entry(i)
+        FillEntry(f, p)
     end
-    for i = #PAGES + 1, #rows do rows[i]:Hide() end
-    tour = { module = module, version = version }
+    for i = #PAGES + 1, #entries do entries[i]:Hide() end
+    tour = { module = module, version = version, born = GetTime() }
     headName:SetText(Title(module))
     headSmall:SetText(seen and ("What's new since " .. seen .. ": version " .. tostring(version))
         or ("What's new in version " .. tostring(version)))
     goal = 1
-    shownAt = nil
-    reached = 1
+    reached = 0
+    page = 0
+    entries[1].born = GetTime()
     local ok, err = pcall(Go, 1)
     if not ok then
         goal = 0
