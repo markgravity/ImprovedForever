@@ -488,6 +488,12 @@ end
 ---------------------------------------------------------------------------
 local presence = 0
 
+-- Is the tour up (or fading)? The sidebar's other cards stand down meanwhile
+-- (Immersion's Card.lua asks)
+function WN.Active()
+    return goal == 1 or presence > 0
+end
+
 local function Play(f, i, now)
     local T = math.min(1, (now - (f.born or 0)) / IN_TIME)
     local pop = Ease(T, 0, 0.4)

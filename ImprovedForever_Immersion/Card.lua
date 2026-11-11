@@ -308,6 +308,9 @@ end
 
 function Card:Update(elapsed, content)
     self.dt = elapsed
+    -- (the what's-new tour is up, in this corner: every card out of its way)
+    local WN = ImprovedForever.WhatsNew
+    if content and WN and WN.Active() then content = nil end
     -- (a window open: nothing over it, the card goes out as with nothing to say)
     -- (opts.always: the quest tracker stays while windows are open)
     if content and not self.opts.always and ImprovedForever.Focus and ImprovedForever.Focus.AnyOpen() then content = nil end
