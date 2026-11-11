@@ -1,22 +1,23 @@
--- What's new: when a module has been updated since you last saw it, a tour of
--- what changed, in the look of Immersion's sidebar cards (Card.lua,
--- QuestPeek.lua): at the screen's top left on the NPC dialog's dark band,
--- the module's name in Morpheus, then a card for each page, one under
--- another: the spell diamond with the page's picture, a gold line running
--- down from it, the page's name and two lines to the right. The cards play
--- in as the quest cards do, one after another, all of them shown; up / down
--- (the D-pad) pick one (a module's example of it, when it gave one, to the
--- right); the game's button legend under them: Close, B or Esc end it.
--- * The pages live here, in WhatsNewData.lua, per module and version
---   (IF.WhatsNew.Add); a module may add a live example of its own by key
---   (IF.WhatsNew.Example(key, build(stageFrame))).
+-- What's new, as a changelog: when a module has been updated since you last
+-- saw it, a list of what changed, in the look of Immersion's sidebar cards
+-- (Card.lua, QuestPeek.lua): at the screen's top left on the NPC dialog's
+-- dark band, "What's new" in Morpheus, then a card for each module: its
+-- spell diamond (the module's icon), a gold line running down from it, its
+-- name and versions, under them its changes as a list with each change's
+-- name lit. The cards play in as the quest cards do, one after another. The
+-- list scrolls (the wheel, the D-pad) when it would reach the chat box. The
+-- game's button legend under it with the pad (Close; B or Esc end it), the
+-- game's X at the top right with the mouse.
+-- * The changes live here, in WhatsNewData.lua, per module and version
+--   (IF.WhatsNew.Add).
 -- * What each module was last seen at is IF.db.whatsNew[module]. A first
 --   install (IF.freshInstall) shows nothing: the versions are just noted, as
---   for a module installed later. An update from before this existed (no
---   record yet) shows each module's latest pages once. Several updated
---   modules are shown one after another.
--- * /if whatsnew [module] plays it again (the module's latest pages).
--- The pad is taken by a catcher frame only while the tour is up (not in a
+--   for a module installed later. A player with no version tracked (an
+--   update from before this existed) is shown every change there is. Several
+--   updated modules are one list.
+-- * /if whatsnew demo plays that case; /if whatsnew [module] one module's
+--   latest changes; the General tab's button every module's latest.
+-- The pad is taken by a catcher frame only while the list is up (not in a
 -- fight).
 local IF = ImprovedForever
 
@@ -36,7 +37,6 @@ local TEXT_W = 380
 local PANEL_W = 46 + TEXT_W
 local CORNER_X = 40
 local BAND_ALPHA, BAND_REACH = 0.6, 40
-local STAGE_W, STAGE_H = 500, 240
 
 local GOLD = { 1, 0.82, 0.45 }
 local GREY = { 0.5, 0.5, 0.5 }
@@ -53,18 +53,13 @@ local NAME_SIZE, SMALL_SIZE = 30, 13
 -- The data: WN.data[module] = { { version, title?, pages }, ... }
 ---------------------------------------------------------------------------
 WN.data = {}
-WN.examples = {}
 
--- module: "Core" or the module's name ("Immersion"); def.pages: { name, icon,
--- lines = { first, second }, example? = key }
+-- module: "Core" or the module's name ("Immersion"); def.pages: { name,
+-- lines = { first, second } }: one change each, its name lit
 function WN.Add(module, version, def)
     local list = WN.data[module] or {}
     WN.data[module] = list
     list[#list + 1] = { version = version, pages = def.pages }
-end
-
-function WN.Example(key, build)
-    WN.examples[key] = build
 end
 
 local function Folder(module)
@@ -178,6 +173,7 @@ end
 
 local bodyFont = GameFontHighlight and GameFontHighlight:GetFont()
 local ACROSS = TILE * 1.2 * ROOT2           -- (a diamond's width, point to point)
+local GOLD_HEX = "ffd173"                   -- (a change's name, lit)
 
 -- Where the sidebar is: Immersion's cards' corner, its top and scale (the
 -- Body tab's), else the same defaults
@@ -189,7 +185,8 @@ local function Corner()
 end
 
 ---------------------------------------------------------------------------
--- The panel: the module's name, then a card for each page revealed so far
+-- The panel: "What's new", then a card for each module: its diamond and
+-- name, under it the list of its changes
 ---------------------------------------------------------------------------
 local root = CreateFrame("Frame", "ImprovedForeverWhatsNew", UIParent)
 root:SetSize(PANEL_W, 200)
@@ -220,16 +217,17 @@ do
     Part({ { "TOPRIGHT" }, { "BOTTOMLEFT", band, "BOTTOMRIGHT", -fade, 0 } }, BAND_ALPHA, 0)
 end
 
--- (the module's name in Morpheus, what changed small under it)
+-- (the title in Morpheus, what it is small under it)
 local headName = Text(root, FONT, NAME_SIZE, GOLD[1], GOLD[2], GOLD[3])
 headName:SetPoint("TOPLEFT", root, "TOPLEFT", 0, 0)
 local headSmall = Text(root, bodyFont, SMALL_SIZE, 1, 1, 1)
 headSmall:SetPoint("TOPLEFT", headName, "BOTTOMLEFT", 0, -4)
 
 -- (the cards in a window under the header: the list scrolls when it would
--- reach the chat box, the wheel or the pad's browse moving it)
+-- reach the chat box, the wheel or the pad's D-pad moving it)
 local HEAD_H = NAME_SIZE + SMALL_SIZE + 4 + 18
 local VIEW_PAD = 14
+local SCROLL_STEP = 80
 local view = CreateFrame("Frame", nil, root)
 view:SetPoint("TOPLEFT", root, "TOPLEFT", -VIEW_PAD, -HEAD_H)
 view:SetPoint("BOTTOMRIGHT", root, "BOTTOMRIGHT", VIEW_PAD, 0)
@@ -246,25 +244,22 @@ end
 Scrolled()
 root:EnableMouseWheel(true)
 root:SetScript("OnMouseWheel", function(_, delta)
-    scroll = scroll - delta * 60
+    scroll = scroll - delta * SCROLL_STEP
     Scrolled()
 end)
 
 -- (the current tour)
-local PAGES = {}                        -- (every page of every module, in order)
-local secs = {}                         -- (a module's section: { module, version, seen, all, first, last })
-local entries = {}
-local headers = {}
-local page, goal = 1, 0
-local reached = 1
+local items = {}
+local cards = {}
+local goal = 0
 local broken
-local Go
 local tour                              -- { items, demo, born }
 
--- A page's card: the diamond with its picture, the gold line running down
--- from it, the name, the words to the right
-local function Entry(i)
-    local f = CreateFrame("Button", nil, content)
+-- A module's card: its diamond (the module's own icon), the gold line
+-- running down from it, its name and versions, then its changes: a version's
+-- small label when there are several, each change with its name lit
+local function Card(k)
+    local f = CreateFrame("Frame", nil, content)
     f:SetWidth(PANEL_W)
     f.tile = Tile(f, TILE)
     f.tile:ClearAllPoints()
@@ -279,72 +274,84 @@ local function Entry(i)
         CreateColor(GOLD[1], GOLD[2], GOLD[3], 0.9)) then
         f.line:SetVertexColor(GOLD[1], GOLD[2], GOLD[3], 0.6)
     end
-    f.name = Text(f, FONT, 22, 1, 1, 1)
-    f.ver = Text(f, bodyFont, 11, 0.55, 0.55, 0.55)
-    f.l1 = Text(f, bodyFont, SMALL_SIZE, 1, 1, 1)
-    f.l2 = Text(f, bodyFont, SMALL_SIZE, 1, 0.82, 0)
-    for _, s in ipairs({ f.l1, f.l2 }) do
-        s:SetWordWrap(true)
-        s:SetJustifyH("LEFT")
-        s:SetWidth(TEXT_W)
-    end
-    f:SetScript("OnEnter", function(self) self.hover = true end)
-    f:SetScript("OnLeave", function(self) self.hover = nil end)
-    f:SetScript("OnClick", function() Go(i) end)
-    entries[i] = f
+    f.name = Text(f, FONT, 22, GOLD[1], GOLD[2], GOLD[3])
+    f.ver = Text(f, bodyFont, 12, 0.6, 0.6, 0.6)
+    f.rows = {}                         -- (fontstrings, reused)
+    cards[k] = f
     return f
 end
 
--- (a card's words laid out: where each sits and how tall the card is)
-local function FillEntry(f, p)
-    f.tile.icon:SetTexture(p.icon or "Interface\\Icons\\INV_Misc_Note_01")
+local function RowString(f, j)
+    local fs = f.rows[j]
+    if not fs then
+        fs = Text(f, bodyFont, SMALL_SIZE, 1, 1, 1)
+        fs:SetJustifyH("LEFT")
+        fs:SetWordWrap(true)
+        fs:SetWidth(TEXT_W)
+        f.rows[j] = fs
+    end
+    return fs
+end
+
+-- (a page's words, joined)
+local function Words(p)
+    local t = {}
+    for _, line in ipairs(p.lines or {}) do t[#t + 1] = line end
+    return table.concat(t, " ")
+end
+
+local function IconOf(module)
+    local A = _G.C_AddOns
+    local icon = A and A.GetAddOnMetadata and A.GetAddOnMetadata(Folder(module), "IconTexture")
+    return icon or "Interface\\Icons\\INV_Misc_Note_01"
+end
+
+local function Fill(f, item)
+    f.tile.icon:SetTexture(IconOf(item.module))
     f.tile.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92)
-    f.name:SetText(p.name or "")
-    f.ver:SetText(p.version or "")
-    f.l1:SetText(p.lines and p.lines[1] or "")
-    f.l2:SetText(p.lines and p.lines[2] or "")
-    local y = -(ACROSS / 2 - 10)
-    f.nameY = y
-    y = y - 24 - 5
-    f.l1Y = y
-    y = y - (f.l1:GetStringHeight() or 0) - 3
-    f.l2Y = y
-    y = y - ((p.lines and p.lines[2]) and f.l2:GetStringHeight() or 0)
+    f.name:SetText(Title(item.module))
+    f.ver:SetText(item.seen and (item.seen .. "  >  " .. tostring(item.version))
+        or ((item.all and "up to " or "") .. tostring(item.version)))
+    f.nameY = -(ACROSS / 2 - 10)
+    local y = f.nameY - 24 - 6
+    local shown = 0
+    local last
+    local multi = false
+    for _, p in ipairs(item.pages) do
+        if p.version ~= item.pages[1].version then multi = true end
+    end
+    f.list = {}
+    for _, p in ipairs(item.pages) do
+        if multi and p.version ~= last then
+            last = p.version
+            shown = shown + 1
+            local fs = RowString(f, shown)
+            fs:SetTextColor(0.6, 0.6, 0.6)
+            fs:SetText(tostring(p.version))
+            y = y - 4
+            f.list[#f.list + 1] = { fs = fs, y = y }
+            y = y - (fs:GetStringHeight() or 12) - 3
+        end
+        shown = shown + 1
+        local fs = RowString(f, shown)
+        fs:SetTextColor(1, 1, 1)
+        fs:SetText(("|cff%s%s|r  %s"):format(GOLD_HEX, p.name or "", Words(p)))
+        f.list[#f.list + 1] = { fs = fs, y = y }
+        y = y - (fs:GetStringHeight() or 14) - 6
+    end
+    for j = shown + 1, #f.rows do f.rows[j]:Hide() end
+    for _, e in ipairs(f.list) do e.fs:Show() end
     f.h = math.max(-y + PAD_Y, ACROSS + 24)
     f:SetHeight(f.h)
     f.line:SetHeight(0.001)
 end
 
--- (a module's example of a page, to the right of the sidebar)
-local stage = CreateFrame("Frame", nil, root)
-stage:SetSize(STAGE_W, STAGE_H)
-stage:SetPoint("LEFT", root, "TOPRIGHT", 60 + BAND_REACH, -STAGE_H / 2)
-local built = {}
-
-local function ShowExample(key)
-    for k, f in pairs(built) do f:SetShown(k == key) end
-    if key and not built[key] and WN.examples[key] then
-        local f = CreateFrame("Frame", nil, stage)
-        f:SetAllPoints()
-        built[key] = f
-        local ok, err = pcall(WN.examples[key], f)
-        if not ok then
-            local s = Text(f, bodyFont, 12, 1, 0.4, 0.4)
-            s:SetPoint("CENTER")
-            s:SetText("(example not drawn: " .. tostring(err):sub(1, 90) .. ")")
-        end
-    end
-end
-
--- The buttons: the game's legend (the pad's prompts; with the mouse its
--- Close button), under the cards
+-- (with the mouse and keyboard: the game's X at the top right, no legend)
 local LEGEND = {
     { "PAD2", "PAD2", "Close" },
     { glyph = "DPAD_UD", text = "Browse", pad = true },
 }
 local legend = IF.InputLegend(root)
-
--- (with the mouse and keyboard: the game's X at the top right, no legend)
 local close
 do
     local ok, b = pcall(CreateFrame, "Button", nil, root, "UIPanelCloseButton")
@@ -362,31 +369,6 @@ do
     close:SetPoint("TOPRIGHT", root, "TOPRIGHT", 6, 8)
 end
 
--- Where everything sits: the header, the revealed cards one under another,
--- the reveal button under them, then Close; the panel as tall as that, in
--- the sidebar's corner
--- A module's section header: its name, the versions beside it, a rule under
-local SEC_H = 34
-local function Header(k)
-    local f = CreateFrame("Frame", nil, content)
-    f:SetSize(PANEL_W, SEC_H)
-    f.title = Text(f, FONT, 20, GOLD[1], GOLD[2], GOLD[3])
-    f.title:SetPoint("TOPLEFT")
-    f.info = Text(f, bodyFont, 12, 0.6, 0.6, 0.6)
-    f.info:SetPoint("TOPRIGHT", f, "TOPRIGHT", 0, -6)
-    local rule = f:CreateTexture(nil, "ARTWORK")
-    rule:SetHeight(1)
-    rule:SetPoint("TOPLEFT", f, "TOPLEFT", 0, -28)
-    rule:SetPoint("TOPRIGHT", f, "TOPRIGHT", 0, -28)
-    rule:SetColorTexture(1, 1, 1, 1)
-    if not pcall(rule.SetGradient, rule, "HORIZONTAL", CreateColor(GOLD[1], GOLD[2], GOLD[3], 0.7),
-        CreateColor(GOLD[1], GOLD[2], GOLD[3], 0)) then
-        rule:SetVertexColor(GOLD[1], GOLD[2], GOLD[3], 0.4)
-    end
-    headers[k] = f
-    return f
-end
-
 -- The height there is for the panel: down to the chat box's top (and the
 -- legend under the panel), from where the sidebar starts
 local LEGEND_ROOM, CHAT_TABS = 56, 36
@@ -402,26 +384,16 @@ end
 
 local function Layout()
     local y = 0
-    for k, sec in ipairs(secs) do
-        local h = headers[k] or Header(k)
-        h:Show()
-        h:ClearAllPoints()
-        h:SetPoint("TOPLEFT", content, "TOPLEFT", 0, y)
-        sec.top = -y
-        y = y - SEC_H - 10
-        for i = sec.first, sec.last do
-            local f = entries[i]
-            f:Show()
-            f:ClearAllPoints()
-            f:SetPoint("TOPLEFT", content, "TOPLEFT", 0, y)
-            f.top = -y
-            y = y - f.h - STACK_GAP
-        end
+    for k = 1, #items do
+        local f = cards[k]
+        f:Show()
+        f:ClearAllPoints()
+        f:SetPoint("TOPLEFT", content, "TOPLEFT", 0, y)
+        y = y - f.h - STACK_GAP
     end
-    for k = #secs + 1, #headers do headers[k]:Hide() end
-    for i = #PAGES + 1, #entries do entries[i]:Hide() end
+    for k = #items + 1, #cards do cards[k]:Hide() end
     -- (as tall as the cards, but not past the chat box)
-    local contentH = -y
+    local contentH = math.max(1, -y - STACK_GAP)
     viewH = math.max(140, math.min(contentH, Available() - HEAD_H))
     content:SetHeight(contentH)
     root:SetHeight(HEAD_H + viewH)
@@ -438,24 +410,8 @@ local function Layout()
     root:SetPoint("TOPLEFT", UIParent, "TOPLEFT", x / scale, -UIParent:GetHeight() * top / scale)
 end
 
--- (a card brought into the window: the first of a section with its header)
-local function ScrollTo(n)
-    local f = entries[n]
-    if not f then return end
-    local from, to = f.top, f.top + f.h
-    for _, sec in ipairs(secs) do
-        if sec.first == n then from = sec.top end
-    end
-    if from < scroll then
-        scroll = from
-    elseif to > scroll + viewH then
-        scroll = to - viewH
-    end
-    Scrolled()
-end
-
 ---------------------------------------------------------------------------
--- The pages
+-- Closing, the pad
 ---------------------------------------------------------------------------
 local escape = CreateFrame("Frame", "ImprovedForeverWhatsNewEscape", UIParent)
 escape:Hide()
@@ -463,7 +419,6 @@ IF.Focus.EscapeClose(escape)
 
 local function Finish()
     goal = 0
-    page = 1
     -- (seen: each module's version is noted, so its next update shows again)
     if tour and IF.db and not tour.demo then
         IF.db.whatsNew = IF.db.whatsNew or {}
@@ -474,32 +429,20 @@ local function Finish()
     escape:Hide()
 end
 
-function Go(n)
-    if n > #PAGES then return Finish() end
-    if n < 1 then return end
-    local changed = n ~= page
-    page = n
-    ShowExample(PAGES[n].example)
-    Layout()
-    ScrollTo(n)
-    if changed and goal == 1 then PlaySound(SOUNDKIT and SOUNDKIT.IG_QUEST_LIST_SELECT or 856) end
-end
-
 local function Press(key)
     if goal ~= 1 then return end
     if key == "UP" then
-        if page > 1 then Go(page - 1) end
+        scroll = scroll - SCROLL_STEP
+        Scrolled()
     elseif key == "DOWN" then
-        if page < reached then Go(page + 1) end
+        scroll = scroll + SCROLL_STEP
+        Scrolled()
     elseif key == "PAD2" then
         Finish()
     end
 end
 close:SetScript("OnClick", function() Press("PAD2") end)
 
----------------------------------------------------------------------------
--- The pad: taken only while it is up
----------------------------------------------------------------------------
 local catcher = CreateFrame("Frame", nil, UIParent)
 catcher:SetScript("OnGamePadButtonDown", function(_, button)
     if button == "PADDUP" then Press("UP") end
@@ -539,7 +482,7 @@ function WN.Active()
     return goal == 1 or presence > 0
 end
 
-local function Play(f, i, now)
+local function Play(f, now)
     local T = math.min(1, (now - (f.born or 0)) / IN_TIME)
     local pop = Ease(T, 0, 0.4)
     local scale = math.max(0.01, 0.5 + 0.5 * Pop(pop))
@@ -548,21 +491,21 @@ local function Play(f, i, now)
     f.tile:SetPoint("CENTER", f, "TOPLEFT", ACROSS / 2 / scale, -ACROSS / 2 / scale)
     f.tile:SetAlpha(pop)
     f.line:SetHeight(math.max(0.001, (f.h - (ACROSS + 4)) * Ease(T, 0.2, 0.75)))
+    local e = Ease(T, 0.3, 0.7)
+    f.name:ClearAllPoints()
+    f.name:SetPoint("TOPLEFT", f, "TOPLEFT", ACROSS + 10 - ROW_SLIDE * (1 - e), f.nameY)
+    f.name:SetAlpha(e)
     f.ver:ClearAllPoints()
     f.ver:SetPoint("TOPRIGHT", f, "TOPLEFT", ACROSS + 10 + TEXT_W, f.nameY - 8)
-    f.ver:SetAlpha(Ease(T, 0.3, 0.7))
-    local rows = { { f.name, f.nameY }, { f.l1, f.l1Y }, { f.l2, f.l2Y } }
-    for r, row in ipairs(rows) do
-        local from = 0.3 + 0.1 * (r - 1)
-        local e = Ease(T, from, from + 0.4)
-        row[1]:ClearAllPoints()
-        row[1]:SetPoint("TOPLEFT", f, "TOPLEFT", ACROSS + 10 - ROW_SLIDE * (1 - e), row[2])
-        row[1]:SetAlpha(e)
+    f.ver:SetAlpha(e)
+    -- (the changes, a beat apart)
+    for j, row in ipairs(f.list or {}) do
+        local from = math.min(0.55, 0.4 + 0.04 * (j - 1))
+        local r = Ease(T, from, from + 0.35)
+        row.fs:ClearAllPoints()
+        row.fs:SetPoint("TOPLEFT", f, "TOPLEFT", ACROSS + 10 - ROW_SLIDE * (1 - r), row.y)
+        row.fs:SetAlpha(r)
     end
-    -- (the page picked is lit; the others dimmer)
-    local on = i == page
-    f:SetAlpha(on and 1 or (f.hover and 0.85 or 0.55))
-    f.name:SetTextColor(on and GOLD[1] or 1, on and GOLD[2] or 1, on and GOLD[3] or 1)
 end
 
 local function Step(elapsed)
@@ -579,14 +522,8 @@ local function Step(elapsed)
     root:SetAlpha(Ease(presence, 0, 1))
     local now = GetTime()
     band:SetAlpha(Ease(math.min(1, (now - (tour and tour.born or 0)) / IN_TIME), 0, 0.5))
-    for k, sec in ipairs(secs) do
-        local h, first = headers[k], entries[sec.first]
-        if h and first then
-            h:SetAlpha(Ease((now - (first.born or 0)) / IN_TIME, 0, 0.4))
-        end
-    end
-    for i, f in ipairs(entries) do
-        if f:IsShown() then Play(f, i, now) end
+    for k = 1, #items do
+        if cards[k]:IsShown() then Play(cards[k], now) end
     end
 end
 
@@ -606,33 +543,20 @@ end)
 ---------------------------------------------------------------------------
 -- Starting
 ---------------------------------------------------------------------------
--- A tour of the modules' items: { module, pages, version, seen?, all? },
--- one list, a section for each module
-local function Start(items, demo)
+-- A tour of the modules' entries: { module, pages, version, seen?, all? },
+-- one list, a card for each module
+local function Start(list, demo)
     broken = nil
-    PAGES, secs = {}, {}
-    for _, item in ipairs(items) do
-        local first = #PAGES + 1
-        for _, p in ipairs(item.pages) do PAGES[#PAGES + 1] = p end
-        secs[#secs + 1] = { module = item.module, version = item.version, seen = item.seen, all = item.all,
-            first = first, last = #PAGES }
-    end
-    for i, p in ipairs(PAGES) do FillEntry(entries[i] or Entry(i), p) end
-    for k, sec in ipairs(secs) do
-        local h = headers[k] or Header(k)
-        h.title:SetText(Title(sec.module))
-        h.info:SetText(sec.seen and (sec.seen .. "  >  " .. tostring(sec.version))
-            or ((sec.all and "up to " or "") .. tostring(sec.version)))
-    end
+    items = list
+    for k, item in ipairs(items) do Fill(cards[k] or Card(k), item) end
     tour = { items = items, born = GetTime(), demo = demo }
     headName:SetText("What's new")
     headSmall:SetText(demo and "Demo: nothing is noted as seen." or "Since the version you had.")
     goal = 1
-    reached = #PAGES
-    page = 0
-    -- (every card at once, one after another a beat apart)
-    for i = 1, #PAGES do entries[i].born = GetTime() + (i - 1) * CARD_BEAT end
-    local ok, err = pcall(Go, 1)
+    scroll = 0
+    -- (the cards one after another a beat apart)
+    for k = 1, #items do cards[k].born = GetTime() + (k - 1) * CARD_BEAT end
+    local ok, err = pcall(Layout)
     if not ok then
         goal = 0
         IF.Print("What's new: the tour could not start: " .. tostring(err))

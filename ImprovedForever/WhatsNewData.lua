@@ -1,9 +1,8 @@
--- The pages of the what's-new tours (WhatsNew.lua), per module and version:
--- a module updated since the player last saw it plays the pages of every
+-- The changes of the what's-new list (WhatsNew.lua), per module and version:
+-- a module updated since the player last saw it lists the changes of every
 -- version after theirs, the newest first. Add a version here when a release
--- has something a player should be shown (not fixes). A page: its name
--- (the list), an icon, two lines, and optionally an example key a module
--- gave with IF.WhatsNew.Example.
+-- has something a player should be shown (not fixes). A change: its name
+-- (lit in the list), an icon (kept for later), and two lines of words.
 local IF = ImprovedForever
 local WN = IF.WhatsNew
 local ICON = "Interface\\Icons\\"
