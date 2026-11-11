@@ -26,16 +26,20 @@ local NEXT_DELAY = 1.2                  -- (between two modules' tours)
 local FADE = 0.35
 
 -- (the panel, and in it: the list's rule, the right side)
-local W, H = 1200, 540
+-- (its height wraps what is in it: the list's rows, or the example, the
+-- words and Close, whichever is taller; Fit() works it out per tour)
+local W = 1200
 local RIGHT_W = 500
 local RULE_X = W / 2 - RIGHT_W / 2 - 70
-local RULE_TOP, RULE_BOTTOM = 90, 470
-local LIST_TOP, LIST_BOTTOM = 190, 440
+local RULE_TOP = 90
+local LIST_TOP = 190                    -- (the first row's top; the page's diamond above it)
+local ROW_STEP = 38
 local STAGE_W, STAGE_H = RIGHT_W, 240
-local STAGE_Y = H / 2 - STAGE_H / 2
-local WORDS_Y = STAGE_Y + STAGE_H + 12
+local STAGE_TOP = 100
 local TILE = 30
-local ROW_MAX = 38                      -- (a row's most height: few pages are not spread wide)
+local PAD_BOTTOM = 40
+local H = 540
+local wordsY = LIST_TOP                 -- (the words' top: under the example, else level with the list)
 
 local GOLD = { 1, 0.82, 0.45 }
 local GREY = { 0.5, 0.5, 0.5 }
@@ -170,12 +174,18 @@ end
 local function Rule(parent, length)
     local f = CreateFrame("Frame", nil, parent)
     f:SetSize(1, length)
+    f.parts = {}
+    function f.Resize(length)
+        f:SetHeight(length)
+        for _, r in ipairs(f.parts) do r:SetHeight(length / 2) end
+    end
     local function Color(a) return CreateColor(GOLD[1], GOLD[2], GOLD[3], a) end
     for _, first in ipairs({ true, false }) do
         local r = f:CreateTexture(nil, "ARTWORK")
         r:SetColorTexture(GOLD[1], GOLD[2], GOLD[3], 1)
         r:SetSize(1, length / 2)
         r:SetPoint(first and "BOTTOM" or "TOP", f, "CENTER")
+        f.parts[#f.parts + 1] = r
         -- (vertical gradients run from the bottom to the top)
         local ok = pcall(r.SetGradient, r, "VERTICAL", first and Color(0.8) or Color(0), first and Color(0) or Color(0.8))
         if not ok then r:SetAlpha(0.6) end
@@ -219,7 +229,7 @@ do
     Part({ { "TOPRIGHT" }, { "BOTTOMLEFT", band, "BOTTOMRIGHT", -fade, 0 } }, BAND_ALPHA, 0)
 end
 
-local sideRule = Rule(root, RULE_BOTTOM - RULE_TOP)
+local sideRule = Rule(root, 380)
 sideRule:SetPoint("TOP", root, "TOPLEFT", RULE_X, -RULE_TOP)
 
 -- (the current tour)
@@ -232,8 +242,7 @@ local Go
 local tour                              -- { module, version }
 
 local function RowY(i)
-    local step = math.min(ROW_MAX, (LIST_BOTTOM - LIST_TOP) / math.max(#PAGES, 1))
-    return LIST_TOP + (i - 0.5) * step
+    return LIST_TOP + (i - 0.5) * ROW_STEP
 end
 
 local function Row(i)
@@ -296,7 +305,7 @@ browse:SetJustifyH("RIGHT")
 -- The right side: the example (the middle of the screen), the words
 ---------------------------------------------------------------------------
 local right = CreateFrame("Frame", nil, root)
-right:SetSize(RIGHT_W, H)
+right:SetSize(RIGHT_W, H)  -- (resized by Fit)
 right:SetPoint("TOP", root, "TOP", 0, 0)
 right:EnableMouse(true)
 
@@ -308,7 +317,7 @@ line2:SetPoint("TOP", line1, "BOTTOM", 0, -4)
 
 local stage = CreateFrame("Frame", nil, right)
 stage:SetSize(STAGE_W, STAGE_H)
-stage:SetPoint("TOP", right, "TOP", 0, -STAGE_Y)
+stage:SetPoint("TOP", right, "TOP", 0, -STAGE_TOP)
 local built = {}                        -- (an example's frame, built when first wanted)
 
 -- (a page's example, or nothing: its words then sit where the stage is)
@@ -345,6 +354,25 @@ end
 local closeButton = Word(17, 0.7, 0.7, 0.7, "PAD2")
 
 local hasExample
+local anyExample
+
+-- (the panel's height for the tour: the list down to its hint, or the right
+-- side down to Close, whichever is taller, and a margin)
+local function Fit()
+    anyExample = false
+    for _, p in ipairs(PAGES) do
+        if p.example and WN.examples[p.example] then anyExample = true end
+    end
+    wordsY = anyExample and (STAGE_TOP + STAGE_H + 12) or LIST_TOP
+    local listBottom = LIST_TOP + #PAGES * ROW_STEP
+    H = math.max(listBottom + 60, wordsY + 58 + 25) + PAD_BOTTOM
+    root:SetHeight(H)
+    right:SetHeight(H)
+    stage:SetShown(anyExample)
+    sideRule:SetPoint("TOP", root, "TOPLEFT", RULE_X, -RULE_TOP)
+    sideRule.Resize(listBottom + 30 - RULE_TOP)
+end
+
 local function Layout()
     local pad = IF.Input.Pad()
     moreKey:SetText(pad and IF.GlyphText("PAD1", 18) or "")
@@ -352,7 +380,6 @@ local function Layout()
     browse:ClearAllPoints()
     browse:SetPoint("TOPRIGHT", root, "TOPLEFT", RULE_X - 52, -(RowY(#PAGES) + 30))
     closeButton:Set(pad and "Close" or "Close  (Esc)")
-    local wordsY = hasExample and WORDS_Y or (STAGE_Y + STAGE_H / 2 - 30)
     line1:ClearAllPoints()
     line1:SetPoint("TOP", right, "TOP", 0, -wordsY)
     closeButton:ClearAllPoints()
@@ -533,6 +560,7 @@ end)
 local function Start(module, pages, version, seen)
     broken = nil
     PAGES = pages
+    Fit()
     for i, p in ipairs(PAGES) do
         if not rows[i] then Row(i) end
         rows[i].name:SetText(p.name or "")
