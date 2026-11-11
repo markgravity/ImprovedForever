@@ -32,9 +32,9 @@ local UF = IN.UnitFrames
 local PlayerHealth = {}
 IN.PlayerHealth = PlayerHealth
 
-local LINE_H = IN.HP_H or 4
-local POWER_H = IN.MP_H or 3
-local GAP = 2
+local LINE_H = IN.HP_H or 5
+local POWER_H = IN.MP_H or 5
+local GAP = -1                   -- (the two lines share one border row)
 local FADE = 0.3
 local HOLD = 0.8                 -- (whole again: shown this long before fading)
 local TRAIL_DELAY = 0.4          -- (the trail waits this long, then eases in)
@@ -61,9 +61,12 @@ local CAP_W = 2
 -- (the empty part: a dark backing for contrast, a dim tint of the line's
 -- colour showing how far full goes, notches at a quarter, half and three
 -- quarters of each half)
-local BACKING = 0.4
-local TINT = 0.22
-local NOTCHES = { 0.25, 0.5, 0.75 }
+local BACKING = 0.7
+-- (the fishing skill line's look: a thin grey frame, 20 compartments, the
+-- fill graded top to bottom, a soft glow at its end)
+local COMPARTMENTS = 20
+local FRAME = { 0.25, 0.25, 0.25 }
+local GLOW_W = 48
 -- (low mana: a pulse over the power's fill from LOW_MANA down)
 local LOW_MANA = 0.25
 local LOW_POINTS = { { 0, 1 }, { LOW_MANA, 1 }, { LOW_MANA + 0.001, 0 }, { 1, 0 } }
@@ -116,26 +119,33 @@ local function Track(height)
     back:SetAllPoints()
     back:SetColorTexture(0, 0, 0, BACKING)
     t.marks = Layer(t, L_MARKS)
+    for _, e in ipairs({ { "TOPLEFT", "TOPRIGHT", nil, 1 }, { "BOTTOMLEFT", "BOTTOMRIGHT", nil, 1 },
+        { "TOPLEFT", "BOTTOMLEFT", 1, nil }, { "TOPRIGHT", "BOTTOMRIGHT", 1, nil } }) do
+        local f = t.marks:CreateTexture(nil, "OVERLAY")
+        f:SetColorTexture(FRAME[1], FRAME[2], FRAME[3], 1)
+        f:SetPoint(e[1])
+        f:SetPoint(e[2])
+        if e[3] then f:SetWidth(e[3]) end
+        if e[4] then f:SetHeight(e[4]) end
+    end
     t.notches = {}
-    for _, at in ipairs(NOTCHES) do
-        for side = -1, 1, 2 do
-            local n = t.marks:CreateTexture(nil, "OVERLAY")
-            n:SetColorTexture(0, 0, 0, 0.55)
-            n:SetWidth(1)
-            n.at, n.side = at, side
-            t.notches[#t.notches + 1] = n
-        end
+    for i = 1, COMPARTMENTS - 1 do
+        local n = t.marks:CreateTexture(nil, "OVERLAY", nil, 1)
+        n:SetColorTexture(FRAME[1], FRAME[2], FRAME[3], 1)
+        n.at = i / COMPARTMENTS
+        t.notches[i] = n
     end
     t.sized = {}
     t:SetScript("OnSizeChanged", function(self)
-        local half = (self:GetWidth() or 0) / 2
+        local width = self:GetWidth() or 0
+        if width <= 0 then return end
+        local pixel = 768 / (select(2, GetPhysicalScreenSize()) or 768) / self:GetEffectiveScale()
         for _, n in ipairs(self.notches) do
-            local x = n.side * math.floor(half * n.at + 0.5)
+            n:SetSize(2 * pixel, height - 2)
             n:ClearAllPoints()
-            n:SetPoint("TOP", self, "TOP", x, 0)
-            n:SetPoint("BOTTOM", self, "BOTTOM", x, 0)
+            n:SetPoint("CENTER", self, "LEFT", n.at * width, 0)
         end
-        for _, fn in ipairs(self.sized) do fn(half) end
+        for _, fn in ipairs(self.sized) do fn(width - 2) end
     end)
     return t
 end
@@ -150,25 +160,14 @@ end
 
 -- (a fill's colour darkening toward its end, as the header's rule fades:
 -- its colour at the middle, EDGE of it at the end, never see-through)
-local function Grade(tex, left, color)
+local function Grade(tex, _, color)
     if not (tex and tex.SetGradient and CreateColor) then return end
-    local lit = CreateColor(color[1], color[2], color[3], 1)
-    local dark = CreateColor(color[1] * EDGE, color[2] * EDGE, color[3] * EDGE, 1)
+    local low = CreateColor(color[1] * 0.65, color[2] * 0.65, color[3] * 0.65, 1)
+    local high = CreateColor(math.min(1, color[1] * 1.15 + 0.04), math.min(1, color[2] * 1.15 + 0.04),
+        math.min(1, color[3] * 1.15 + 0.04), 1)
     -- (the gradient must not undo the texture's own alpha: the colours' strength)
     local own = tex:GetAlpha()
-    pcall(tex.SetGradient, tex, "HORIZONTAL", left and dark or lit, left and lit or dark)
-    tex:SetAlpha(own)
-end
-
--- (a colour fading toward the end instead: at `alpha` at the middle, down
--- to `edge` of that at the end)
-local function Fade(tex, left, color, alpha, edge)
-    if not (tex and tex.SetGradient and CreateColor) then return end
-    local a = alpha or 1
-    local clear = CreateColor(color[1], color[2], color[3], a * (edge or 0))
-    local lit = CreateColor(color[1], color[2], color[3], a)
-    local own = tex:GetAlpha()
-    pcall(tex.SetGradient, tex, "HORIZONTAL", left and clear or lit, left and lit or clear)
+    pcall(tex.SetGradient, tex, "VERTICAL", low, high)
     tex:SetAlpha(own)
 end
 
@@ -177,24 +176,12 @@ local function Lit(color, by)
     return { color[1] + (1 - color[1]) * by, color[2] + (1 - color[2]) * by, color[3] + (1 - color[3]) * by }
 end
 
--- (the empty part's tint of a half: the whole half, static, so its fade
--- toward the end stays put while the fill moves over it)
-local function Tint(track, left, color)
-    local t = track:CreateTexture(nil, "BACKGROUND", nil, 1)
-    t:SetPoint(left and "TOPLEFT" or "TOPRIGHT", track)
-    t:SetPoint(left and "BOTTOMRIGHT" or "BOTTOMLEFT", track, "BOTTOM")
-    t:SetColorTexture(1, 1, 1, 1)
-    Fade(t, left, color, TINT, 0.5)
-    return t
-end
-
 -- (a half's bar, full out from the middle)
 local function Bar(track, left, level)
     local bar = CreateFrame("StatusBar", nil, track)
-    bar:SetPoint(left and "TOPLEFT" or "TOPRIGHT", track)
-    bar:SetPoint(left and "BOTTOMRIGHT" or "BOTTOMLEFT", track, "BOTTOM")
+    bar:SetPoint("TOPLEFT", track, "TOPLEFT", 1, -1)
+    bar:SetPoint("BOTTOMRIGHT", track, "BOTTOMRIGHT", -1, 1)
     bar:SetFrameLevel(track:GetFrameLevel() + level)
-    bar:SetReverseFill(left)
     bar:SetStatusBarTexture(WHITE)
     bar:SetMinMaxValues(0, 1)
     bar:SetValue(1)
@@ -232,10 +219,14 @@ end
 -- fills reversed), placed by the bar, so a secret value moves it too)
 local function Cap(bar, fill, left, color)
     local c = bar:CreateTexture(nil, "OVERLAY", nil, 7)
-    c:SetPoint(left and "TOPLEFT" or "TOPRIGHT", fill)
-    c:SetPoint(left and "BOTTOMLEFT" or "BOTTOMRIGHT", fill)
-    c:SetWidth(CAP_W)
+    c:SetPoint("TOPRIGHT", fill)
+    c:SetPoint("BOTTOMRIGHT", fill)
+    c:SetWidth(GLOW_W)
     c:SetColorTexture(1, 1, 1, 1)
+    c:SetBlendMode("ADD")
+    if c.SetGradient and CreateColor then
+        c:SetGradient("HORIZONTAL", CreateColor(1, 1, 1, 0), CreateColor(1, 1, 1, 0.22))
+    end
     Tinted(c, color)
     return c
 end
@@ -301,17 +292,16 @@ local healthLine = { halves = {}, trail = {} }
 local powerLine = { halves = {}, trail = {} }
 local halves, powerHalves = healthLine.halves, powerLine.halves
 
-for i = 1, 2 do
-    local left = i == 1
+for i = 1, 1 do
+    local left = false
     local h = { left = left }
-    Tint(line, left, { 1, 1, 1 })
     h.trail = Bar(line, left, L_UNDER)
-    Fade(h.trail:GetStatusBarTexture(), left, TRAIL, TRAIL[4], 0.55)
+    h.trail:SetStatusBarColor(TRAIL[1], TRAIL[2], TRAIL[3], TRAIL[4])
     h.bar = Bar(line, left, L_FILL)
     local fill = h.bar:GetStatusBarTexture()
     Grade(fill, left, GREEN)
     h.orange, h.red = Over(h.bar, fill, 1, left, ORANGE), Over(h.bar, fill, 2, left, RED)
-    h.cap = Cap(h.bar, fill, left, { 1, 0.97, 0.88 })
+    h.cap = Cap(h.bar, fill, left, { 0.85, 1, 0.85 })
     -- (the heals coming, from the fill's end on: a striped band, square)
     h.heal = EdgeBar(line, fill, left, true, L_HEAL)
     local healSpan = h.heal:CreateTexture(nil, "ARTWORK")
@@ -323,9 +313,8 @@ for i = 1, 2 do
     halves[i] = h
 
     local p = { left = left }
-    p.tint = Tint(power, left, POWER_COLOR)
     p.trail = Bar(power, left, L_UNDER)
-    Fade(p.trail:GetStatusBarTexture(), left, TRAIL, TRAIL[4], 0.55)
+    p.trail:SetStatusBarColor(TRAIL[1], TRAIL[2], TRAIL[3], TRAIL[4])
     p.bar = Bar(power, left, L_FILL)
     p.bar:SetValue(0)
     local pfill = p.bar:GetStatusBarTexture()
@@ -505,7 +494,6 @@ local function FillPower(ease)
             p.token = token
             local color = PowerColor(token)
             Grade(p.bar:GetStatusBarTexture(), p.left, color)
-            Fade(p.tint, p.left, color, TINT, 0.5)
             Tinted(p.cap, Lit(color, 0.5))
             Tinted(p.costStripes, Lit(color, 0.5), 0.85)
         end
