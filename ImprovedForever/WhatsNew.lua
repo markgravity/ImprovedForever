@@ -8,10 +8,11 @@
 -- * The pages live here, in WhatsNewData.lua, per module and version
 --   (IF.WhatsNew.Add); a module may add a live example of its own by key
 --   (IF.WhatsNew.Example(key, build(stageFrame))).
--- * What each module was last seen at is IF.db.whatsNew[module]. The first
---   time (no record yet) nothing is shown: the versions are just noted. A
---   module installed later is noted the same way. Several updated modules
---   are shown one after another.
+-- * What each module was last seen at is IF.db.whatsNew[module]. A first
+--   install (IF.freshInstall) shows nothing: the versions are just noted, as
+--   for a module installed later. An update from before this existed (no
+--   record yet) shows each module's latest pages once. Several updated
+--   modules are shown one after another.
 -- * /if whatsnew [module] plays it again (the module's latest pages).
 -- The pad is taken by a catcher frame only while the tour is up (not in a
 -- fight).
@@ -556,8 +557,16 @@ local function Pending()
         local now = Installed(module)
         local seen = db.whatsNew[module]
         if now then
-            if first or not seen then
-                -- (nothing to show on the first run, or for a module installed later)
+            if first and not IF.freshInstall then
+                -- (an update from before this existed: its latest pages, once)
+                local pages, version = PagesFor(module, nil, now)
+                if #pages > 0 then
+                    found[#found + 1] = { module = module, pages = pages, version = version }
+                else
+                    db.whatsNew[module] = now
+                end
+            elseif first or not seen then
+                -- (a first install, or a module installed later: nothing to show)
                 db.whatsNew[module] = now
             elseif Compare(now, seen) > 0 then
                 local pages, version = PagesFor(module, seen, now)

@@ -137,6 +137,8 @@ end
 local loader = CreateFrame("Frame")
 loader:RegisterEvent("PLAYER_LOGIN")
 loader:SetScript("OnEvent", function()
+    -- (no saved file yet: a first install, told apart from an update; WhatsNew.lua)
+    IF.freshInstall = ImprovedForeverDB == nil
     ImprovedForeverDB = ImprovedForeverDB or {}
     IF.db = ImprovedForeverDB
     ImprovedForeverCharDB = ImprovedForeverCharDB or {}
