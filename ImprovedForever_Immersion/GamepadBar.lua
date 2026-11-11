@@ -1065,6 +1065,27 @@ local function DrawCursor(b, native)
     return ok and not Secret(drawn) and drawn and true or false
 end
 
+-- Out of range of the target: the action's own answer (false is an answer;
+-- a secret or an error is none), else the game's red tint on its icon
+local function OutOfRange(native, icon)
+    local action = native.action
+    if action and not (native.spellID or native.itemID) then
+        local fn = (C_ActionBar and C_ActionBar.IsActionInRange) or IsActionInRange
+        if fn then
+            local ok, r = pcall(fn, action, "target")
+            if ok and not Secret(r) and r ~= nil then return r == false or r == 0 end
+        end
+    end
+    if icon then
+        local ok, r, g, bl = pcall(icon.GetVertexColor, icon)
+        if ok and not (Secret(r) or Secret(g) or Secret(bl)) and type(r) == "number"
+            and r > 0.7 and g < 0.3 and bl < 0.3 then
+            return true
+        end
+    end
+    return false
+end
+
 local function Mirror(b, native)
     b.native = native
     local interact = native ~= nil and native == InteractButton()
@@ -1112,6 +1133,11 @@ local function Mirror(b, native)
     if icon then
         b.icon:SetVertexColor(icon:GetVertexColor())
         b.icon:SetDesaturated(b.disabled or icon:IsDesaturated())
+        if OutOfRange(native, icon) then
+            -- (out of range: greyed out, not the game's red)
+            b.icon:SetVertexColor(0.55, 0.55, 0.55)
+            b.icon:SetDesaturated(true)
+        end
     else
         b.icon:SetVertexColor(1, 1, 1)
         b.icon:SetDesaturated(b.disabled and true or false)

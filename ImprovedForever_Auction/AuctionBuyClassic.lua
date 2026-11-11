@@ -824,12 +824,14 @@ local function SendQuery()
         minLevel = 0, maxLevel = s.buyMyLevel and UnitLevel("player") or 0,
     })
     A.lastQuery = "browse"
+    BY.browseSent = true
     BY.searching = true
     BY.Render()
 end
 
 -- After the categories settle; keep: the same list again (after buying), its place kept
 function BY.Query(keep)
+    BY.browseSent = false
     if not keep then BY.results, BY.allResults, BY.index, BY.top = {}, {}, 1, 1 end
     BY.searching = true
     queryToken = queryToken + 1
@@ -1348,8 +1350,11 @@ end
 
 -- After a buy: the list's refresh first, the item looked up again once it
 -- has come (the item's search the last one sent)
-function BY.AfterBrowse()
+function BY.AfterBrowse(force)
     if not (D and D.afterBrowse) then return end
+    -- (the client's own refresh after a buy comes before our query is
+    -- sent: an item search sent now would be overtaken by it, never answered)
+    if not force and not BY.browseSent then return end
     D.afterBrowse = nil
     local message = D.message
     BY.SearchItem()
@@ -2327,7 +2332,7 @@ win:SetScript("OnUpdate", function()
         BY.Render()
     end
     -- The list's refresh not come after a buy: the item looked up anyway
-    if D and D.afterBrowse and now - D.afterBrowse > 5 then BY.AfterBrowse() end
+    if D and D.afterBrowse and now - D.afterBrowse > 5 then BY.AfterBrowse(true) end
     -- A buy never answered: given up, its auctions looked up again
     if D and D.state == "buying" and now - (D.buyingAt or now) > BUY_TIMEOUT then
         D.state = nil

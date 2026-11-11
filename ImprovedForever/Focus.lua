@@ -389,6 +389,30 @@ local function RightEdge(f)
     return r * f:GetEffectiveScale() / ui
 end
 
+-- Is any window open: the game's panels and gamepad window row, the bags, loot, or one of ours
+function F.AnyOpen()
+    local function up(f)
+        return f and f.IsShown and f:IsShown() and f ~= UIParent
+    end
+    for _, slot in ipairs(SLOTS) do
+        if up(GetUIPanel and GetUIPanel(slot)) then return true end
+    end
+    local m = F.Manager()
+    for _, f in ipairs(m and m.shownFrames or {}) do
+        if up(f) then return true end
+    end
+    for f in pairs(docked) do
+        if up(f) then return true end
+    end
+    for f in pairs(alongTop) do
+        if up(f) then return true end
+    end
+    for i = 1, 13 do
+        if up(_G["ContainerFrame" .. i]) then return true end
+    end
+    return up(_G.LootFrame) or up(_G.GamepadRadial)
+end
+
 -- The right edge of what's open along the top before win, or nil
 local function TakenRight(win)
     local right

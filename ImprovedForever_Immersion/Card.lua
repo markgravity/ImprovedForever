@@ -265,6 +265,8 @@ end
 
 function Card:Update(elapsed, content)
     self.dt = elapsed
+    -- (a window open: nothing over it, the card goes out as with nothing to say)
+    if content and ImprovedForever.Focus and ImprovedForever.Focus.AnyOpen() then content = nil end
     local grace = self.opts.grace
     if content then
         self.gone = 0

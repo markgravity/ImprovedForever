@@ -162,6 +162,14 @@ local function Look(updateInfo)
             if type(id) == "number" then updated[id] = true end
         end
     end
+    -- (an aura gone: its notice goes too, shown or waiting)
+    local function Gone(c)
+        return not now[tonumber(c.key)]
+    end
+    if current and Gone(current) then current = nil end
+    for i = #queue, 1, -1 do
+        if Gone(queue[i]) then table.remove(queue, i) end
+    end
     local was = known
     known = {}
     for id, aura in pairs(now) do
