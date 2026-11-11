@@ -215,10 +215,12 @@ local ITEMS = {
             .. "the yards left, and a diamond arrow that turns green as you head its way.",
     }, Toggle("questArrow", "Quest arrow", function() IN.QuestArrow.Apply() end)),
     Item({
-        key = "questPeek", group = "top", section = "Global Tooltips", label = "Quest",
-        tip = "Swipe the touchpad left to right to show your focused quest as a card at the screen's top "
-            .. "left: its way (name, yards, arrow), its story and its objectives. Swipe left to right again to hide it.",
-    }, Toggle("questPeek", "Quest", function() end)),
+        key = "questPeek", group = "top", section = "Global Tooltips", label = "Quest tracker",
+        tip = "Your tracked quests as tooltip rows at the screen's top left, in the HUD's look, instead of the "
+            .. "quest tracker: the focused quest first, its way (arrow and yards) in the diamond. Swipe the touchpad "
+            .. "left to right to open the focused quest in full (story, every objective), again to shut it. The unit / "
+            .. "object tooltip and the buff notice always keep their room: the quests give way first.",
+    }, Toggle("questPeek", "Quest tracker", function() end)),
     Item({
         key = "questProgress", group = "top", section = "Quests", label = "Quest progress",
         tip = "Quest progress (\"Crystal Fragment: 6/12\") as a header for a few seconds. /if progresstest "

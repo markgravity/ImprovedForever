@@ -419,9 +419,13 @@ local function GetCVarSafe(name)
     return ok and value or nil
 end
 
+-- (setting a CVar fires CVAR_UPDATE at once, which applies again: that is ours, ignored)
+local settingCVar = false
 local function SetCVarSafe(name, value)
     local setter = (C_CVar and C_CVar.SetCVar) or SetCVar
+    settingCVar = true
     pcall(setter, name, value)
+    settingCVar = false
 end
 
 -- A finger sliding on the pad moves the mouse cursor (the game's touch
@@ -576,8 +580,8 @@ local events = CreateFrame("Frame")
 events:RegisterEvent("PLAYER_REGEN_ENABLED")
 events:RegisterEvent("CVAR_UPDATE")
 events:RegisterEvent("PLAYER_LOGOUT")
-events:SetScript("OnEvent", function(_, event)
-    if not IF.db then
+events:SetScript("OnEvent", function(_, event, cvar)
+    if not IF.db or settingCVar or (event == "CVAR_UPDATE" and cvar == "GamePadTouchCursorEnable") then
         return
     end
     -- (the touch cursor saved as the player had it; blocked again at login)

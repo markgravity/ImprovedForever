@@ -209,7 +209,9 @@ local function Stop()
 end
 
 mirror:SetScript("OnUpdate", function()
-	if not NativeFocused() or not IFObjectiveTrackerFrame:IsVisible() then
+	local peek = IF.Interface and IF.Interface.QuestPeek
+	-- (Immersion's quest tracker is the one seen: no cursor, no sort prompt of ours on the unseen one)
+	if not NativeFocused() or not IFObjectiveTrackerFrame:IsVisible() or (peek and peek.Replaces()) then
 		return Stop()
 	end
 	mirroring = true

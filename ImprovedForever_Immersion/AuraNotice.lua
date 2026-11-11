@@ -22,6 +22,7 @@ end
 
 local card = IN.Card.New("ImprovedForeverAuraNotice")
 AN.card = card
+AN.above = {}     -- (the cards over it, refilled each frame: Card.Dock)
 
 -- (what is on you: id -> true, per kind; nil until a first look)
 local known
@@ -216,6 +217,10 @@ ticker:SetScript("OnUpdate", function(_, elapsed)
     if IF.db and IN.Settings().auraNotice == false then
         current, queue = nil, {}
     end
-    card:Dock({ IN.QuestPeek and IN.QuestPeek.card, IN.Tooltip and IN.Tooltip.card })
+    local above = AN.above
+    for i = #above, 1, -1 do above[i] = nil end
+    for _, c in ipairs(IN.QuestPeek and IN.QuestPeek.cards or {}) do above[#above + 1] = c end
+    above[#above + 1] = IN.Tooltip and IN.Tooltip.card
+    card:Dock(above)
     card:Update(elapsed, current)
 end)

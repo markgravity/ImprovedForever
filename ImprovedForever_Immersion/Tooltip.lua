@@ -161,6 +161,6 @@ ticker:SetScript("OnUpdate", function(_, elapsed)
         if level then lines = WithoutLevel(lines) end
         content = { key = lines[1].lt or "", sig = Signature(lines) .. "#" .. (level and level.text or ""), lines = lines, portrait = Portrait, level = level }
     end
-    card:Dock({ IN.QuestPeek and IN.QuestPeek.card })
+    card:Dock(IN.QuestPeek and IN.QuestPeek.cards or {})
     card:Update(elapsed, content)
 end)

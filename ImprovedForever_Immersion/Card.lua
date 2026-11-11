@@ -266,6 +266,7 @@ end
 -- screen's height), one under another when several show. card:Dock(above): above = the cards
 -- over it, in order; it goes under the lowest one showing, else in the corner. Call each frame.
 local CORNER_X, CORNER_TOP, STACK_GAP = 40, 0.15, 14
+Card.CORNER_TOP, Card.CORNER_X = CORNER_TOP, CORNER_X
 
 function Card:Dock(above)
     local anchor
@@ -291,7 +292,8 @@ end
 function Card:Update(elapsed, content)
     self.dt = elapsed
     -- (a window open: nothing over it, the card goes out as with nothing to say)
-    if content and ImprovedForever.Focus and ImprovedForever.Focus.AnyOpen() then content = nil end
+    -- (opts.always: the quest tracker stays while windows are open)
+    if content and not self.opts.always and ImprovedForever.Focus and ImprovedForever.Focus.AnyOpen() then content = nil end
     local grace = self.opts.grace
     if content then
         self.gone = 0
