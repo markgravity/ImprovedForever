@@ -352,12 +352,6 @@ local ITEMS = {
             .. "the game's own shows, moved just above the action bar so it doesn't cover it.",
     }, Toggle("tooltipOurs", "World tooltip in our look", function() end)),
     Item({
-        key = "padPeek", group = "bottom", section = "Action bar", label = "Peek at the other sets' cooldowns",
-        tip = "A small tile on each action tile shows the cooldown of the same slot in the other sets (the "
-            .. "plain one, L2, R2, both): cast on L2 + a button and the plain set's tile shows it cooling, "
-            .. "and holding L2 shows the plain set's. Only while a cooldown runs.",
-    }, Toggle("padPeek", "Peek at the other sets' cooldowns", function() IN.GamepadBar.Apply() end)),
-    Item({
         key = "gcd", group = "bottom", section = "Action bar", label = "Global cooldown",
         tip = "A swipe over the action bar's tiles while the global cooldown runs (after any spell), so you "
             .. "see when the next one can go. Off by default; the tiles show real cooldowns only.",

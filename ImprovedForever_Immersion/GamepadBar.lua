@@ -769,13 +769,13 @@ end
 -- over it: the line whitened, its glow a little stronger (its width kept:
 -- wider, the square ends block up at the corners; the tile flashes
 -- instead, Mirror)
-local function DrawRing(ring, f, color, pulse)
+local function DrawRing(ring, f, color, pulse, path)
     local r = ring.r
     pulse = pulse or 0
     local lr = color[1] + (1 - color[1]) * pulse
     local lg = color[2] + (1 - color[2]) * pulse
     local lb = color[3] + (1 - color[3]) * pulse
-    local path = RingPath()
+    path = path or RingPath()
     local segments = #path - 1
     for i = segments + 1, #ring.lines do
         ring.lines[i]:Hide()
@@ -801,6 +801,32 @@ local function DrawRing(ring, f, color, pulse)
         end
     end
 end
+
+-- The ring for other tiles (the timeline's icons, BuffTimeline.lua): GB.Ring.New(parent, half) a
+-- ring frame over `parent`, `half` its half width; GB.Ring.Draw(ring, f, color, pulse, path) as the
+-- tiles' (path: GB.Ring.CIRCLE or GB.Ring.SQUARE, else the style's); the beat, the flash and the
+-- colours by the share left are the tiles' too.
+local CIRCLE_PATH = {}
+for i = 0, CIRCLE_STEPS do
+    local a = i / CIRCLE_STEPS * 2 * math.pi
+    CIRCLE_PATH[#CIRCLE_PATH + 1] = { math.sin(a), math.cos(a) }
+end
+GB.Ring = {
+    CIRCLE = CIRCLE_PATH,
+    SQUARE = { { -1, 1 }, { 1, 1 }, { 1, -1 }, { -1, -1 }, { -1, 1 } },
+    BEAT = BEAT, BEAT_LOW = BEAT_LOW, READY = READY, BEAT_FLASH = BEAT_FLASH, READY_FLASH = READY_FLASH,
+    Color = CooldownColor,
+    Draw = DrawRing,
+    New = function(parent, half)
+        local ring = CreateFrame("Frame", nil, parent)
+        ring:SetAllPoints()
+        ring:SetFrameLevel(parent:GetFrameLevel() + 3)
+        ring.r = half
+        ring.glows, ring.lines = {}, {}
+        ring:Hide()
+        return ring
+    end,
+}
 
 -- The slot's spell (its action's, or its macro's) by name, or nil
 local function SlotSpellName(native)
@@ -1716,94 +1742,6 @@ local function Picking()
     return PC ~= nil and PC.Picking ~= nil and PC.Picking()
 end
 
----------------------------------------------------------------------------
--- Peek: each tile (with no trigger held too: the plain set shows the L2 / R2
--- sets' cooldowns, and the other way round) carries up to three small tiles, one per other set (the plain, L2, R2,
--- both), with that set's same slot: its icon dimmed and its cooldown's
--- time, only while it cools down (setting padPeek)
----------------------------------------------------------------------------
-do
-local PEEK_SIZE = 0.42      -- (a small tile's side, of the tile's)
-local function EnsurePeek(b)
-    if b.peeks then return b.peeks end
-    local host = CreateFrame("Frame", nil, b)
-    host:SetAllPoints()
-    host:SetFrameLevel(b:GetFrameLevel() + 12)
-    b.peeks = {}
-    for n = 1, 3 do
-        local f = CreateFrame("Frame", nil, host)
-        f.bg = f:CreateTexture(nil, "BACKGROUND")
-        f.bg:SetAllPoints()
-        f.bg:SetColorTexture(0, 0, 0, 0.75)
-        f.icon = f:CreateTexture(nil, "ARTWORK")
-        f.icon:SetPoint("CENTER")
-        f.icon:SetVertexColor(0.55, 0.55, 0.55)
-        f.mask = f:CreateMaskTexture()
-        f.mask:SetPoint("CENTER")
-        f.icon:AddMaskTexture(f.mask)
-        f.bg:AddMaskTexture(f.mask)
-        f.timer = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-        f.timer:SetPoint("CENTER")
-        f.timer:SetShadowOffset(1, -1)
-        f:Hide()
-        b.peeks[n] = f
-    end
-    return b.peeks
-end
-
-local function LayoutPeek(b, f, n, count)
-    local d = b.d
-    local size = d.side * PEEK_SIZE
-    local w = style.pointed and size * ROOT2 or size
-    if f.laid ~= styleName .. ":" .. d.side then
-        f.laid = styleName .. ":" .. d.side
-        f:SetSize(w, w)
-        f.mask:SetAtlas(SLOT.mask)
-        f.mask:SetSize(w, w)
-        f.icon:SetSize(size, size)
-        f.icon:SetRotation(style.turn)
-    end
-    f:ClearAllPoints()
-    f:SetPoint("CENTER", b, "CENTER", (n - (count + 1) / 2) * w * 0.9, -d.side * 0.1)
-end
-
-local function Peek(b, i, pu, active)
-    local peeks = EnsurePeek(b)
-    local order = { pu.actionBars.topBar, pu.actionBars.leftBar, pu.actionBars.rightBar, pu.actionBars.bottomBar }
-    local cooling = {}
-    local now = GetTime()
-    if active and IN.Settings().padPeek ~= false then
-        for _, bar in ipairs(order) do
-            local native = bar ~= active and Native(bar, i)
-            if native and native:IsShown() then
-                local start, duration = SlotCooldown(native)
-                if Secret(start) or Secret(duration) then start, duration = OwnCastCooldown(native) end
-                if type(start) == "number" and type(duration) == "number" and not (Secret(start) or Secret(duration))
-                    and duration > GCD_MAX and now < start + duration then
-                    local has, texture, atlas = Picture(native)
-                    if has then
-                        cooling[#cooling + 1] = { left = start + duration - now, texture = texture, atlas = atlas }
-                    end
-                end
-            end
-        end
-    end
-    for n, f in ipairs(peeks) do
-        local c = cooling[n]
-        if c then
-            LayoutPeek(b, f, n, #cooling)
-            if Has(c.atlas) and c.atlas then f.icon:SetAtlas(c.atlas) else f.icon:SetTexture(c.texture) end
-            f.timer:SetText(Short(c.left))
-            f:Show()
-        else
-            f:Hide()
-        end
-    end
-end
-
-GB.Peek = Peek
-end
-
 local placedKey
 local function Watch()
     if not IF.db then return end
@@ -1862,7 +1800,6 @@ local function Watch()
         b.disabled = picking
         Mirror(b, Native(bar, i))
         if bar == top then OverrideTile(b) end
-        GB.Peek(b, i, pu, bar)
     end
     MirrorClass(classLeft, pu.LeftClassAction)
     MirrorClass(classRight, pu.RightClassAction)

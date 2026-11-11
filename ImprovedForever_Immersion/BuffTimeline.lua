@@ -101,9 +101,9 @@ local function DurationTimes(duration)
         Read(duration, "GetTotalDuration", "EvaluateTotalDuration")
 end
 
--- The icons' size: three quarters of the Cooldown Manager's
+-- The icons' size: three fifths of the Cooldown Manager's
 -- (HudLayout.lua), else of SIZE_FALLBACK
-local ICON_SCALE = 0.75
+local ICON_SCALE = 0.6
 local function Size()
     local HL = IN.HudLayout
     local size = HL and HL.CooldownIconSize and HL.CooldownIconSize()
@@ -159,6 +159,23 @@ local function Timeline(name, source)
         b.effect = b:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         b.effect:SetPoint("BOTTOM", b, "TOP", 0, 2)
         b.effect:SetWordWrap(false)
+        -- (a cooldown's icon as the action bar's round tiles (GamepadBar.lua, the round style): the
+        -- game's round slot's ground under it, its border over it, the picture cut round; sized in Fill)
+        b.bg = b:CreateTexture(nil, "BACKGROUND")
+        b.bg:SetAtlas("gamepad-actionbar-circleslot-bg")
+        b.bg:SetPoint("CENTER")
+        b.round = b:CreateMaskTexture()
+        b.round:SetPoint("CENTER")
+        b.round:SetAtlas("CircleMask")
+        b.icon:AddMaskTexture(b.round)
+        b.flash:AddMaskTexture(b.round)
+        b.rim = b:CreateTexture(nil, "OVERLAY")
+        b.rim:SetAtlas("gamepad-actionbar-circleslot-border-normal")
+        b.rim:SetPoint("CENTER")
+        -- (a cooldown's ring, as the spell diamonds' tiles': running down, coloured by the share left,
+        -- beating each second, flashing as it comes ready; GamepadBar.lua's)
+        local GB = IN.GamepadBar
+        if GB and GB.Ring then b.ring = GB.Ring.New(b, 20) end
         b:SetScript("OnEnter", function(self)
             if not self.Tooltip then return end
             GameTooltip:SetOwner(self, "ANCHOR_TOP")
@@ -225,15 +242,39 @@ local function Timeline(name, source)
             b.time:SetText(entry.left and entry.left > 0 and Short(entry.left) or "")
             -- (under the icon, or (a cooldown's: no effect there) over it)
             b.time:ClearAllPoints()
-            if entry.timeOver then
-                b.time:SetPoint("BOTTOM", b, "TOP", 0, 1)
+            if entry.whole then
+                -- (a cooldown's: under its round tile, in white)
+                b.time:SetFontObject("GameFontHighlight")
+                b.time:SetPoint("TOP", b, "BOTTOM", 0, -(size * 0.2 + 2))
             else
-                b.time:SetPoint("TOP", b, "BOTTOM", 0, -1)
+                b.time:SetFontObject("GameFontNormalSmall")
+                if entry.timeOver then
+                    b.time:SetPoint("BOTTOM", b, "TOP", 0, 1)
+                else
+                    b.time:SetPoint("TOP", b, "BOTTOM", 0, -1)
+                end
             end
             b.count:SetText(entry.count or "")
             b.effect:SetText(entry.effect or "")
             b.effect:SetWidth(size + 40)
             b.Tooltip = entry.Tooltip
+            -- (a cooldown's: its length and its end, for the ring, drawn each frame below; just come
+            -- ready, the ring flashing out)
+            b.whole = entry.whole
+            b.endsAt = entry.left and GetTime() + entry.left or nil
+            b.readyFade = entry.whole and entry.flash and (entry.flash / 0.6) or nil
+            -- (the tile's visible side is 1.2 of its size, as the action bar's; its picture 0.94 of that)
+            local side = size * 1.2
+            b.bg:SetSize(side, side)
+            b.rim:SetSize(size * 64 / 46, size * 64 / 46)
+            b.round:SetSize(side * 0.94, side * 0.94)
+            b.icon:ClearAllPoints()
+            b.icon:SetPoint("CENTER")
+            b.icon:SetSize(side * 0.94, side * 0.94)
+            b.flash:ClearAllPoints()
+            b.flash:SetPoint("CENTER")
+            b.flash:SetSize(side * 0.94, side * 0.94)
+            if b.ring then b.ring.r = side / 2 * 0.96 end
             b.wantX, b.wantY, b.wantAlpha = entry.x, entry.y, 1
         end
         -- (gone: sliding up and out)
@@ -243,6 +284,39 @@ local function Timeline(name, source)
                 b:EnableMouse(false)
                 b.wantY, b.wantAlpha = b.y + RISE, 0
             end
+        end
+    end
+
+    -- The ring on a cooldown's icon each frame: running down (coloured by the share left, the line
+    -- and the icon beating on each whole second), or just ready: the whole ring, green, flashing out
+    function T.DrawRing(b)
+        local GB, ring = IN.GamepadBar, b.ring
+        if not (GB and GB.Ring and ring) then return end
+        local R = GB.Ring
+        local now = GetTime()
+        if b.whole and b.endsAt and b.endsAt > now and b.whole > 0 then
+            local left = b.endsAt - now
+            local share = math.min(1, left / b.whole)
+            local color = R.Color(share)
+            local since = 1 - (left - math.floor(left))
+            local beat = math.max(0, 1 - since / R.BEAT)
+            local wave = 0.5 + 0.5 * math.cos(2 * math.pi * since)
+            R.Draw(ring, share, color, nil, R.CIRCLE)
+            ring:SetAlpha(R.BEAT_LOW + (1 - R.BEAT_LOW) * wave)
+            ring:Show()
+            b.flash:SetVertexColor(color[1], color[2], color[3], 1)
+            b.flash:SetAlpha(R.BEAT_FLASH * beat)
+            -- (greyed while it cools, as the action bar's tiles)
+            b.icon:SetVertexColor(0.4, 0.4, 0.4)
+        elseif b.readyFade and b.readyFade > 0 then
+            b.icon:SetVertexColor(1, 1, 1)
+            local color = R.Color(0)
+            R.Draw(ring, 1, color, b.readyFade, R.CIRCLE)
+            ring:SetAlpha(b.readyFade)
+            ring:Show()
+        elseif ring:IsShown() then
+            b.icon:SetVertexColor(1, 1, 1)
+            ring:Hide()
         end
     end
 
@@ -265,6 +339,7 @@ local function Timeline(name, source)
             b.x = b.x + (b.wantX - b.x) * k
             b.y = b.y + (b.wantY - b.y) * k
             b.alpha = b.alpha + (b.wantAlpha - b.alpha) * k
+            T.DrawRing(b)
             if b.leaving and b.alpha < 0.02 then
                 Parts(b, false)
                 T.byKey[key] = nil
@@ -328,6 +403,17 @@ local function StyleButton(b, harmful, size)
     local count = b:CreateFontString(nil, "OVERLAY", "NumberFontNormal")
     count:SetPoint("BOTTOMRIGHT", -2, 2)
 
+    -- (the time running out as a sweep over the icon: the game's own cooldown fed by the game from
+    -- the aura's duration, secret in a fight too; the ring's colours and beat need the numbers, which
+    -- an aura's are not in a fight)
+    local sweep = CreateFrame("Cooldown", nil, b, "CooldownFrameTemplate")
+    sweep:SetAllPoints()
+    sweep:SetHideCountdownNumbers(true)
+    sweep:SetDrawEdge(true)
+    sweep:SetDrawBling(false)
+    sweep:SetReverse(true)
+    sweep:SetSwipeColor(0, 0, 0, 0.55)
+    pcall(b.SetDurationCooldown, b, sweep)
     pcall(b.SetIcon, b, icon)
     pcall(b.SetDurationText, b, time)
     pcall(b.SetApplicationCount, b, count)
@@ -850,7 +936,7 @@ local cooldowns = Timeline("ImprovedForeverCooldownTimeline", {
             found[key] = true
             ready[key] = nil
             local entry = {
-                key = key, texture = texture, left = left,
+                key = key, texture = texture, left = left, whole = duration,
                 color = left and CooldownColor(left / duration) or CooldownColor(1),
                 timeOver = true, Tooltip = Tooltip,
             }

@@ -129,7 +129,6 @@ local DEFAULTS = {
     recentLootKey = false, -- the binding's controller press (RecentLoot.lua)
     padStyle = "diamond", -- its tiles: "diamond", "square" (rows and columns) or "circle" (GamepadBar.lua)
     padX = 0, padY = 0, padScale = 100, -- the action bar's place (px right, px up) and size (%)
-    padPeek = true,     -- holding L2 / R2: small tiles on each tile with the other sets' cooldowns on the same slot (GamepadBar.lua)
     hideAuraTip = true, -- on the pad, the game's own buff tooltip (shown by itself) drawn at 0 (Tooltip.lua)
     auraNotice = true,  -- a buff or debuff you gain announced as a card left of your character (AuraNotice.lua)
     tooltipOurs = true, -- the world tooltip drawn as ours, fading in right of your character (Tooltip.lua)
