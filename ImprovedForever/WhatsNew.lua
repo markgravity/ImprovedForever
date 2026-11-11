@@ -195,6 +195,30 @@ root:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
 root:EnableMouse(true)
 root:Hide()
 
+-- (the ground: the NPC dialog's band (Immersion's NpcDialog.lua): dark in
+-- the middle, fading out to its sides)
+local BAND_ALPHA, BAND_REACH = 0.6, 40
+local band = CreateFrame("Frame", nil, root)
+band:SetPoint("TOPLEFT", -BAND_REACH, 10)
+band:SetPoint("BOTTOMRIGHT", BAND_REACH, -10)
+band:SetFrameLevel(math.max(0, root:GetFrameLevel() - 1))
+do
+    local fade = BAND_REACH * 2
+    local function Part(points, from, to)
+        local t = band:CreateTexture(nil, "BACKGROUND")
+        t:SetColorTexture(1, 1, 1, 1)
+        for _, p in ipairs(points) do t:SetPoint(unpack(p)) end
+        if from and t.SetGradient and CreateColor then
+            t:SetGradient("HORIZONTAL", CreateColor(0, 0, 0, from), CreateColor(0, 0, 0, to))
+        else
+            t:SetVertexColor(0, 0, 0, BAND_ALPHA)
+        end
+    end
+    Part({ { "TOPLEFT", band, "TOPLEFT", fade, 0 }, { "BOTTOMRIGHT", band, "BOTTOMRIGHT", -fade, 0 } })
+    Part({ { "TOPLEFT" }, { "BOTTOMRIGHT", band, "BOTTOMLEFT", fade, 0 } }, 0, BAND_ALPHA)
+    Part({ { "TOPRIGHT" }, { "BOTTOMLEFT", band, "BOTTOMRIGHT", -fade, 0 } }, BAND_ALPHA, 0)
+end
+
 local sideRule = Rule(root, RULE_BOTTOM - RULE_TOP)
 sideRule:SetPoint("TOP", root, "TOPLEFT", RULE_X, -RULE_TOP)
 
