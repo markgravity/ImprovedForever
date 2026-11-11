@@ -226,6 +226,30 @@ headName:SetPoint("TOPLEFT", root, "TOPLEFT", 0, 0)
 local headSmall = Text(root, bodyFont, SMALL_SIZE, 1, 1, 1)
 headSmall:SetPoint("TOPLEFT", headName, "BOTTOMLEFT", 0, -4)
 
+-- (the cards in a window under the header: the list scrolls when it would
+-- reach the chat box, the wheel or the pad's browse moving it)
+local HEAD_H = NAME_SIZE + SMALL_SIZE + 4 + 18
+local VIEW_PAD = 14
+local view = CreateFrame("Frame", nil, root)
+view:SetPoint("TOPLEFT", root, "TOPLEFT", -VIEW_PAD, -HEAD_H)
+view:SetPoint("BOTTOMRIGHT", root, "BOTTOMRIGHT", VIEW_PAD, 0)
+view:SetClipsChildren(true)
+local content = CreateFrame("Frame", nil, view)
+content:SetSize(PANEL_W, 10)
+local scroll, scrollMax, viewH = 0, 0, 0
+
+local function Scrolled()
+    scroll = math.max(0, math.min(scrollMax, scroll))
+    content:ClearAllPoints()
+    content:SetPoint("TOPLEFT", view, "TOPLEFT", VIEW_PAD, scroll)
+end
+Scrolled()
+root:EnableMouseWheel(true)
+root:SetScript("OnMouseWheel", function(_, delta)
+    scroll = scroll - delta * 60
+    Scrolled()
+end)
+
 -- (the current tour)
 local PAGES = {}                        -- (every page of every module, in order)
 local secs = {}                         -- (a module's section: { module, version, seen, all, first, last })
@@ -240,7 +264,7 @@ local tour                              -- { items, demo, born }
 -- A page's card: the diamond with its picture, the gold line running down
 -- from it, the name, the words to the right
 local function Entry(i)
-    local f = CreateFrame("Button", nil, root)
+    local f = CreateFrame("Button", nil, content)
     f:SetWidth(PANEL_W)
     f.tile = Tile(f, TILE)
     f.tile:ClearAllPoints()
@@ -326,7 +350,7 @@ local legend = IF.InputLegend(root)
 -- A module's section header: its name, the versions beside it, a rule under
 local SEC_H = 34
 local function Header(k)
-    local f = CreateFrame("Frame", nil, root)
+    local f = CreateFrame("Frame", nil, content)
     f:SetSize(PANEL_W, SEC_H)
     f.title = Text(f, FONT, 20, GOLD[1], GOLD[2], GOLD[3])
     f.title:SetPoint("TOPLEFT")
@@ -345,25 +369,46 @@ local function Header(k)
     return f
 end
 
+-- The height there is for the panel: down to the chat box's top (and the
+-- legend under the panel), from where the sidebar starts
+local LEGEND_ROOM, CHAT_TABS = 56, 36
+local function Available()
+    local _, top, scale = Corner()
+    local ui = UIParent:GetHeight()
+    local floor = 0
+    local chat = _G.ChatFrame1
+    local ct = chat and chat.GetTop and chat:GetTop()
+    if ct then floor = ct * chat:GetEffectiveScale() / UIParent:GetEffectiveScale() + CHAT_TABS end
+    return (ui - ui * top - floor - LEGEND_ROOM) / scale
+end
+
 local function Layout()
-    local y = -(NAME_SIZE + SMALL_SIZE + 4 + 18)
+    local y = 0
     for k, sec in ipairs(secs) do
         local h = headers[k] or Header(k)
         h:Show()
         h:ClearAllPoints()
-        h:SetPoint("TOPLEFT", root, "TOPLEFT", 0, y)
+        h:SetPoint("TOPLEFT", content, "TOPLEFT", 0, y)
+        sec.top = -y
         y = y - SEC_H - 10
         for i = sec.first, sec.last do
             local f = entries[i]
             f:Show()
             f:ClearAllPoints()
-            f:SetPoint("TOPLEFT", root, "TOPLEFT", 0, y)
+            f:SetPoint("TOPLEFT", content, "TOPLEFT", 0, y)
+            f.top = -y
             y = y - f.h - STACK_GAP
         end
     end
     for k = #secs + 1, #headers do headers[k]:Hide() end
     for i = #PAGES + 1, #entries do entries[i]:Hide() end
-    root:SetHeight(-y)
+    -- (as tall as the cards, but not past the chat box)
+    local contentH = -y
+    viewH = math.max(140, math.min(contentH, Available() - HEAD_H))
+    content:SetHeight(contentH)
+    root:SetHeight(HEAD_H + viewH)
+    scrollMax = math.max(0, contentH - viewH)
+    Scrolled()
     legend:ClearAllPoints()
     legend:SetPoint("TOPLEFT", root, "BOTTOMLEFT", 0, -8)
     legend.row:ClearAllPoints()
@@ -373,6 +418,22 @@ local function Layout()
     root:SetScale(scale)
     root:ClearAllPoints()
     root:SetPoint("TOPLEFT", UIParent, "TOPLEFT", x / scale, -UIParent:GetHeight() * top / scale)
+end
+
+-- (a card brought into the window: the first of a section with its header)
+local function ScrollTo(n)
+    local f = entries[n]
+    if not f then return end
+    local from, to = f.top, f.top + f.h
+    for _, sec in ipairs(secs) do
+        if sec.first == n then from = sec.top end
+    end
+    if from < scroll then
+        scroll = from
+    elseif to > scroll + viewH then
+        scroll = to - viewH
+    end
+    Scrolled()
 end
 
 ---------------------------------------------------------------------------
@@ -402,6 +463,7 @@ function Go(n)
     page = n
     ShowExample(PAGES[n].example)
     Layout()
+    ScrollTo(n)
     if changed and goal == 1 then PlaySound(SOUNDKIT and SOUNDKIT.IG_QUEST_LIST_SELECT or 856) end
 end
 
