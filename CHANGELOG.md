@@ -1,12 +1,26 @@
 # Changelog
 
-## Immersion 0.11.1
+## Immersion 0.12.0
 
 - With "Square shoots the wand" on, Square's tile shows Shoot's icon while an enemy is targeted, and blinks while the wand fires.
+- The gathering cast bar shows your profession skill.
+- Your health and power lines: set their height, and they glow in combat.
+- Cards show the pad's button glyphs.
+- The spell tracker follows buffs from weapon enchants too.
+- Cards lay themselves out again after login or a cinematic.
+- An action's range is read correctly with the pad.
+- Settings: Immersion's Quests and Global Tooltips are titles inside Body > Sidebar; the quest cards toggle is renamed.
+
+## Auction 0.10.0
+
+- Buy tab: a scan progress bar, and Y starts or stops the scan.
+- Buy tab: sort by required level, and each row shows the level it requires instead of the item level.
 
 ## Core 0.18.1
 
 - Fixed: the wand's Shoot button no longer fires at a mob that is only soft-targeted (the pad's hover) while you loot next to it, which pulled it. It needs a target you have actually selected.
+- The bind editor locks the game's own binds, picks a spell's rank with the stick, and shows the recorder's hint inline.
+- Settings: a section "Parent/Child" lists only its parent; Immersion's Quests and Global Tooltips sit inside Body > Sidebar.
 
 ## Core 0.18.0
 
