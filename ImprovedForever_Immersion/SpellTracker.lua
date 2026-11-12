@@ -113,20 +113,53 @@ local function BaseLength(id)
     return ms / 1000
 end
 
--- What is on you now, by name; nil when the game won't tell (a fight)
+-- A name the way a totem and its buff share it: "Strength of Earth Totem" (the spell), "Strength of Earth
+-- Totem IV" (the totem) and "Strength of Earth" (the buff) are all "strength of earth"
+local function Norm(name)
+    name = name:lower():gsub("%s*%(rank %d+%)", ""):gsub("%s+[ivx]+$", ""):gsub("%s+totem$", "")
+    return name
+end
+
+-- What is on you now; nil when the game won't tell (a fight). { raw = aura names, norm = Norm of them,
+-- totem = Norm of your totems' names, weapon = { mh, oh } weapon enchants (Rockbiter) }
 local function Helpful()
     local get = C_UnitAuras and C_UnitAuras.GetAuraDataByIndex
     if not get or IF.InCombat() then return nil end
-    local names = {}
+    local names = { raw = {}, norm = {}, totem = {}, weapon = {} }
     for i = 1, 80 do
         local ok, aura = pcall(get, "player", i, "HELPFUL")
         if not ok then return nil end
         if not aura then break end
         local name = aura.name
         if Secret(name) then return nil end
-        if type(name) == "string" then names[name] = true end
+        if type(name) == "string" then names.raw[name] = true; names.norm[Norm(name)] = true end
+    end
+    if GetTotemInfo then
+        for slot = 1, 4 do
+            local ok, have, name = pcall(GetTotemInfo, slot)
+            if ok and not Secret(have) and not Secret(name) and have and type(name) == "string" then
+                names.totem[Norm(name)] = true
+            end
+        end
+    end
+    if GetWeaponEnchantInfo then
+        local ok, mh, _, _, _, oh = pcall(GetWeaponEnchantInfo)
+        if ok and not Secret(mh) and not Secret(oh) then
+            names.weapon.mh, names.weapon.oh = mh and true or nil, oh and true or nil
+        end
     end
     return names
+end
+
+-- Is what the spell leaves on you there? The buff is the spell's own (IF.SpellBuffs, from Forever's client
+-- tables: Strength of Earth Totem -> the aura Strength of Earth; Rockbiter Weapon -> a weapon enchant), not
+-- the spell's name. A spell not in it is its own buff (or, a totem, the totem standing).
+local function IsOn(names, name)
+    local buff = IF.SpellBuffs and IF.SpellBuffs[name]
+    if buff and buff.weapon then return (names.weapon.mh or names.weapon.oh) and true or false end
+    if buff and buff.aura then return names.raw[buff.aura] and true or false end
+    local n = Norm(name)
+    return (names.raw[name] or names.norm[n] or names.totem[n]) and true or false
 end
 
 -- The notices showing: { name, id, kind = "ready" | "gone", until }. A spell's cooldown over, or its buff
@@ -149,7 +182,7 @@ local function LookAuras()
         local name = SpellName(id)
         if name then
             local s = Get(name, id)
-            if names[name] then
+            if IsOn(names, name) then
                 s.present, s.goneAt = true, nil
             elseif s.present then
                 -- (you had it, it is gone: used up)
@@ -181,9 +214,6 @@ events:SetScript("OnEvent", function(_, event, _, _, spellID)
         if SpellName(id) == name then
             local s = Get(name, id)
             s.goneAt = nil      -- (cast again: it is back)
-            for i = #notices, 1, -1 do
-                if notices[i].name == name then table.remove(notices, i) end
-            end
             -- (its length: read whole out of a fight, else learnt before, else the spell's base one)
             local start, duration = ReadCooldown(spellID)
             local length = (duration and duration > GCD_MAX and duration) or lengths[name] or BaseLength(spellID)
@@ -206,6 +236,30 @@ local function Left(t)
     return math.ceil(t) .. " sec"
 end
 
+-- The pad buttons that run a spell (by name: any rank) from the crossbar, as a list of keys (the buttons
+-- held, then the one pressed), or nil. Looked up twice a second; only while the pad was used last.
+local keysAt, keysOf = 0, {}
+local function KeysOf(name)
+    if not (IF.Input and IF.Input.Pad() and IF.Native and IF.Native.Bound) then return nil end
+    local now = GetTime()
+    if now - keysAt > 0.5 then
+        keysAt = now
+        wipe(keysOf)
+        local ok, bound = pcall(IF.Native.Bound)
+        for _, b in ipairs(ok and bound or {}) do
+            local id = tonumber(b.action:match("^spell:(%d+)$"))
+            local spell = id and SpellName(id)
+            if spell and not keysOf[spell] then
+                local held, pressed = IF.Binds.Parse(b.spec)
+                local keys = IF.Binds.HeldList(held)
+                keys[#keys + 1] = pressed
+                keysOf[spell] = keys
+            end
+        end
+    end
+    return keysOf[name]
+end
+
 local function Content(item)
     local c = item.kind == "ready" and READY or (item.kind == "gone" and GONE or COOL)
     local lines
@@ -220,10 +274,12 @@ local function Content(item)
             { lt = item.kind == "ready" and "Ready" or "Missing", lr = 0.78, lg = 0.78, lb = 0.78 },
         }
     end
+    local keys = KeysOf(item.name)
     return {
         key = item.name .. "|" .. item.kind,
-        sig = item.name .. "|" .. item.kind .. "|" .. (item.left and math.ceil(item.left) or ""),
-        lines = lines, tint = c,
+        sig = item.name .. "|" .. item.kind .. "|" .. (item.left and math.ceil(item.left) or "")
+            .. "|" .. (keys and table.concat(keys, "+") or "") .. "|" .. IF.PadStyle(),
+        lines = lines, tint = c, keys = keys,
         portrait = function(tex) IN.Card.Icon(tex, SpellIcon(item.id)) end,
     }
 end
@@ -273,7 +329,6 @@ ticker:SetScript("OnUpdate", function(_, elapsed)
         since = 0
         if IF.db and IN.Settings().spellTracker ~= false then pcall(LookAuras) end
     end
-    if IF.db and IF.db.spellLog then IF.db.spellLog = nil end     -- (the probe's log, cleared once)
     local list = (IF.db and IN.Settings().spellTracker ~= false) and Active() or {}
     local above
     for i = 1, MAX_CARDS do

@@ -1134,9 +1134,9 @@ local function Mirror(b, native)
         b.icon:SetVertexColor(icon:GetVertexColor())
         b.icon:SetDesaturated(b.disabled or icon:IsDesaturated())
         if OutOfRange(native, icon) then
-            -- (out of range: greyed out, not the game's red)
-            b.icon:SetVertexColor(0.55, 0.55, 0.55)
-            b.icon:SetDesaturated(true)
+            -- (out of range: a subtle red, not greyed out)
+            b.icon:SetVertexColor(1, 0.5, 0.5)
+            b.icon:SetDesaturated(false)
         end
     else
         b.icon:SetVertexColor(1, 1, 1)

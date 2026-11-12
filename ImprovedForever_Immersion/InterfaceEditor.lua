@@ -548,6 +548,13 @@ for i = 1, 120 do
             local spell = Book()[i]
             return SPELL_MODE_NAMES[spell and IN.SpellTracker.Mode(spell.name) or "off"]
         end,
+        tip = function()
+            local spell = Book()[i]
+            if not spell then return "" end
+            local get = C_Spell and C_Spell.GetSpellDescription
+            local ok, text = pcall(get or function() end, spell.spellID)
+            return ok and type(text) == "string" and text or ""
+        end,
         options = function() return SPELL_MODES end,
         choose = function(action)
             local spell = Book()[i]

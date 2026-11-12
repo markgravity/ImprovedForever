@@ -28,6 +28,7 @@ Card.lua
 Tooltip.lua
 QuestPeek.lua
 AuraNotice.lua
+SpellBuffs.lua
 SpellTracker.lua
 RecentLoot.lua
 HudLayout.lua

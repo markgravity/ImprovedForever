@@ -18,6 +18,7 @@ local PAD_Y = 6
 local MAX_W = 360
 local TILE = 24
 local BADGE = 18
+local GLYPH = 22
 local OBJECT_ICON = "Interface\\Icons\\INV_Misc_QuestionMark"
 local SPOKEN_BAND = "Interface\\AddOns\\Spoken\\Textures\\SubtitleBand"
 local BAND_REACH, BAND_TOP_ROWS, BAND_BOTTOM_ROWS = 40, 28 / 64, 8 / 64
@@ -104,6 +105,16 @@ function Card.New(name, opts)
     skull:Hide()
     self.badge, self.level, self.skull = badge, level, skull
 
+    -- (the pad buttons that run it, under the diamond's foot: content.keys, e.g. { "PADLTRIGGER", "PAD1" },
+    -- in the style of the pad in use)
+    self.glyphs = {}
+    for i = 1, 3 do
+        local g = tile:CreateTexture(nil, "OVERLAY", nil, 5)
+        g:SetSize(GLYPH, GLYPH)
+        g:Hide()
+        self.glyphs[i] = g
+    end
+
     self.rows, self.lineH, self.T, self.dir = {}, 0, 0, 0
     self.width = 0
     return self
@@ -117,6 +128,24 @@ function Card:SetTint(c)
     if not pcall(self.line.SetGradient, self.line, "VERTICAL", CreateColor(c[1], c[2], c[3], 0),
         CreateColor(c[1], c[2], c[3], 0.9)) then
         self.line:SetVertexColor(c[1], c[2], c[3], 0.6)
+    end
+end
+
+-- The buttons shown under the diamond's foot (a list of pad keys, or nil for none), side by side
+function Card:SetKeys(keys)
+    local n = 0
+    for _, key in ipairs(keys or {}) do
+        local atlas = IF.GlyphAtlas(key)
+        if atlas and n < #self.glyphs then
+            n = n + 1
+            self.glyphs[n]:SetAtlas(atlas)
+        end
+    end
+    local total = n * GLYPH + (n - 1) * 2
+    for i, g in ipairs(self.glyphs) do
+        g:SetShown(i <= n)
+        g:ClearAllPoints()
+        g:SetPoint("CENTER", self.tile, "CENTER", -total / 2 + GLYPH / 2 + (i - 1) * (GLYPH + 2), -self.tile.across / 2 - 2)
     end
 end
 
@@ -248,6 +277,7 @@ function Card:Apply(content)
     else
         self.level:SetText("")
     end
+    self:SetKeys(content.keys)
     local a = content.arrow
     if a then
         local tex = self.arrow.tex
