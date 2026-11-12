@@ -23,11 +23,11 @@ IF.Interface = IN
 -- player's avatar (UnitFrames.lua) and the gamepad bar's face buttons
 -- diamond (GamepadBar.lua: its bottom point), the set pips and glyphs
 -- under it still clear of the power line and the health bar over it
-IN.BOTTOM = 38
+IN.BOTTOM = 42
 -- The power line's height, on the bottom edge (PlayerHealth.lua)
-IN.MP_H = 5
+IN.MP_H = 7
 -- The health bar's, over it (PlayerHealth.lua): the old experience line's
-IN.HP_H = 5
+IN.HP_H = 7
 
 -- The game's colours of a monster's level against yours, its own when it
 -- has them: green, yellow, orange, red (a card's alert, a cooldown's time
@@ -116,6 +116,7 @@ local DEFAULTS = {
     nameplateDebuffs = true, -- your debuffs on the mob, under its nameplate (the game fills them, in a fight too)
     castRange = true,   -- the target header greyed while an enemy is out of your reach
     hpLine = true,      -- your health as a bar over the power line
+    lineHeight = 7,     -- the health and power lines' height, px (PlayerHealth.lua)
     mpLine = true,      -- your power (mana, rage, energy...) as a bar along the screen's bottom edge
     questArrow = true,  -- the focused quest's way: its name, the yards left and a diamond arrow over its summary card (QuestPeek.lua)
     levelBanner = true, -- your level ups: ours, in the header's place and look

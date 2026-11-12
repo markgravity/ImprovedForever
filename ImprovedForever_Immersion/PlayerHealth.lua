@@ -4,7 +4,7 @@
 -- full from end to end, two halves out from the middle, each darkening
 -- toward its end (lost draws them in from both ends to the middle).
 -- * the health: the game's own fills (the reputation bar's green, turning
---   orange past half and red when low, red pulsing under URGENT), the heals
+--   green out of a fight, red in one, pulsing under URGENT), the heals
 --   coming to you a green band past its end (a loss can't be foreseen, a gain
 --   can);
 -- * the power: in the game's colour of its kind (mana a lighter blue),
@@ -31,8 +31,8 @@ local UF = IN.UnitFrames
 local PlayerHealth = {}
 IN.PlayerHealth = PlayerHealth
 
-local LINE_H = IN.HP_H or 5
-local POWER_H = IN.MP_H or 5
+local LINE_H = IN.HP_H or 7     -- (the lines' height now: the Interface tab's slider (Watch) sets it)
+local POWER_H = IN.MP_H or 7
 local GAP = -1                   -- (the two lines share one border row)
 local FADE = 0.3
 local HOLD = 0.8                 -- (whole again: shown this long before fading)
@@ -115,10 +115,12 @@ local function Track(height)
     back:SetAllPoints()
     back:SetColorTexture(0, 0, 0, BACKING)
     t.marks = Layer(t, L_MARKS)
+    t.edges = {}
     for _, e in ipairs({ { "TOPLEFT", "TOPRIGHT", nil, 1 }, { "BOTTOMLEFT", "BOTTOMRIGHT", nil, 1 },
         { "TOPLEFT", "BOTTOMLEFT", 1, nil }, { "TOPRIGHT", "BOTTOMRIGHT", 1, nil } }) do
         local f = t.marks:CreateTexture(nil, "OVERLAY")
         f:SetColorTexture(FRAME[1], FRAME[2], FRAME[3], 1)
+        t.edges[#t.edges + 1] = f
         f:SetPoint(e[1])
         f:SetPoint(e[2])
         if e[3] then f:SetWidth(e[3]) end
@@ -129,6 +131,7 @@ local function Track(height)
         local n = t.marks:CreateTexture(nil, "OVERLAY", nil, 1)
         n:SetColorTexture(FRAME[1], FRAME[2], FRAME[3], 1)
         n.at = i / COMPARTMENTS
+        t.edges[#t.edges + 1] = n
         t.notches[i] = n
     end
     t:SetScript("OnSizeChanged", function(self)
@@ -136,7 +139,7 @@ local function Track(height)
         if width <= 0 then return end
         local pixel = 768 / (select(2, GetPhysicalScreenSize()) or 768) / self:GetEffectiveScale()
         for _, n in ipairs(self.notches) do
-            n:SetSize(2 * pixel, height - 2)
+            n:SetSize(2 * pixel, math.max((self:GetHeight() or height) - 2, 1))
             n:ClearAllPoints()
             n:SetPoint("CENTER", self, "LEFT", n.at * width, 0)
         end
@@ -146,6 +149,40 @@ end
 
 local line = Track(LINE_H)
 local power = Track(POWER_H)
+
+-- In a fight: the frames and notches turn an ember red and a red glow breathes along the lines'
+-- top edge, so a fight reads at a glance from rest. Four fading strips (a gradient would need
+-- a texture), over the topmost line.
+local COMBAT_FRAME = { 0.72, 0.22, 0.16 }
+local STRIP_H, STRIP_ALPHA = 2, { 0.5, 0.34, 0.2, 0.09 }
+local strips = {}
+for i = 1, #STRIP_ALPHA do
+    local t = holder:CreateTexture(nil, "OVERLAY")
+    t:SetColorTexture(1, 0.25, 0.18, 1)
+    t:SetBlendMode("ADD")
+    t:SetHeight(STRIP_H)
+    t:Hide()
+    strips[i] = t
+end
+local fighting = false
+
+local function PlaceStrips(health)
+    local top = health and line or power
+    for i, t in ipairs(strips) do
+        t:ClearAllPoints()
+        t:SetPoint("BOTTOMLEFT", top, "TOPLEFT", 0, (i - 1) * STRIP_H)
+        t:SetPoint("BOTTOMRIGHT", top, "TOPRIGHT", 0, (i - 1) * STRIP_H)
+    end
+end
+
+local function SetFighting(on)
+    fighting = on
+    local c = on and COMBAT_FRAME or FRAME
+    for _, track in ipairs({ line, power }) do
+        for _, e in ipairs(track.edges) do e:SetColorTexture(c[1], c[2], c[3], 1) end
+    end
+    for _, t in ipairs(strips) do t:SetShown(on) end
+end
 
 -- (a fill's colour darkening toward its end, as the header's rule fades:
 -- its colour at the middle, EDGE of it at the end, never see-through)
@@ -268,7 +305,10 @@ for i = 1, 1 do
     h.bar = Bar(line, left, L_FILL)
     local fill = h.bar:GetStatusBarTexture()
     Grade(fill, left, GREEN)
+    -- (the overlays of old are off: the fill's own colour is the state's, set by SetHealthColor)
     h.orange, h.red = Over(h.bar, fill, 1, left, ORANGE), Over(h.bar, fill, 2, left, RED)
+    h.orange:Hide()
+    h.red:Hide()
     h.cap = Cap(h.bar, fill, left, { 0.85, 1, 0.85 })
     healthLine.flare = Flare(line, fill, { 0.75, 1, 0.75 })
     -- (the heals coming to you, from the fill's end on, as wide as the track at most: a heal past
@@ -314,9 +354,9 @@ for i = 1, 1 do
     p.cost:SetMinMaxValues(0, 1)
     p.cost:SetValue(0)
     p.cost:Hide()
-    -- (the lost mana's trail and the cost's band: the health line's red, whatever the power; flashing)
     p.cost.base = RED
-    p.trail.base = RED
+    -- (the cost's band: the health line's red, whatever the power; pulsing. The lost mana's trail is the
+    -- health's: the same pale one, still)
     powerHalves[i] = p
 end
 
@@ -345,7 +385,7 @@ local function Curve(points)
 end
 
 -- (a flashing band at a beat's strength, 0 to 1: its colour lit toward white, its alpha up)
-local BEAT_LIT, BEAT_DIM = 0.7, 0.4
+local BEAT_LIT, BEAT_DIM, BEAT_PERIOD = 0.7, 0.4, 1.6   -- (a slow pulse: seconds a beat)
 local function Beat(bar, base, strength)
     if not base then return end
     local by = BEAT_LIT * strength
@@ -465,8 +505,7 @@ local function Fill(ease)
         if not ease and not Try(h.trail.SetMinMaxValues, h.trail, 0, max) then
             h.trail:SetMinMaxValues(0, 1)
         end
-        h.how = Shade(h.orange, ORANGE_POINTS)
-        Shade(h.red, RED_POINTS)
+        h.how = fighting and "combat" or "rest"
         Shade(h.alarm, URGENT_POINTS)
     end
     FillHeals(max)
@@ -560,14 +599,25 @@ holder:SetScript("OnUpdate", function(self, elapsed)
     local now = GetTime()
     if healthLine.trail.at and now >= healthLine.trail.at then TrailTo(healthLine, true, 1) end
     if powerLine.trail.at and now >= powerLine.trail.at then TrailTo(powerLine, true, 0) end
-    -- (the flashing bands: the heals coming, the cost, the lost mana; by hand, as an animation on a
+    -- (the bands (heals coming, cost) pulsing; by hand, as an animation on a
     -- hidden frame never plays)
-    -- (each beat lights the band toward white and opaque, then dims it to its colour)
-    local flash = 0.5 + 0.5 * math.cos(now * 2 * math.pi / 0.7)
+    local fight = demo and demo.combat or (not demo and IF.InCombat()) or false
+    if fight ~= fighting then
+        SetFighting(fight)
+        -- (the health's fill: green at rest, red in a fight)
+        for _, h in ipairs(halves) do
+            Grade(h.bar:GetStatusBarTexture(), h.left, fighting and RED or GREEN)
+        end
+    end
+    if fighting then
+        local breath = 0.65 + 0.35 * math.cos(now * 2 * math.pi / 1.6)
+        for i, t in ipairs(strips) do t:SetAlpha(STRIP_ALPHA[i] * breath * 1.4) end
+    end
+    -- (a pulsing band at a beat's strength: its colour lit toward white and opaque, then dimmed)
+    local flash = 0.5 + 0.5 * math.cos(now * 2 * math.pi / BEAT_PERIOD)
     for _, h in ipairs(halves) do Beat(h.heal, h.heal.base, flash) end
     for _, p in ipairs(powerHalves) do
         Beat(p.cost, p.cost.base, flash)
-        Beat(p.trail, p.trail.base, flash)
     end
     for _, L in ipairs({ healthLine, powerLine }) do
         if L.flareAt then
@@ -733,6 +783,7 @@ local function Place(health, mp)
     power:ClearAllPoints()
     power:SetPoint("BOTTOMLEFT")
     power:SetPoint("BOTTOMRIGHT")
+    PlaceStrips(health)
     local h = (health and LINE_H or 0) + (mp and POWER_H or 0) + (health and mp and GAP or 0)
     holder:SetHeight(math.max(h, 1))
     if not health then beat:Stop() end
@@ -749,7 +800,15 @@ local function Watch()
     local s = IN.Settings()
     local edit = UF.EditMode()
     local health, mp = s.hpLine and not edit or false, s.mpLine and not edit or false
-    if health == PlayerHealth.health and mp == PlayerHealth.power then return end
+    -- (the lines' height: the slider's, both alike)
+    local want = math.max(3, math.min(16, math.floor(tonumber(s.lineHeight) or IN.HP_H or 7)))
+    local resized = want ~= LINE_H
+    if resized then
+        LINE_H, POWER_H = want, want
+        line:SetHeight(want)
+        power:SetHeight(want)
+    end
+    if not resized and health == PlayerHealth.health and mp == PlayerHealth.power then return end
     PlayerHealth.health, PlayerHealth.power = health, mp
     PlayerHealth.on = health or mp
     Place(health, mp)
@@ -811,15 +870,19 @@ local STEPS = {
         function() Set(nil, 500) end },
     { 2, "low mana (15%): the mana bar pulses",
         function() Set(nil, 150) end },
-    { 3, "hit to 45% health: orange, a pale trail",
+    { 3, "hit to 45% health: a pale trail",
         function() Set(450) end },
     { 3, "a heal coming (30%): a green band past the fill's end",
         function() Set(nil, nil, 300) end },
     { 3, "the heal lands: the band gone, the fill grown, a star at its end",
         function() Set(750, nil, 0) end },
-    { 2.5, "health 20%: red, pulsing",
+    { 2.5, "health 20%: pulsing",
         function() Set(200) end },
-    { 3, nil, function() DemoStop() end },
+    { 2.5, "in a fight: the frames ember red, a red glow breathing over the top edge",
+        function() demo.combat = true; Update(false, false) end },
+    { 3.5, "fight over: back to the grey frames",
+        function() demo.combat = false end },
+    { 1.5, nil, function() DemoStop() end },
 }
 
 local function DemoStep(i, id)

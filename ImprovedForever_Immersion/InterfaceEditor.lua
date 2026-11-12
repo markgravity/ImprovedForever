@@ -81,7 +81,7 @@ end
 
 -- Every place and size put back to its default (the sliders' own reset buttons do one each)
 local PLACED = { "playerX", "playerY", "playerScale", "padX", "padY", "padScale", "partyX", "partyY", "headerX",
-    "headerY", "headerScale", "hudWidth" }
+    "headerY", "headerScale", "hudWidth", "lineHeight" }
 local function ResetPlaces()
     local s = IN.Settings()
     for _, key in ipairs(PLACED) do s[key] = IN.DEFAULTS[key] end
@@ -310,6 +310,9 @@ local ITEMS = {
         tip = "Your health as a line along the bottom edge of the screen. Off, no line (the player card still "
             .. "shows it).",
     }, Toggle("hpLine", "Health line", ApplyBottom)),
+    Slide("lineHeight", "bottom", "Player frame", "Line height", "How thick the health and power lines are along "
+        .. "the bottom edge, in pixels (the action bar and the rest stay where they are).", 3, 16, 1, nil,
+        function() IN.PlayerHealth.Apply() end),
     Item({
         key = "mpLine", group = "bottom", section = "Player frame", label = "Power line",
         tip = "Your mana, rage or energy as a line along the bottom edge of the screen (the green bar on a "
