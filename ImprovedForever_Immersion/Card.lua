@@ -291,6 +291,7 @@ function Card:Apply(content)
         self.arrow:Hide()
     end
     self.key, self.sig = content.key, content.sig
+    self.shownContent = content
 end
 
 -- Where the cards sit: the screen's top left corner, the top this far down (a share of the
@@ -312,14 +313,25 @@ end
 Card.CORNER_TOP = CORNER_TOP     -- (the default)
 function Card.ApplySidebar() sidebarRev = sidebarRev + 1 end
 
+-- After a login, a cinematic or movie, or a screen change: the cards laid out again and docked again
+-- (their words may have been measured while the UI was hidden or not ready, and the same content
+-- would never lay them out again)
+Card.gen = 0
+local regen = CreateFrame("Frame")
+for _, e in ipairs({ "PLAYER_ENTERING_WORLD", "CINEMATIC_STOP", "STOP_MOVIE", "PLAY_MOVIE", "UI_SCALE_CHANGED",
+    "DISPLAY_SIZE_CHANGED", "PLAYER_LOGIN" }) do
+    pcall(regen.RegisterEvent, regen, e)
+end
+regen:SetScript("OnEvent", function() Card.gen = Card.gen + 1 end)
+
 function Card:Dock(above)
     local anchor
     for i = #above, 1, -1 do
         if above[i] and above[i]:Active() then anchor = above[i] break end
     end
     local h = UIParent:GetHeight()
-    if anchor == self.dockAnchor and h == self.dockHeight and self.dockRev == sidebarRev then return end
-    self.dockAnchor, self.dockHeight, self.dockRev = anchor, h, sidebarRev
+    if anchor == self.dockAnchor and h == self.dockHeight and self.dockRev == sidebarRev and self.dockGen == Card.gen then return end
+    self.dockAnchor, self.dockHeight, self.dockRev, self.dockGen = anchor, h, sidebarRev, Card.gen
     local scale = Card.Scale()
     self.panel:SetScale(scale)
     self.panel:ClearAllPoints()
@@ -338,6 +350,15 @@ end
 
 function Card:Update(elapsed, content)
     self.dt = elapsed
+    -- (laid out again after a login / cinematic: the same content, measured now)
+    if self.gen ~= Card.gen then
+        self.gen = Card.gen
+        if self.shownContent and self.sig then
+            self.snap = true
+            self:Layout(self.shownContent.lines)
+            self.snap = nil
+        end
+    end
     -- (the what's-new tour is up, in this corner: every card out of its way)
     local WN = ImprovedForever.WhatsNew
     if content and WN and WN.Active() then content = nil end

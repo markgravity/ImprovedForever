@@ -1069,10 +1069,16 @@ end
 -- a secret or an error is none), else the game's red tint on its icon
 local function OutOfRange(native, icon)
     local action = native.action
-    if action and not (native.spellID or native.itemID) then
+    if action then
         local fn = (C_ActionBar and C_ActionBar.IsActionInRange) or IsActionInRange
         if fn then
             local ok, r = pcall(fn, action, "target")
+            if ok and not Secret(r) and r ~= nil then return r == false or r == 0 end
+        end
+        -- (a spell on the slot: the spell's own answer)
+        local okInfo, kind, id = pcall(GetActionInfo, action)
+        if okInfo and kind == "spell" and not Secret(id) and type(id) == "number" and C_Spell and C_Spell.IsSpellInRange then
+            local ok, r = pcall(C_Spell.IsSpellInRange, id, "target")
             if ok and not Secret(r) and r ~= nil then return r == false or r == 0 end
         end
     end
