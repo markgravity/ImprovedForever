@@ -501,13 +501,19 @@ function IF.SettingsPage(tab, GROUPS, ITEMS, hooks)
         if tab.peek and item and item.peek ~= false then menu.Peek() end
     end
 
+    -- (a section "Parent/Child" is listed under "Parent", a title inside it: the parent shows its own fields and its children's)
+    local function InSection(item, section)
+        return item == section or (item ~= nil and item:sub(1, #section + 1) == section .. "/")
+    end
+    local function SectionName(section) return section:match("([^/]+)$") end
+
     -- The current category's fields
     function G:Fields()
         local key = GROUPS[self.group].key
         local list = {}
         for _, item in ipairs(ITEMS) do
             if item.group == key and not Resolve(item.hidden)
-                and (not (tab.tree and self.section) or item.section == self.section) then
+                and (not (tab.tree and self.section) or InSection(item.section, self.section)) then
                 list[#list + 1] = item
             end
         end
@@ -523,9 +529,13 @@ function IF.SettingsPage(tab, GROUPS, ITEMS, hooks)
     function G:Sections()
         local key, out, seen = GROUPS[self.group].key, {}, {}
         for _, item in ipairs(ITEMS) do
-            if item.group == key and item.section and not seen[item.section] and not Resolve(item.hidden) then
-                seen[item.section] = true
-                out[#out + 1] = item.section
+            if item.group == key and item.section and not Resolve(item.hidden) then
+                -- ("Parent/Child": only the parent is a sub-category, the child a title inside it)
+                local top = item.section:match("^([^/]+)")
+                if not seen[top] then
+                    seen[top] = true
+                    out[#out + 1] = top
+                end
             end
         end
         return out
@@ -1105,7 +1115,7 @@ function IF.SettingsPage(tab, GROUPS, ITEMS, hooks)
 
         local item, index, fields = self:Item()
         local group = GROUPS[self.group]
-        f.status:SetText(group.label .. (tab.tree and self.section and (" > " .. self.section) or "") .. (group.note and ("  ·  " .. Resolve(group.note)) or "")
+        f.status:SetText(group.label .. (tab.tree and self.section and (" > " .. self.section:gsub("/", " > ")) or "") .. (group.note and ("  ·  " .. Resolve(group.note)) or "")
             .. "  ·  " .. #fields .. (#fields == 1 and " setting" or " settings"))
 
         -- The fields, each as tall as its description, under their
@@ -1124,7 +1134,7 @@ function IF.SettingsPage(tab, GROUPS, ITEMS, hooks)
                     if fields[j].section ~= it.section then break end
                     act = act or fields[j].headerAction
                 end
-                lines[#lines + 1] = { head = it.section, action = act }
+                lines[#lines + 1] = { head = SectionName(it.section), action = act }
             end
             section = it.section
             lines[#lines + 1] = { slot = i }

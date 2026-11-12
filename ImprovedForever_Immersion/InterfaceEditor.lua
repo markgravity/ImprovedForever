@@ -215,19 +215,19 @@ local ITEMS = {
         },
     },
     Item({
-        key = "questArrow", group = "top", section = "Quests", label = "Quest arrow",
+        key = "questArrow", group = "body", section = "Sidebar/Quests", label = "Quest arrow",
         tip = "The way to your focused quest over its summary card (swipe the touchpad left to right): its name, "
             .. "the yards left, and a diamond arrow that turns green as you head its way.",
     }, Toggle("questArrow", "Quest arrow", function() IN.QuestArrow.Apply() end)),
     Item({
-        key = "questPeek", group = "top", section = "Global Tooltips", label = "Quest tracker",
-        tip = "Your tracked quests as tooltip rows at the screen's top left, in the HUD's look, instead of the "
+        key = "questPeek", group = "body", section = "Sidebar/Quests", label = "Quest cards (instead of the quest tracker)",
+        tip = "Off: the quest tracker is back as it was. On: your tracked quests as tooltip rows at the screen's top left, in the HUD's look, instead of the "
             .. "quest tracker: the focused quest first, its way (arrow and yards) in the diamond. Swipe the touchpad "
             .. "left to right to open the focused quest in full (story, every objective), again to shut it. The unit / "
             .. "object tooltip and the buff notice always keep their room: the quests give way first.",
-    }, Toggle("questPeek", "Quest tracker", function() end)),
+    }, Toggle("questPeek", "Quest cards", function() end)),
     Item({
-        key = "questProgress", group = "top", section = "Quests", label = "Quest progress",
+        key = "questProgress", group = "body", section = "Sidebar/Quests", label = "Quest progress",
         tip = "Quest progress (\"Crystal Fragment: 6/12\") as a header for a few seconds. /if progresstest "
             .. "shows it.",
     }, Toggle("questProgress", "Quest progress", function() IN.QuestProgress.Apply() end)),
@@ -361,7 +361,7 @@ local ITEMS = {
         tip = "The D-pad's four tiles the same size as the face buttons' four. Takes effect after a /reload.",
     }, Toggle("padSame", "Same size", function() IF.Print("the action bar's tiles are the same size after a /reload.") end)),
     Item({
-        key = "tooltipOurs", group = "top", section = "Global Tooltips", label = "Unit / Object",
+        key = "tooltipOurs", group = "body", section = "Sidebar/Global Tooltips", label = "Unit / Object",
         tip = "The tooltip of a unit or object in the world (the game shows it bottom right, over the action "
             .. "bar) drawn as ours instead: a card at the screen's top left, fading in, in the HUD's look. Off, "
             .. "the game's own shows, moved just above the action bar so it doesn't cover it.",
@@ -372,7 +372,7 @@ local ITEMS = {
             .. "see when the next one can go. Off by default; the tiles show real cooldowns only.",
     }, Toggle("gcd", "Global cooldown", function() IN.GamepadBar.Apply() end)),
     Item({
-        key = "auraNotice", group = "top", section = "Global Tooltips", label = "Buff / Debuff",
+        key = "auraNotice", group = "body", section = "Sidebar/Global Tooltips", label = "Buff / Debuff",
         tip = "A buff or debuff you gain shows as a card at the screen's top left: its icon, name, "
             .. "kind, time and words. Several come one after another. Out of combat only.",
     }, Toggle("auraNotice", "Buff / Debuff", function() end)),
