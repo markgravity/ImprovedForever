@@ -285,6 +285,29 @@ local function Present(v)
     return Secret(v) or v ~= nil
 end
 
+-- Gathering casts (Herb Gathering, Mining, Skinning, every rank): their spell IDs, and the
+-- profession's skill line, to show "Skinning (12/75)" on the bar
+local GATHER_SPELLS = {
+    [2366] = 182, [2368] = 182, [3570] = 182, [11993] = 182,    -- Herb Gathering
+    [2575] = 186, [2576] = 186, [3564] = 186, [10248] = 186,    -- Mining
+    [8613] = 393, [8617] = 393, [8618] = 393, [10768] = 393,    -- Skinning
+}
+
+-- The cast's text with the profession's skill, "Skinning (12/75)", or nil (not a gathering cast,
+-- or the profession isn't read)
+local function GatherText(spell)
+    local id = spell and spell[3]
+    if type(id) ~= "number" or Secret(id) or not (GetProfessions and GetProfessionInfo) then return nil end
+    local line = GATHER_SPELLS[id]
+    if not line then return nil end
+    for _, index in pairs({ GetProfessions() }) do
+        local pname, _, rank, maxRank, _, _, skillLine = GetProfessionInfo(index)
+        if skillLine == line and pname and rank and maxRank then
+            return string.format("%s (%d/%d)", pname, rank, maxRank)
+        end
+    end
+end
+
 -- What you cast now: kind ("cast" / "channel") and its info (its spell:
 -- name, texture, ID, for the diamond)
 -- Casts another bar of ours draws (the Fishing module's fishing bar):
@@ -370,7 +393,12 @@ local function Start(kind, text, startMs, endMs, notInterruptible, spell)
     Shielded(notInterruptible)
     -- (plain times: an end of our own too, should an event be missed)
     line.endMs = not Secret(endMs) and type(endMs) == "number" and endMs or nil
-    if not Try(name.SetText, name, text) then name:SetText("") end
+    local gather = GatherText(spell)
+    if gather then
+        name:SetText(gather)
+    elseif not Try(name.SetText, name, text) then
+        name:SetText("")
+    end
     name:SetTextColor(1, 1, 1)
     -- (the icon only: the progress is the line's and the edges', not the
     -- tile's own cast ring)
