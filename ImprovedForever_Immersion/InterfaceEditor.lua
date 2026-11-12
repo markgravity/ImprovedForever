@@ -357,7 +357,7 @@ local ITEMS = {
     Slide("padScale", "bottom", "Action bar", "Action bar: size", "How big the action bar is, in percent. Out of "
         .. "combat only.", 50, 150, 5, Percent, function() IN.GamepadBar.Reanchor() end),
     Item({
-        key = "padSame", group = "bottom", section = "Action bar", label = "D-pad tiles as big as the face buttons'",
+        key = "padSame", group = "bottom", section = "Action bar", label = "D-pad tiles as big as the face buttons' (after /reload)",
         tip = "The D-pad's four tiles the same size as the face buttons' four. Takes effect after a /reload.",
     }, Toggle("padSame", "Same size", function() IF.Print("the action bar's tiles are the same size after a /reload.") end)),
     Item({

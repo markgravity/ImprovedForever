@@ -1092,12 +1092,33 @@ local function OutOfRange(native, icon)
     return false
 end
 
+-- The wand: Square (the interact button) shoots instead of swinging while an
+-- enemy that lives is targeted (the core's WandShoot). Its tile then shows
+-- Shoot's icon, and blinks while the wand is firing. texture, shooting; or nil
+function GB.WandIcon(native)
+    local wand = IF.WandShoot
+    if not (wand and wand.Spell and native ~= nil and native == InteractButton()) then return nil end
+    if not (Yes(UnitExists, "target") and Yes(UnitCanAttack, "target") and not Yes(UnitIsDead, "target")) then
+        return nil
+    end
+    local texture, name = wand.Spell()
+    if not texture then return nil end
+    local ok, shooting = pcall(function()
+        return (IsAutoRepeatSpell and IsAutoRepeatSpell(name))
+            or (C_Spell and C_Spell.IsAutoRepeatSpell and C_Spell.IsAutoRepeatSpell(name))
+    end)
+    return texture, ok and not Secret(shooting) and shooting and true or false
+end
+
 local function Mirror(b, native)
     b.native = native
     local interact = native ~= nil and native == InteractButton()
-    local cursor = DrawCursor(b, native)
+    local wandTexture, shooting = GB.WandIcon(native)
+    local cursor = not wandTexture and DrawCursor(b, native)
     local has, texture, atlas, coords, icon = Picture(native)
+    if wandTexture then has, texture, atlas, coords, icon = true, wandTexture, nil, nil, nil end
     if cursor then has, texture, atlas, coords, icon = true, nil, nil, nil, nil end
+    b.icon:SetAlpha(shooting and (0.55 + 0.45 * math.abs(math.sin(GetTime() * 4))) or 1)
     if not has then
         b.icon:SetTexture(nil)
         b.count:SetText("")

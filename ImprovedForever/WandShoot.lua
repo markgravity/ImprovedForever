@@ -55,7 +55,17 @@ function W.Macro()
     if not (name and GameButton("")) then return nil end
     local layers = {}
     for _, layer in ipairs({ "LT", "RT", "LTRT" }) do layers[layer] = Click(layer) end
-    return "/cast [harm,nodead] !" .. name .. "", layers
+    return "/cast [@target,harm,nodead] !" .. name .. "", layers
+end
+
+-- Shoot's icon and name while Square would shoot (on, a wand wielded, Shoot
+-- learned), else nil: Immersion draws it on Square's tile
+function W.Spell()
+    if IF.db.wandShoot ~= true or not Wielding() then return nil end
+    local name = ShootName()
+    local texture = name and C_Spell.GetSpellTexture and C_Spell.GetSpellTexture(name)
+    if not texture then return nil end
+    return texture, name
 end
 
 -- Square is ours only while an enemy that lives is targeted: anything else
@@ -70,7 +80,7 @@ driver:SetAttribute("ic-eval", [[
     end
 ]])
 driver:SetAttribute("_onstate-wand", [[ self:RunAttribute("ic-eval") ]])
-RegisterStateDriver(driver, "wand", "[harm,nodead] shoot; none")
+RegisterStateDriver(driver, "wand", "[@target,harm,nodead] shoot; none")
 
 -- Square's key and the secure button it runs while shooting; nil: off.
 -- Out of combat only (Override.Apply)

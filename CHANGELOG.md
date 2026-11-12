@@ -1,5 +1,13 @@
 # Changelog
 
+## Immersion 0.11.1
+
+- With "Square shoots the wand" on, Square's tile shows Shoot's icon while an enemy is targeted, and blinks while the wand fires.
+
+## Core 0.18.1
+
+- Fixed: the wand's Shoot button no longer fires at a mob that is only soft-targeted (the pad's hover) while you loot next to it, which pulled it. It needs a target you have actually selected.
+
 ## Core 0.18.0
 
 - **What's new**: after an update, a list of what changed in each Improved Forever module you have, a card per module with its changes, at the top left. Someone who has never seen it gets every change there is. B or Esc closes it; the General tab's "What's new" button (under Updates) shows it again.
