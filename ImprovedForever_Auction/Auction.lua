@@ -290,6 +290,27 @@ end
 local reader = CreateFrame("Frame")
 reader:Hide()
 
+-- Stops a scan under way (waiting for the server, or being read). What was
+-- read is dropped; the server's 15 minutes still count.
+function A.StopScan(quiet)
+    if scan.state == "idle" then return false end
+    reader:Hide()
+    scan.state, scan.byItem = "idle", nil
+    if not quiet then IF.Print("auction scan stopped.") end
+    Changed()
+    return true
+end
+
+-- The scan's state as a line for a window ("" when none is under way)
+function A.ScanText()
+    if scan.state == "idle" then return "" end
+    if scan.state == "waiting" or not scan.total or scan.total == 0 then
+        return "Scanning: waiting for the server..."
+    end
+    return "Scanning: " .. scan.read .. " / " .. scan.total
+        .. " (" .. math.floor(scan.read * 100 / scan.total) .. "%)"
+end
+
 local function FinishScan()
     reader:Hide()
     local items = 0

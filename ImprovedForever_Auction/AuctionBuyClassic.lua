@@ -297,6 +297,43 @@ status:SetPoint("TOPLEFT", MAIN_X + 4, -106 + 6)
 status:SetPoint("RIGHT", win, "RIGHT", -20, 0)
 status:SetJustifyH("LEFT")
 
+-- The scan's progress: a bar along the window's bottom left (every
+-- tab: the scan is the realm's), hidden while none is under way
+local statusBase = ""
+local scanBar = CreateFrame("StatusBar", nil, win)
+scanBar:SetPoint("BOTTOMLEFT", win, "BOTTOMLEFT", 16, 10)
+scanBar:SetSize(280, 16)
+scanBar:SetStatusBarTexture("Interface\\Buttons\\WHITE8X8")
+scanBar:SetStatusBarColor(0.25, 0.55, 0.65, 0.9)
+scanBar:SetMinMaxValues(0, 1)
+scanBar.bg = scanBar:CreateTexture(nil, "BACKGROUND")
+scanBar.bg:SetAllPoints()
+scanBar.bg:SetColorTexture(0, 0, 0, 0.45)
+scanBar.text = scanBar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+scanBar.text:SetPoint("CENTER")
+scanBar:Hide()
+
+local function ShowStatus()
+    status:SetText(statusBase)
+    local scanning, read, total = A.Scanning()
+    scanBar:SetShown(scanning)
+    if not scanning then return end
+    scanBar:SetValue((total and total > 0) and read / total or 0)
+    scanBar.text:SetText(A.ScanText())
+end
+
+-- Scan now / Stop (Y, or the mouse's button): the scan the auction
+-- house allows once in 15 minutes
+function BY.ToggleScan()
+    if A.Scanning() then
+        A.StopScan()
+    else
+        A.Scan()
+    end
+    ShowStatus()
+    BY.Render()
+end
+
 local content = K.NewFrame("Frame", nil, buyPage)
 content:SetPoint("TOPLEFT", MAIN_X, CONTENT_TOP)
 content:SetSize(MAIN_W, CONTENT_H)
@@ -1632,8 +1669,9 @@ local function RenderResults()
     if s.buyMyLevel then active[#active + 1] = "up to my level" end
     if s.buyUpgrades == "only" then active[#active + 1] = "upgrades only" end
     if BY.search and BY.search ~= "" then path = path .. "   ·   |cffd8ccb0\"" .. BY.search .. "\"|r" end
-    status:SetText(path .. "   ·   " .. (BY.searching and "searching..." or (n .. " found"))
-        .. (#active > 0 and ("   ·   |cffc9a25a" .. table.concat(active, ", ") .. "|r") or ""))
+    statusBase = path .. "   ·   " .. (BY.searching and "searching..." or (n .. " found"))
+        .. (#active > 0 and ("   ·   |cffc9a25a" .. table.concat(active, ", ") .. "|r") or "")
+    ShowStatus()
 end
 
 -- What it costs, for the hold box: the picked auction; a commodity's
@@ -1978,19 +2016,22 @@ function BY.Render()
     if D then RenderDetail() end
     if filterBox:IsShown() then RenderFilters() end
     local text
+    local scanLabel = A.Scanning() and "Stop scan" or "Scan"
     if filterBox:IsShown() then
         text = Glyph("DPAD") .. " Move   " .. Glyph("A") .. " Select   " .. Glyph("LS") .. " / " .. Glyph("B") .. " Close"
     elseif D and BY.detailFocus then
-        text = DetailHints(true) .. Glyph("LB") .. " " .. Glyph("RB") .. " Category   " .. Glyph("B") .. " Back"
+        text = DetailHints(true) .. Glyph("Y") .. " " .. scanLabel .. "   " .. Glyph("LB") .. " " .. Glyph("RB")
+            .. " Category   " .. Glyph("B") .. " Back"
     else
         text = Glyph("A") .. " Open   " .. Glyph("DPAD") .. " Move   " .. Glyph("LS") .. " Filters   "
-            .. Glyph("B") .. " Close"
+            .. Glyph("Y") .. " " .. scanLabel .. "   " .. Glyph("B") .. " Close"
     end
     local mouseList
     if filterBox:IsShown() then
         mouseList = { { "Done", function() BY.Press("LS") end } }
     else
-        mouseList = { { "Filters", function() BY.Press("LS") end } }
+        mouseList = { { "Filters", function() BY.Press("LS") end },
+            { scanLabel, function() BY.ToggleScan() end } }
     end
     SetHints(text, mouseList)
     BY.Tip()
@@ -2111,6 +2152,7 @@ function BY.Press(name, fast)
         end
         return BY.Render()
     end
+    if name == "Y" then return BY.ToggleScan() end
     if D and BY.detailFocus then
         -- (Circle back to the list, the screen kept; the categories' buttons
         -- and the filters: the list's, the screen left)
@@ -2320,6 +2362,13 @@ win:SetScript("OnUpdate", function()
             end
         end
     end
+    -- (the scan's bar; the legend's label when one starts or ends)
+    local scanning = A.Scanning()
+    if scanning ~= BY.scanShown then
+        BY.scanShown = scanning
+        BY.Render()
+    end
+    ShowStatus()
     local held = BY.held
     if held and now >= held.next then
         held.next = now + REPEAT_EVERY
