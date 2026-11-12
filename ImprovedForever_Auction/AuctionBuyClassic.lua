@@ -249,6 +249,20 @@ local function GainBadge(isUpgrade, gain, needLevel)
     return text, needLevel and "later" or "upgrade"
 end
 
+-- "requires level 40", red when above the player's own (nil: none needed / not cached yet)
+local function MinLevel(item)
+    local info = item and (C_Item and C_Item.GetItemInfo or GetItemInfo)
+    return info and select(5, info(item)) or nil
+end
+
+local function ReqLevel(item)
+    local minLevel = MinLevel(item)
+    if not minLevel or minLevel <= 1 then return nil end
+    local text = "requires level " .. minLevel
+    if minLevel > (UnitLevel("player") or 1) then text = "|cffff4d4d" .. text .. "|r" end
+    return text
+end
+
 ---------------------------------------------------------------------------
 -- The main categories, down the left
 ---------------------------------------------------------------------------
@@ -466,6 +480,7 @@ for _, e in ipairs({
     { kind = "title", text = "Sort" },
     Radio("Price, lowest first", "buySort", "price"),
     Radio("Name", "buySort", "name"),
+    Radio("Required level, lowest first", "buySort", "level"),
 }) do ENTRIES[#ENTRIES + 1] = e end
 
 local function Selectable(entry)
@@ -907,13 +922,36 @@ end
 -- not known yet join as their data come)
 function BY.FilterResults()
     local all = BY.allResults or {}
-    if S().buyUpgrades ~= "only" then
-        BY.results = all
-        return
+    local list = all
+    if S().buyUpgrades == "only" then
+        list = {}
+        for _, result in ipairs(all) do
+            if BY.GroupUpgrade(result.itemKey) then list[#list + 1] = result end
+        end
     end
-    local list = {}
-    for _, result in ipairs(all) do
-        if BY.GroupUpgrade(result.itemKey) then list[#list + 1] = result end
+    if S().buySort == "level" then
+        -- (by the item's required level, the server's order kept within one; those
+        -- not known yet last, sorted in as their data come, the picked one kept)
+        local picked = BY.results and BY.results[BY.index]
+        local rank, ordered = {}, {}
+        for i, result in ipairs(list) do
+            ordered[i] = result
+            rank[result] = { MinLevel(result.itemKey.itemID) or 999, i }
+        end
+        table.sort(ordered, function(a, b)
+            local ra, rb = rank[a], rank[b]
+            if ra[1] ~= rb[1] then return ra[1] < rb[1] end
+            return ra[2] < rb[2]
+        end)
+        list = ordered
+        if picked then
+            for i, result in ipairs(list) do
+                if result == picked then
+                    BY.index = i
+                    break
+                end
+            end
+        end
     end
     BY.results = list
 end
@@ -1637,16 +1675,16 @@ local function RenderResults()
             local info = KeyInfo(result)
             local price = result.minPrice
             local upgrade, gain, needLevel = BY.GroupUpgrade(result.itemKey)
-            local gainText, gainColor = GainBadge(upgrade, gain, needLevel)
-            local dealText, dealColor = DealBadge(result.itemKey.itemID, price)
+            -- (no "New" badge: only a gain's percent; no price badge)
+            local gainText, gainColor
+            if gain then gainText, gainColor = GainBadge(upgrade, gain, needLevel) end
             local priceText = price and price > 0 and A.Money(price) or "bid only"
             f:Fill({
                 icon = info and info.iconFileID, quality = info and info.quality,
                 name = info and info.itemName or "...", price = priceText, upgrade = upgrade,
                 line = result.totalQuantity .. " available"
-                    .. (result.itemKey.itemLevel and result.itemKey.itemLevel > 0 and info and info.isEquipment
-                        and ("  ·  item level " .. result.itemKey.itemLevel) or ""),
-                gain = gainText and { gainText, gainColor }, deal = dealText and { dealText, dealColor },
+                    .. (ReqLevel(result.itemKey.itemID) and ("  ·  " .. ReqLevel(result.itemKey.itemID)) or ""),
+                gain = gainText and { gainText, gainColor },
             })
             -- (dimmed only under the filters: the item's screen gone into
             -- keeps its row bright)
@@ -1790,20 +1828,19 @@ local function RenderDetail()
                     and true or false
                 local gain, needLevel
                 if upgrade then gain, needLevel = IF.Upgrades.Gain(a.link, nil, nil, true) end
-                local gainText, gainColor = GainBadge(upgrade, gain, needLevel)
-                local dealText, dealColor = DealBadge(D.itemID, a.unit)
+                local gainText, gainColor
+                if gain then gainText, gainColor = GainBadge(upgrade, gain, needLevel) end
                 local parts = {}
                 if a.count > 1 then parts[#parts + 1] = a.count .. " ×  " .. A.Money(a.unit) .. " each" end
-                if a.itemLevel and a.itemLevel > 0 and info.isEquipment then
-                    parts[#parts + 1] = "item level " .. a.itemLevel
-                end
+                local req = ReqLevel(a.link or D.itemID)
+                if req then parts[#parts + 1] = req end
                 r:Fill({
                     icon = info.iconFileID, quality = info.quality,
                     -- (its own name: a random suffix's "of the Owl")
                     name = a.link and a.link:match("%[(.-)%]") or info.itemName,
                     line = table.concat(parts, "  ·  "), price = A.Money(a.total or a.unit * a.count),
                     upgrade = upgrade,
-                    gain = gainText and { gainText, gainColor }, deal = dealText and { dealText, dealColor },
+                    gain = gainText and { gainText, gainColor },
                 })
                 -- (beside the list, not gone into: no pick shown; with the
                 -- mouse it's clicked, always shown)
@@ -2514,6 +2551,11 @@ events:SetScript("OnEvent", function(_, event, ...)
             C_Timer.After(0.2, function()
                 BY.versionsQueued = false
                 VersionsLoaded()
+                -- (a level sort: the items' levels came)
+                if S().buySort == "level" and win:IsShown() and not BY.searching then
+                    BY.FilterResults()
+                    BY.Render()
+                end
             end)
         end
     elseif event == "ITEM_KEY_ITEM_INFO_RECEIVED" then
