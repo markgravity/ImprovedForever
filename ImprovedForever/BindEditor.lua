@@ -43,7 +43,7 @@ local LIST_W = 310
 -- controller DRAWN_W of its width, the rest see-through; ART_PAD clear on
 -- each side; up to MAX_SCALE)
 local ART_W, ART_H, DRAWN_W, MAX_SCALE = 512, 256, 400, 1.8
-local PRESS_H, RUNS_H, MSG_H, ART_PAD = 20, 22, 20, 48
+local PRESS_H, RUNS_H, MSG_H, TIP_H, ART_PAD = 20, 22, 20, 54, 48
 local ART_TOP = PRESS_H + 6
 
 -- Its buttons: where they sit on the drawing (its pixels, y down), their
@@ -386,6 +386,8 @@ function P:OpenPicker()
         -- button, or Square, binds it)
         onChoose = function() if KeysOnly() and not KeyView() then P:Bind() end end,
         onAlt = function() P:Unbind((Mouse() or KeysOnly()) and "key") end,
+        -- (Square holds the card: its lock, till Circle)
+        locked = function() return P.selected end,
     })
 end
 
@@ -416,6 +418,21 @@ local function NewSpot(parent, s)
     else
         b.glyph = K.Glyph(b, size)
         b.glyph:SetPoint("CENTER")
+        -- what is on the button: its icon, the glyph small under it
+        b.icon = K.RoundIcon(b, size - 4, "ARTWORK")
+        b.icon:SetDrawLayer("ARTWORK", 2)
+        b.icon:SetPoint("CENTER")
+        b.icon:Hide()
+        -- red lock: the card picked can't go on this button (the game's own)
+        b.block = b:CreateTexture(nil, "OVERLAY", nil, 3)
+        b.block:SetSize(math.max(14, size * 0.6), math.max(14, size * 0.6))
+        b.block:SetPoint("CENTER", b, "BOTTOMRIGHT", -4, 4)
+        local atlas = IF.HasAtlas("Professions-Icon-Lock") and "Professions-Icon-Lock"
+            or IF.HasAtlas("AdventureMapIcon-Lock") and "AdventureMapIcon-Lock"
+        if atlas then b.block:SetAtlas(atlas) else b.block:SetTexture("Interface\\PetBattles\\PetBattle-LockIcon") end
+        b.block:SetDesaturated(true)
+        b.block:SetVertexColor(1, 0.25, 0.2)
+        b.block:Hide()
     end
     b.dot = b:CreateTexture(nil, "OVERLAY", nil, 2)
     b.dot:SetTexture(TEX .. "ic_dot")
@@ -596,20 +613,10 @@ function P:Build(parent)
     f.msg:SetPoint("TOP", f.runs, "BOTTOM", 0, -6)
     f.msg:SetJustifyH("CENTER")
 
-    -- Over the drawing, a card on no press: Square to start binding it
-    local over = K.NewFrame("Frame", nil, group)
-    over:SetSize(400, 66)
-    over:SetFrameLevel(art:GetFrameLevel() + 20)
-    over.box = K.Box(over, 4, 1, "BACKGROUND")
-    over.box:SetColors(KC.boxBg, 0.92, KC.info, 0.6)
-    over.title = K.Text(over, 16, KC.cream)
-    over.title:SetPoint("CENTER", 0, 10)
-    over.title:SetJustifyH("CENTER")
-    over.sub = K.ChatText(over, 12, KC.help)
-    over.sub:SetPoint("CENTER", 0, -14)
-    over.sub:SetJustifyH("CENTER")
-    over:Hide()
-    f.over = over
+    -- Under the drawing's lines: how to bind the card picked (Square), its rank (left / right)
+    f.tip = K.ChatText(group, 13, KC.cream2)
+    f.tip:SetPoint("TOP", f.msg, "BOTTOM", 0, -4)
+    f.tip:SetJustifyH("CENTER")
 
     -- The confirmation box (P:Confirm), over the page: the panel's own
     -- window look (its title in its bar, its focus glow: it has the pad),
@@ -636,8 +643,25 @@ function P:Build(parent)
     d:SetScript("OnMouseWheel", function(_, delta) P:RankStep(delta > 0 and -1 or 1) end)
     d:Hide()
     self.dialog = d
+    -- The buttons held for a layer, read as they go down and up
+    local poll = K.NewFrame("Frame", nil, f)
+    poll:SetScript("OnUpdate", function() P:PollLayer() end)
     f.mid:SetScript("OnSizeChanged", function() P:Layout() end)
     self:Layout()
+end
+
+-- L1 / L2 / R1 / R2 held: the drawing shows that set of presses
+function P:PollLayer()
+    if not (self.frame and self.frame:IsShown()) or KeyView() or not IsKeyDown then return end
+    local list = {}
+    for _, key in ipairs(B.HOLDS) do
+        if IsKeyDown(key) then list[#list + 1] = key end
+    end
+    local text = table.concat(list, "+")
+    if text ~= (self.layerText or "") then
+        self.layerText, self.layerList = text, list
+        menu.Render()
+    end
 end
 
 -- The drawing as big as the column lets it, the block placed for it
@@ -649,9 +673,9 @@ function P:Layout()
     local art = keys and f.kb or f.art
     local artW, artH, drawn = ART_W, ART_H, DRAWN_W
     if keys then artW, artH, drawn = KB_W, KB_H, KB_W end
-    local scale = math.min(MAX_SCALE, (w - 2 * ART_PAD) / drawn, (h - ART_TOP - 8 - RUNS_H - MSG_H) / artH)
+    local scale = math.min(MAX_SCALE, (w - 2 * ART_PAD) / drawn, (h - ART_TOP - 8 - RUNS_H - MSG_H - TIP_H) / artH)
     local height = artH * scale
-    f.group:SetHeight(ART_TOP + height + 8 + RUNS_H + MSG_H)
+    f.group:SetHeight(ART_TOP + height + 8 + RUNS_H + MSG_H + TIP_H)
     art:SetSize(artW, artH)
     art:SetScale(scale)
     -- (a scaled frame's offsets are in its own units)
@@ -659,8 +683,6 @@ function P:Layout()
     art:SetPoint("TOP", f.group, "TOP", 0, -ART_TOP / scale)
     f.runs:ClearAllPoints()
     f.runs:SetPoint("TOP", f.group, "TOP", 0, -(ART_TOP + height + 8))
-    f.over:ClearAllPoints()
-    f.over:SetPoint("CENTER", f.group, "TOP", 0, -(ART_TOP + height / 2))
 end
 
 -- The layer the keys drawing shows ("ALT-CTRL-"), for the bar under it to follow; nil when
@@ -688,11 +710,13 @@ end
 
 -- The left stick (Menu.lua): up / down the cards
 function P:StickStep(dir)
+    if self.selected then return end
     if self.popup then return self:RankStep(dir) end
     self.picker:Press(dir < 0 and "UP" or "DOWN")
 end
 
 function P:Hide()
+    self.selected = false
     -- (an open confirmation is a no)
     if self.popup then self:AnswerPopup(false) end
     self.frame:Hide()
@@ -829,6 +853,30 @@ function P:BindCorner(region, e, confirmed, double, layer)
         .. (touch.IsBound(from) and from ~= e.action and (", " .. touch.ActionLabel(from) .. " off it") or ""))
 end
 
+-- A spell card's ranks (Rank 1... then Highest), the one picked first: left / right change it
+local function RankList(e)
+    local list = {}
+    for i, r in ipairs(e.ranks) do list[i] = { id = r.id, rank = r.rank or ("Rank " .. i) } end
+    list[#list + 1] = { id = e.ranks[#e.ranks].id, rank = "Highest" }
+    return list
+end
+
+function P:RankIndex(e)
+    self.rankSel = self.rankSel or {}
+    local list = RankList(e)
+    return math.max(1, math.min(#list, self.rankSel[e.action or e.name] or #list)), list
+end
+
+function P:RankMove(dir)
+    local e = self:Entry()
+    if not self.selected and IF.Input.Pad() then return false end
+    if not (e and e.ranks and #e.ranks > 1) then return false end
+    local i, list = self:RankIndex(e)
+    self.rankSel[e.action or e.name] = math.max(1, math.min(#list, i + dir))
+    menu.Render()
+    return true
+end
+
 -- Square (Cross too): the card picked onto a press made now (Recorder.lua).
 -- An action clicked on the touchpad: the corner under the finger.
 function P:Bind()
@@ -836,12 +884,11 @@ function P:Bind()
     if not e or IF.InCombat() then return end
     -- (a spell with several ranks: which one first, then the binding as for any card)
     if e.ranks and #e.ranks > 1 then
-        return self:ChooseRank(e, function(id)
-            local copy = {}
-            for k, v in pairs(e) do copy[k] = v end
-            copy.action, copy.ranks = "spell:" .. id, nil
-            self:BindEntry(copy)
-        end)
+        local i, list = self:RankIndex(e)
+        local copy = {}
+        for k, v in pairs(e) do copy[k] = v end
+        copy.action, copy.ranks = "spell:" .. list[i].id, nil
+        return self:BindEntry(copy)
     end
     self:BindEntry(e)
 end
@@ -897,6 +944,8 @@ function P:BindEntry(e)
     local def = e.def
     IF.Recorder.Start({
         title = "Bind " .. (e.name or ""), chord = true, double = true,
+        -- (with the pad: no box, the press shows at the top of the drawing)
+        inline = IF.Input.Pad(),
         -- (a key, a click on an item: its keyboard / mouse press)
         keys = TakesKey(e), clicks = def ~= nil and def.click ~= nil,
         acceptKey = function(spec)
@@ -1081,16 +1130,32 @@ end
 -- The pad: the cards; Square binds the one picked
 ---------------------------------------------------------------------------
 function P:Press(name)
+    if not (name == "LB" or name == "RB" or name == "LT" or name == "RT") then self.listPending = nil end
     -- A confirmation up: Cross replaces, Circle backs out, the rest wait
     if self.popup then
         if name == "A" or name == "B" then self:AnswerPopup(name == "A") end
         if name == "UP" then self:RankStep(-1) elseif name == "DOWN" then self:RankStep(1) end
         return true
     end
+    -- A card locked: the D-pad is the drawing's (the rank), not the list's; Circle lets go
+    if self.selected then
+        if name == "B" then
+            self.selected = false
+            menu.Render()
+            return true
+        end
+        if name == "LEFT" or name == "UP" then self:RankMove(-1)
+        elseif name == "RIGHT" or name == "DOWN" then self:RankMove(1) end
+        if name == "LEFT" or name == "UP" or name == "RIGHT" or name == "DOWN" then return true end
+    end
     -- (Circle closes: the panel's)
     if name == "B" then return false end
     if name == "X" then
+        -- Square locks the card (Circle lets go) and starts the binding
+        local e = self:Entry()
+        if e and not e.header then self.selected = true end
         self:Bind()
+        menu.Render()
         return true
     end
     -- (Cross on a card: picked already, nothing to start)
@@ -1099,11 +1164,24 @@ function P:Press(name)
         if Region() then self:CornerTriangle(Region()) else self:OptionTriangle() end
         return true
     end
-    -- L1 / R1: the lists (as L2 / R2)
-    if name == "LB" or name == "RB" then name = name == "LB" and "LT" or "RT" end
+    -- L1 / R1 / L2 / R2: held, they show their set of presses; let go alone, they change the list
+    if name == "LB" or name == "RB" or name == "LT" or name == "RT" then
+        self.listPending = name
+        return true
+    end
+    self.listPending = nil
     self.picker:Press(name)
     menu.Render()
     return true
+end
+
+function P:Release(name)
+    if self.listPending ~= name then return end
+    self.listPending = nil
+    if self.selected then return end
+    if name == "LB" or name == "RB" then name = name == "LB" and "LT" or "RT" end
+    self.picker:Press(name)
+    menu.Render()
 end
 
 function P:Help()
@@ -1112,6 +1190,15 @@ function P:Help()
         return { H({ "DPAD" }, "Move"), H({ "A" }, "Choose", "A"), H({ "B" }, "Cancel", "B") }
     end
     if self.popup then return { H({ "A" }, "Replace", "A"), H({ "B" }, "Cancel", "B") } end
+    if self.selected then
+        local e = self:Entry()
+        local hints = {}
+        if e and e.ranks and #e.ranks > 1 then hints[#hints + 1] = H({ "DPAD" }, "Rank") end
+        hints[#hints + 1] = H({ "X" }, "Bind", "X")
+        if self.key or self.keyed then hints[#hints + 1] = H({ "Y" }, "Unbind", "Y") end
+        hints[#hints + 1] = H({ "B" }, "Unlock", "B")
+        return hints
+    end
     local hints = { H({ "DPAD" }, "Move"), H({ "LB", "RB" }, "List"), H({ "X" }, "Bind", "X") }
     if self.key or self.keyed then
         hints[#hints + 1] = H({ "Y" }, Region() and ("Clear / Hold to " .. (touch.IsOff(Region()) and "Turn On" or "Turn Off"))
@@ -1255,7 +1342,7 @@ function P:RenderKeys(e)
     local toast = menu.toast
     f.msg:SetText(toast and toast.text or "")
     if toast then f.msg:SetTextColor(unpack(toast.color)) end
-    f.over:Hide()
+    f.tip:SetText("")
 end
 
 function P:Render()
@@ -1267,6 +1354,9 @@ function P:Render()
     self.list = self.picker.list
     -- The card picked: its press lit
     local e = self:Entry()
+    -- (another card picked, with the mouse: not selected)
+    local id = e and (e.action or e.name)
+    if id ~= self.selectedFor then self.selectedFor, self.selected = id, false end
     self.selAction = e and e.action
     -- The keyboard's drawing in hand, or the controller's
     local keys = KeyView()
@@ -1301,6 +1391,24 @@ function P:Render()
     local held = {}
     for _, key in ipairs(B.HeldList(spec and B.Parse(spec))) do held[key] = true end
     local bySpec = Snapshot()
+    -- The layer held (L1 / L2 / R1 / R2): its set of presses is the one drawn
+    local layerList = self.layerList or {}
+    local layerHeld = #layerList > 0 and table.concat(layerList, "+") or nil
+    for _, k in ipairs(layerList) do held[k] = true end
+    -- The icon of what is on each press (a binding's own, an action's)
+    local iconOf = {}
+    for sp, defs in pairs(bySpec) do
+        for _, def in ipairs(defs) do
+            if def.kind ~= "action" and def.icon and not iconOf[sp] then iconOf[sp] = def.icon end
+        end
+    end
+    for action, presses in pairs(ActionPresses()) do
+        local texture
+        if IF.ActionInfo then _, texture = IF.ActionInfo(action) end
+        if texture then
+            for _, pr in ipairs(presses) do iconOf[pr] = iconOf[pr] or texture end
+        end
+    end
 
     -- The buttons: the one picked lit, marks for what is on each
     for _, s in ipairs(SPOTS) do
@@ -1310,8 +1418,9 @@ function P:Render()
             b.glyph:Set(IF.PAD_KEY[key] or key)
             local any, clash = false, false
             for sp, defs in pairs(bySpec) do
-                local _, pressed = B.Parse(sp)
-                if pressed == key then
+                local h, pressed = B.Parse(sp)
+                -- (only the set of the layer held: none held, the bare presses)
+                if pressed == key and h == layerHeld then
                     any = true
                     clash = clash or Clashes(defs, sp)
                 end
@@ -1331,12 +1440,37 @@ function P:Render()
             b.dot:SetShown(any)
             Tint(b.dot, clash and KC.danger or KC.slot)
             b.glyph:SetAlpha((picked or any) and 1 or 0.7)
+            local icon = iconOf[B.SpecOf(layerList, key)]
+            if icon then K.SetIcon(b.icon, icon) end
+            b.icon:SetShown(icon ~= nil)
+            b.glyph:SetShown(icon == nil)
+            -- (red lock: not the card's to take, the game owns it)
+            local blocked = false
+            if e and not e.header then
+                local sp = B.SpecOf(layerList, key)
+                if B.GameOwns(sp) then
+                    blocked = true
+                elseif e.def then
+                    blocked = not e.def.accepts(sp)
+                else
+                    blocked = not B.ActionFits(sp)
+                end
+            end
+            b.block:SetShown(blocked)
+            if blocked then b.glyph:SetAlpha(0.5) b.icon:SetAlpha(0.5) else b.icon:SetAlpha(1) end
         end
     end
     if HasTouchpad() then RenderCorners(f) end
 
     -- Over the drawing: the press; under it, what runs on it (red: two
     -- things clash there)
+    local live = IF.Recorder and IF.Recorder.IsActive() and IF.Recorder.Inline() and IF.Recorder.LiveText()
+    if live then
+        f.press:SetText(live)
+        f.runs:SetText("")
+        self:RenderTip(e, press)
+        return
+    end
     f.press:SetText(press and ("|cff9d917aPress|r   " .. PressText(press, 18))
         or ("|cff6f6452" .. (e and ((e.name or "") .. ": not bound") or "Nothing picked") .. "|r"))
     local runs = ""
@@ -1351,14 +1485,28 @@ function P:Render()
     f.msg:SetText(toast and toast.text or "")
     if toast then f.msg:SetTextColor(unpack(toast.color)) end
 
-    -- A card on no press: the drawing dimmed, Square over it
-    local unbound = e and not press
-    f.art:SetAlpha(unbound and 0.3 or 1)
-    f.over:SetShown(unbound and true or false)
-    if unbound then
-        f.over.title:SetText("Press " .. IF.GlyphText("X", 22) .. " " .. IF.ButtonName("X") .. " to start binding")
-        f.over.sub:SetText((e.name or "") .. " isn't on a press yet: make the one you want")
+    -- Under the drawing: how to bind the card picked, its rank to change
+    f.art:SetAlpha(1)
+    self:RenderTip(e, press)
+end
+
+function P:RenderTip(e, press)
+    local f, lines = self.frame, {}
+    local rec = IF.Recorder and IF.Recorder.IsActive() and IF.Recorder.Inline()
+    if e and not rec then
+        if self.selected then
+            lines[#lines + 1] = "|cffffd100Locked|r  " .. IF.GlyphText("B", 18) .. " " .. IF.ButtonName("B") .. " to unlock"
+        end
+        if e.ranks and #e.ranks > 1 then
+            local i, list = self:RankIndex(e)
+            lines[#lines + 1] = "|cff9d917a" .. IF.GlyphText("DPAD_LR", 20)
+                .. " Rank|r  |cffffd100" .. list[i].rank .. "|r"
+        end
+        if not press then
+            lines[#lines + 1] = "Press " .. IF.GlyphText("X", 20) .. " " .. IF.ButtonName("X") .. " to start binding"
+        end
     end
+    f.tip:SetText(table.concat(lines, "\n"))
 end
 
 ---------------------------------------------------------------------------

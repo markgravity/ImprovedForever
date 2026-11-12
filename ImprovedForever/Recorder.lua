@@ -76,12 +76,27 @@ local function Prune()
     end
 end
 
+-- Inline: the press so far, for the editor's line at the top ("Press a button...", "L1 + R3")
+function R.Inline()
+    return opts ~= nil and opts.inline == true
+end
+
+function R.LiveText()
+    if not opts then return nil end
+    if not spec then return "|cffffd100Press a button, or hold one and press another|r" end
+    local keys = IF.Binds.Glyphs(spec)
+    local glyphs = ""
+    for _, k in ipairs(keys or {}) do glyphs = glyphs .. IF.GlyphText(k, 18) .. " " end
+    return "|cff9d917aBinding|r   " .. glyphs .. "|cffffd100" .. IF.Binds.Text(spec) .. "|r"
+end
+
 function R.Render()
     local d = box
     local keys = spec and IF.Binds.Glyphs(spec)
     d.glyphs:Set(keys or {})
     d.glyphs:SetShown(keys ~= nil)
     d.press:SetText(spec and IF.Binds.Text(spec) or "")
+    if opts and opts.inline and menu.IsOpen() then menu.Render() end
     if state == "wait" then
         d.status:SetText(IF.PadText("Waiting for a press... " .. (IF.Input.Pad() and "{B} alone or Esc cancels."
             or "Esc cancels.")))
@@ -125,6 +140,9 @@ function R.Start(o)
     else
         box.hint:SetText(mouse .. "\n" .. pad)
     end
+    -- (inline: the box is there to take the pad, unseen; the editor shows the press)
+    box:SetAlpha(o.inline and 0 or 1)
+    box:EnableMouse(not o.inline)
     box:Show()
     box:EnableKeyboard(true)
     box:SetPropagateKeyboardInput(false)

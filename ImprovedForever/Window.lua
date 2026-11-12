@@ -741,10 +741,26 @@ function UI.CardPicker(parent, cols, cardH, onRender, leftKey, rightKey)
                         right = def.right and def.right(e), bound = def.bound and def.bound(e),
                         mid = def.mid and def.mid(e), colW = def.colW and def.colW() })
                     c.focus:Light(first + slot == self.index)
+                    -- (a picker with a lock: the row held shows a lock, no other can be picked)
+                    if def.locked then
+                        if not c.lock then
+                            c.lock = c:CreateTexture(nil, "OVERLAY")
+                            c.lock:SetSize(18, 18)
+                            local atlas = IF.HasAtlas("Professions-Icon-Lock") and "Professions-Icon-Lock"
+                                or IF.HasAtlas("AdventureMapIcon-Lock") and "AdventureMapIcon-Lock"
+                            if atlas then c.lock:SetAtlas(atlas)
+                            else c.lock:SetTexture("Interface\\PetBattles\\PetBattle-LockIcon") end
+                        end
+                        -- (right of the item's name)
+                        c.lock:ClearAllPoints()
+                        c.lock:SetPoint("LEFT", c.name, "LEFT", math.min(c.name:GetStringWidth(), c.name:GetWidth()) + 6, 0)
+                        c.lock:SetShown(first + slot == self.index and def.locked() and true or false)
+                    end
                     -- (the mouse: over one picks it; a click chooses it, a
                     -- right-click does def.onAlt)
                     c:RegisterForClicks("LeftButtonUp", "RightButtonUp")
                     c:SetScript("OnClick", function(_, button)
+                        if def.locked and def.locked() then return end
                         p.index = first + slot
                         if button == "RightButton" then
                             if def.onAlt then def.onAlt(e) end

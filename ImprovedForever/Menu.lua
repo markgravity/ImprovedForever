@@ -287,7 +287,11 @@ function menu.Press(name)
         return
     end
     -- (recording a press: Circle, or the legend's cancel clicked, stops it)
-    if name == "B" and IF.Recorder and IF.Recorder.IsActive() then return IF.Recorder.Finish(true) end
+    if IF.Recorder and IF.Recorder.IsActive() then
+        if name == "B" then return IF.Recorder.Finish(true) end
+        -- (the pad is the recorder's while it is up: a press here is not the page's)
+        return
+    end
     -- A destructive button armed: Cross does it, Circle cancels, a move lets it go
     if menu.armed then
         if name == "B" then
@@ -316,6 +320,8 @@ function menu.CreateInput()
             end
             if down == false then
                 if menu.repeatName == name then menu.repeatName = nil end
+                local page = CurrentPage()
+                if page and page.Release then page:Release(name) end
                 return
             end
             if REPEAT[name] then
