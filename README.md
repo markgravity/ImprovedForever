@@ -94,6 +94,14 @@ settings in the middle (left / right change one, Cross picks from its list on th
   `World of Warcraft/_forever_/Interface/AddOns/` so you get `AddOns/ImprovedForever/`,
   `AddOns/ImprovedForever_Wheel/`... (remove an old `AddOns/ImprovedController/`).
 
+## SteamOS / Steam Deck (PlayStation controller)
+
+The touchpad corners need the game to read the DualSense directly. Steam Input in Game Mode
+hides the touchpad finger from the game, so every click lands in the same corner. For the
+WoW shortcut: *Properties → Controller → Disable Steam Input*, then **restart the game**
+(a `/reload` isn't enough). Buttons you mapped in Steam Input for that shortcut stop working
+then: bind them in the Bindings tab instead.
+
 ## Development
 
 One repo, one folder per addon (`ImprovedForever/` the core, `ImprovedForever_<Module>/` each module).
