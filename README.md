@@ -94,17 +94,26 @@ settings in the middle (left / right change one, Cross picks from its list on th
   `World of Warcraft/_forever_/Interface/AddOns/` so you get `AddOns/ImprovedForever/`,
   `AddOns/ImprovedForever_Wheel/`... (remove an old `AddOns/ImprovedController/`).
 
-## SteamOS / Steam Deck (PlayStation controller), experimental
+## SteamOS / Steam Deck (PlayStation controller)
 
 Keep Steam Input on for the WoW shortcut: it is what lets Steam's on-screen keyboard
 (Steam / PS button + X) take the controller instead of the game. But Steam Input hides the
-touchpad finger from the game, so the corners can't be told apart. Give them as keys instead:
-in the shortcut's controller layout make the touchpad send four keys, one per corner, the
-numpad **7** (top left), **9** (top right), **1** (bottom left) and **3** (bottom right).
-Improved Forever takes those four as the corners. If the game doesn't see the pad as a
-PlayStation one, type `/if cornerkeys on` once. (Not tested in game yet: Steam's *Button Pad*
-splits a pad into top / right / bottom / left areas, not corners, so how to lay the four
-areas out in Steam is still being worked out.)
+touchpad finger from the game, so the corners can't be told apart. The layout in
+[`docs/steam-input/ImprovedForever_PS5_TouchpadCorners.vdf`](docs/steam-input/ImprovedForever_PS5_TouchpadCorners.vdf)
+sends them as keys instead: the touchpad's top left / top right / bottom left / bottom right
+areas press the numpad **7 / 9 / 1 / 3**, and Improved Forever takes those four as the corners
+(also in the Bindings tab).
+
+1. Copy the `.vdf` to `~/.steam/steam/controller_base/templates/` as
+   `controller_ps5_improvedforever.vdf` and restart Steam.
+2. In the WoW shortcut's Controller Settings, Browse Configs, Templates: apply
+   *Improved Forever: PS5 + touchpad corners*, then restart the game.
+3. If the game doesn't see the pad as a PlayStation one, type `/if cornerkeys on` once.
+
+The layout is Steam's stock PS5 gamepad one with only the touchpad changed. Numpad 7 / 9 / 1 / 3
+are taken by the addon in the world while it runs. Each half of the pad has four areas
+(top, right, bottom, left), so a click near the middle of a half can land in the other corner
+of that half.
 
 ## Development
 
