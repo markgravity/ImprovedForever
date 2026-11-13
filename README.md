@@ -94,15 +94,17 @@ settings in the middle (left / right change one, Cross picks from its list on th
   `World of Warcraft/_forever_/Interface/AddOns/` so you get `AddOns/ImprovedForever/`,
   `AddOns/ImprovedForever_Wheel/`... (remove an old `AddOns/ImprovedController/`).
 
-## SteamOS / Steam Deck (PlayStation controller)
+## SteamOS / Steam Deck (PlayStation controller), experimental
 
 Keep Steam Input on for the WoW shortcut: it is what lets Steam's on-screen keyboard
 (Steam / PS button + X) take the controller instead of the game. But Steam Input hides the
 touchpad finger from the game, so the corners can't be told apart. Give them as keys instead:
-in the shortcut's controller layout set the touchpad as a **Button Pad** with four buttons
-sending the numpad keys **7** (top left), **9** (top right), **1** (bottom left) and
-**3** (bottom right). Improved Forever takes those four as the corners. If the game doesn't see
-the pad as a PlayStation one, type `/if cornerkeys on` once.
+in the shortcut's controller layout make the touchpad send four keys, one per corner, the
+numpad **7** (top left), **9** (top right), **1** (bottom left) and **3** (bottom right).
+Improved Forever takes those four as the corners. If the game doesn't see the pad as a
+PlayStation one, type `/if cornerkeys on` once. (Not tested in game yet: Steam's *Button Pad*
+splits a pad into top / right / bottom / left areas, not corners, so how to lay the four
+areas out in Steam is still being worked out.)
 
 ## Development
 
