@@ -218,6 +218,12 @@ function F.PlaceGuide()
     guide:SetPoint("TOPLEFT", UIParent, "TOPLEFT", s and s.guideX or 0, -14 - (s and s.guideY or 0))
 end
 IF.OnLogin(F.PlaceGuide)
+-- How far down the guide line reaches (px from the screen's top, with a little air): the sidebar
+-- of the Immersion module keeps below it, shown or not (Card.Top)
+function F.GuideBottom()
+    local s = IF.db and F.Settings()
+    return 14 + (s and s.guideY or 0) + guide:GetHeight() + 8
+end
 guide:SetFrameStrata("MEDIUM")
 guide:EnableMouse(false)
 guide:SetAlpha(0)

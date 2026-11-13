@@ -312,7 +312,12 @@ local squeeze
 function Card.Squeeze(top) squeeze = top end
 function Card.Top()
     local top = Card.UserTop()
-    return squeeze and math.min(top, squeeze) or top
+    top = squeeze and math.min(top, squeeze) or top
+    -- (never up over the Fishing module's guide line, top left)
+    local FI = ImprovedForever.Fishing
+    local reach = FI and FI.GuideBottom and FI.GuideBottom()
+    if reach then top = math.max(top, reach / UIParent:GetHeight()) end
+    return top
 end
 function Card.Scale()
     local s = IF.db and IN.Settings()
