@@ -39,6 +39,11 @@ touch.LAYER_DEFAULTS = {
 touch.RECORD_DOUBLE = true
 
 touch.REGIONS = { "upleft", "upright", "downleft", "downright" }
+-- Under Steam Input (SteamOS Game Mode) the game's pad has no touchpad
+-- finger: set the touchpad there as a four-button pad whose buttons send
+-- these keys (numpad, laid out as the corners); each is its corner's press.
+-- Bound with a PlayStation pad, or whenever /if cornerkeys is on
+touch.CORNER_KEYS = { upleft = "NUMPAD7", upright = "NUMPAD9", downleft = "NUMPAD1", downright = "NUMPAD3" }
 touch.REGION_LABELS = {
     up = "Top", down = "Bottom", left = "Left", right = "Right", centre = "Centre",
     upleft = "Top left", upright = "Top right", downleft = "Bottom left", downright = "Bottom right",
@@ -310,14 +315,20 @@ SecureHandlerWrapScript(click, "OnClick", click, [[
     local x, y = stick and stick.x or 0, stick and stick.y or 0
     -- The quarter under the finger; one turned off gives its area to the
     -- corner beside it, then the one above / below it (touch.RegionAt)
-    local h, v = x > 0 and "right" or "left", y > 0 and "up" or "down"
-    local order = newtable(v .. h, v .. (h == "right" and "left" or "right"),
-        (v == "up" and "down" or "up") .. h)
     local region
-    for _, name in ipairs(order) do
-        if not self:GetAttribute("ic-off-" .. name) then
-            region = name
-            break
+    if button and self:GetAttribute("ic-corner-" .. button) then
+        -- (Steam Input: the pad's own touchpad reports no finger; its four
+        -- areas come as four keys, each one named for its corner)
+        if not self:GetAttribute("ic-off-" .. button) then region = button end
+    else
+        local h, v = x > 0 and "right" or "left", y > 0 and "up" or "down"
+        local order = newtable(v .. h, v .. (h == "right" and "left" or "right"),
+            (v == "up" and "down" or "up") .. h)
+        for _, name in ipairs(order) do
+            if not self:GetAttribute("ic-off-" .. name) then
+                region = name
+                break
+            end
         end
     end
     if not region then
@@ -470,6 +481,7 @@ function touch.Apply()
     for _, region in ipairs(touch.REGIONS) do
         local off = touch.IsOff(region)
         local action = settings.regions[region]
+        click:SetAttribute("ic-corner-" .. region, true)
         -- The peek map: open while the pad is held (where actions run on
         -- the press; else each click opens / closes it)
         -- (a corner with a double tap keeps its single one: a secure press can't
@@ -514,7 +526,14 @@ function touch.Apply()
     -- pad's release closes it)
     local free = not WindowsShown() or UnitAffectingCombat("player") or touch.DoubleOpen()
     local inGame = (IF.Binds.InGame() and free) or (IF.PeekMap and IF.PeekMap.IsPeeking())
-    local ours = settings.enabled ~= false and IF.PadStyle() == "Shapes" and IF.Binds.PadOverrides()
+    local shapes = IF.PadStyle() == "Shapes"
+    local ours = settings.enabled ~= false and shapes and IF.Binds.PadOverrides()
+    local keys = settings.enabled ~= false and (shapes or settings.cornerKeys) and IF.Binds.PadOverrides()
+    if keys and not panelOpen and inGame then
+        for region, key in pairs(touch.CORNER_KEYS) do
+            SetOverrideBindingClick(click, true, key, click:GetName(), region)
+        end
+    end
     if ours and not panelOpen and inGame then
         for _, modifier in ipairs(MODIFIERS) do
             SetOverrideBindingClick(click, true, modifier .. KEY, click:GetName(), "LeftButton")
@@ -625,3 +644,16 @@ B.Add({
         IF.Touch.Apply()
     end,
 })
+
+-- /if cornerkeys on|off: the four corner keys (numpad 7 9 1 3, from Steam Input's touchpad areas)
+-- bound even when the pad isn't seen as a PlayStation one (SteamOS Game Mode)
+IF.AddCommand("cornerkeys", function(words)
+    local settings = touch.GetSettings()
+    local word = words[1]
+    if word == "on" or word == "off" then
+        settings.cornerKeys = word == "on" or nil
+        touch.Apply()
+    end
+    IF.Print("cornerkeys: " .. (settings.cornerKeys and "on" or "off")
+        .. " (numpad 7 9 1 3 = top left, top right, bottom left, bottom right)")
+end, "on|off: touchpad corners from four numpad keys (Steam Input)")

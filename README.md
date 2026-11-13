@@ -96,11 +96,13 @@ settings in the middle (left / right change one, Cross picks from its list on th
 
 ## SteamOS / Steam Deck (PlayStation controller)
 
-The touchpad corners need the game to read the DualSense directly. Steam Input in Game Mode
-hides the touchpad finger from the game, so every click lands in the same corner. For the
-WoW shortcut: *Properties → Controller → Disable Steam Input*, then **restart the game**
-(a `/reload` isn't enough). Buttons you mapped in Steam Input for that shortcut stop working
-then: bind them in the Bindings tab instead.
+Keep Steam Input on for the WoW shortcut: it is what lets Steam's on-screen keyboard
+(Steam / PS button + X) take the controller instead of the game. But Steam Input hides the
+touchpad finger from the game, so the corners can't be told apart. Give them as keys instead:
+in the shortcut's controller layout set the touchpad as a **Button Pad** with four buttons
+sending the numpad keys **7** (top left), **9** (top right), **1** (bottom left) and
+**3** (bottom right). Improved Forever takes those four as the corners. If the game doesn't see
+the pad as a PlayStation one, type `/if cornerkeys on` once.
 
 ## Development
 
