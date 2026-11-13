@@ -646,7 +646,37 @@ function BY.HoldBox(parent)
     end)
     -- p: 0 to 1; key: the button's glyph key; verb: "Buy"...; extra
     -- (optional): after it ("· 1 silver": what it costs)
+    -- (busy: the action sent, the answer awaited: "Buying...", a bar sweeping)
+    hold.sweep = hold:CreateTexture(nil, "ARTWORK", nil, 3)
+    hold.sweep:SetColorTexture(1, 0.82, 0, 0.35)
+    hold.sweep:SetPoint("TOP", hold, "TOP", 0, -3)
+    hold.sweep:SetPoint("BOTTOM", hold, "BOTTOM", 0, 3)
+    hold.sweep:Hide()
+    hold:SetScript("OnUpdate", function(self)
+        if not self.busy then return end
+        local room = self:GetWidth() - 6
+        local w = room * 0.3
+        local x = ((GetTime() * 0.8) % 1) * (room + w) - w
+        local l, r = math.max(0, x), math.min(room, x + w)
+        self.sweep:ClearAllPoints()
+        self.sweep:SetPoint("TOP", self, "TOP", 0, -3)
+        self.sweep:SetPoint("BOTTOM", self, "BOTTOM", 0, 3)
+        self.sweep:SetPoint("LEFT", self, "LEFT", 3 + l, 0)
+        self.sweep:SetWidth(math.max(1, r - l))
+    end)
+    function hold:SetBusy(verb)
+        self.busy = true
+        self.fill:Hide()
+        self.sweep:Show()
+        self.icon:SetShown(false)
+        self.text:SetText(verb)
+        self.text:ClearAllPoints()
+        self.text:SetPoint("CENTER", self, "CENTER", 0, 0)
+        self.text:SetTextColor(1, 0.82, 0)
+    end
     function hold:SetHold(p, key, verb, extra)
+        self.busy = false
+        self.sweep:Hide()
         local full = p >= 1
         self.fill:SetProgress(p)
         self.icon:SetKey(key)
@@ -897,7 +927,13 @@ end
 function BY.SetMain(i)
     local n = #Mains()
     if n == 0 then return end
-    BY.main = (i - 1) % n + 1
+    local main = (i - 1) % n + 1
+    if main ~= BY.main then
+        -- a new main category: its filters start over
+        local s = S()
+        s.buyUsable, s.buyMyLevel, s.buyQualities = false, false, {}
+    end
+    BY.main = main
     BY.sub, BY.subsub = 1, 1
     BY.detailFocus = false
     BY.Query()
@@ -1851,7 +1887,14 @@ local function RenderDetail()
     end
     dStatus:SetText(D.message or "")
     dRefresh:SetShown(Mouse())
-    dHold:SetHold(BY.HoldProgress(D.holdStart), "A", "Buy", HoldPrice())
+    local buying = D.state == "buying"
+    dRefresh:SetText(buying and "Loading..." or "Refresh")
+    dRefresh:SetEnabled(not buying)
+    if buying then
+        dHold:SetBusy("Buying...")
+    else
+        dHold:SetHold(BY.HoldProgress(D.holdStart), "A", "Buy", HoldPrice())
+    end
 end
 
 function RenderFilters()
@@ -1975,7 +2018,9 @@ local function DetailHints(onBuy)
         and (Glyph("DPAD_LR") .. " 1   " .. Glyph("DPAD_UD") .. " 5   "
             .. (onBuy and "" or (Glyph("LT") .. " " .. Glyph("RT") .. " 20   ")))
         or (Glyph("DPAD_UD") .. " Auction   ")
-    return Glyph("A") .. " Hold to Buy   " .. move .. Glyph("X") .. " Refresh   "
+    local buying = D.state == "buying"
+    return Glyph("A") .. (buying and " Buying...   " or " Hold to Buy   ") .. move
+        .. Glyph("X") .. (buying and " Loading...   " or " Refresh   ")
 end
 
 ---------------------------------------------------------------------------
@@ -2427,7 +2472,9 @@ win:SetScript("OnUpdate", function()
     end
     -- A hold under way (the item's screen, or a page's): its bar, its feel
     local progress
-    if D and D.holdStart then
+    if D and D.state == "buying" then
+        dHold:SetBusy("Buying...")
+    elseif D and D.holdStart then
         progress = BY.HoldProgress(D.holdStart)
         dHold:SetHold(progress, "A", "Buy", HoldPrice())
     else
