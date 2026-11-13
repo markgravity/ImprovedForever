@@ -247,3 +247,43 @@ function IF.StartPadTest()
     end)
     IF.Print("padtest: press Cross, then slide to each touchpad edge (15 seconds).")
 end
+
+-- /if escprobe: until /reload, logs into ImprovedForeverDB.escLog every Escape press (kept going to
+-- the game) and every ToggleGameMenu, with the state the game's Escape chain looks at.
+function IF.StartEscProbe()
+    local log = { date("%H:%M:%S") .. " escprobe start" }
+    IF.db.escLog = log
+    local function State()
+        local parts = {}
+        local gm = _G.GameMenuFrame
+        parts[#parts + 1] = "menu=" .. Str(gm and gm:IsShown())
+        parts[#parts + 1] = "bind=" .. Str(GetBindingAction("ESCAPE", true))
+        parts[#parts + 1] = "target=" .. Str(UnitExists("target"))
+        parts[#parts + 1] = "cast=" .. Str(UnitCastingInfo("player") ~= nil)
+        local shown = {}
+        for _, name in ipairs(_G.UISpecialFrames or {}) do
+            local f = _G[name]
+            if f and f.IsShown and f:IsShown() then shown[#shown + 1] = name end
+        end
+        parts[#parts + 1] = "special={" .. table.concat(shown, ",") .. "}"
+        local fcm = _G.GamepadMode and _G.GamepadMode.FrameControlsManager
+        if fcm then
+            parts[#parts + 1] = "uiFocused=" .. Str(fcm.isUIFocused) .. " shown=" .. Str(fcm.shownFrames and #fcm.shownFrames)
+        end
+        parts[#parts + 1] = "padInput=" .. Str(IF.Input and IF.Input.Pad and IF.Input.Pad())
+        return table.concat(parts, " ")
+    end
+    local function Add(text) if #log < 400 then log[#log + 1] = string.format("%.2f %s", GetTime() % 1000, text) end end
+    local listener = IF.escProbeFrame or CreateFrame("Frame")
+    IF.escProbeFrame = listener
+    listener:EnableKeyboard(true)
+    listener:SetPropagateKeyboardInput(true)
+    listener:SetScript("OnKeyDown", function(_, key)
+        if key == "ESCAPE" then Add("ESC down " .. State()) end
+    end)
+    if not IF.escProbeHooked and _G.ToggleGameMenu then
+        IF.escProbeHooked = true
+        hooksecurefunc("ToggleGameMenu", function() Add("ToggleGameMenu ran " .. State()) end)
+    end
+    IF.Print("escprobe: press Esc a few times in game, then /reload (" .. "lines in escLog).")
+end
