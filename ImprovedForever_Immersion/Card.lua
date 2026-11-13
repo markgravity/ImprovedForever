@@ -302,9 +302,17 @@ Card.CORNER_X = CORNER_X
 -- The sidebar (these cards, top left): its top padding (a share of the screen's height) and its scale,
 -- the player's own (the Body tab's Sidebar: sidebarTop %, sidebarScale %)
 local sidebarRev = 0
-function Card.Top()
+function Card.UserTop()
     local s = IF.db and IN.Settings()
     return math.max(0, math.min(60, tonumber(s and s.sidebarTop) or CORNER_TOP * 100)) / 100
+end
+-- (the top a share of the screen's height up from the player's: Card.Squeeze(top) by the quest tracker, to use
+-- the room above when its quests need it; never lower than the player's)
+local squeeze
+function Card.Squeeze(top) squeeze = top end
+function Card.Top()
+    local top = Card.UserTop()
+    return squeeze and math.min(top, squeeze) or top
 end
 function Card.Scale()
     local s = IF.db and IN.Settings()
@@ -330,8 +338,9 @@ function Card:Dock(above)
         if above[i] and above[i]:Active() then anchor = above[i] break end
     end
     local h = UIParent:GetHeight()
-    if anchor == self.dockAnchor and h == self.dockHeight and self.dockRev == sidebarRev and self.dockGen == Card.gen then return end
-    self.dockAnchor, self.dockHeight, self.dockRev, self.dockGen = anchor, h, sidebarRev, Card.gen
+    local top = Card.Top()
+    if anchor == self.dockAnchor and h == self.dockHeight and self.dockRev == sidebarRev and self.dockGen == Card.gen and self.dockTop == top then return end
+    self.dockAnchor, self.dockHeight, self.dockRev, self.dockGen, self.dockTop = anchor, h, sidebarRev, Card.gen, top
     local scale = Card.Scale()
     self.panel:SetScale(scale)
     self.panel:ClearAllPoints()

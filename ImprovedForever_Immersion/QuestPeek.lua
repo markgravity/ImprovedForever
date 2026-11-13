@@ -68,11 +68,39 @@ end
 -- other quests giving way first, then the story, ended with an ellipsis.
 local RESERVE, BOTTOM, LINE_H, CHROME, MIN_STORY = 330, 40, 17, 40, 2
 local CARD_STEP = 80
+local RESERVE_MIN = 40    -- (the least room at the bottom, with no chat to read)
+local CHAT_TAB, CHAT_GAP = 22, 12   -- (the chat's tab over its frame; the gap kept between it and the cards)
+-- What the cards under ours showing now (the unit tooltip, the buff notice) take, so they fit above the chat
+local function TipRoom()
+    local room = 0
+    for _, mod in ipairs({ IN.Tooltip, IN.AuraNotice }) do
+        local c = mod and mod.card
+        if c and c:Active() then room = room + (c.th or c.panel:GetHeight() or 0) + 14 end
+    end
+    return room
+end
+local MIN_TOP = 0.03     -- (the least top padding, a share of the screen's height)
+-- The height kept free at the screen's bottom, in the cards' own units: the tooltip's room, or the
+-- chat's (its top, its tab above, and the unit tooltip's room over them), whichever is more
+local function Reserve()
+    local scale = IN.Card.Scale()
+    local keep = RESERVE_MIN + TipRoom()
+    local chat = _G.ChatFrame1
+    local top = chat and chat:GetTop()
+    if top and not (issecretvalue and issecretvalue(top)) then
+        local k = chat:GetEffectiveScale() / UIParent:GetEffectiveScale()
+        if not (issecretvalue and issecretvalue(k)) then
+            keep = math.max(RESERVE_MIN, (top * k + CHAT_TAB + CHAT_GAP) / scale + TipRoom())
+        end
+    end
+    return keep
+end
+
 local function MaxLines()
     local h = UIParent:GetHeight()
     -- (the cards' scale makes a line that much of the screen)
     local scale = IN.Card.Scale()
-    local avail = h * (1 - IN.Card.Top()) / scale - RESERVE - BOTTOM
+    local avail = h * (1 - IN.Card.Top()) / scale - Reserve()
     return math.max(4, math.floor((avail - CHROME) / LINE_H))
 end
 
@@ -510,6 +538,131 @@ local function HideOld(hide)
     old:SetAlpha(hide and 0 or 1)
 end
 
+---------------------------------------------------------------------------
+-- The mouse: a click on a quest's lines makes it the focused quest (again: opens / shuts it in full),
+-- a right click gives its menu (QuestTracker's list, as the game's tracker). Hit areas of ours over
+-- each quest's rows; the cards themselves take no mouse.
+---------------------------------------------------------------------------
+local function QuestMenu(id)
+    local Menu = _G.IFObjectiveTrackerMenu
+    if not (Menu and Menu.CreateContextMenu) or InCombatLockdown() then return end
+    Menu.CreateContextMenu(UIParent, function(_, root)
+        root:CreateTitle(C_QuestLog.GetTitleForQuestID(id) or "")
+        if C_SuperTrack.GetSuperTrackedQuestID() ~= id then
+            root:CreateButton(SUPER_TRACK_QUEST, function() C_SuperTrack.SetSuperTrackedQuestID(id) end)
+        else
+            root:CreateButton(STOP_SUPER_TRACK_QUEST, function() C_SuperTrack.SetSuperTrackedQuestID(0) end)
+        end
+        root:CreateButton(expanded == id and HIDE or SHOW, function()
+            expanded = (expanded ~= id) and id or nil
+            since = 1
+        end)
+        root:CreateButton(OBJECTIVES_VIEW_IN_QUESTLOG, function() QuestUtil.OpenQuestDetails(id) end)
+        root:CreateButton(OBJECTIVES_SHOW_QUEST_MAP, function() QuestMapFrame_OpenToQuestDetails(id) end)
+        if QuestUtil.CanRemoveQuestWatch() then
+            root:CreateButton(OBJECTIVES_STOP_TRACKING, function() C_QuestLog.RemoveQuestWatch(id) end)
+        end
+        if C_QuestLog.IsPushableQuest(id) and IsInGroup() then
+            root:CreateButton(SHARE_QUEST, function() QuestUtil.ShareQuest(id) end)
+        end
+        root:CreateButton(SHARE_IN_CHAT, function()
+            local link = GetQuestLink(id)
+            if link and not ChatFrameUtil.InsertLink(link) then ChatFrameUtil.OpenChat(link) end
+        end)
+        root:CreateButton(ABANDON_QUEST_ABBREV, function() QuestMapQuestOptions_AbandonQuest(id) end)
+    end)
+end
+
+local function QuestClick(id, button)
+    if button == "RightButton" then return QuestMenu(id) end
+    if ChatFrameUtil and ChatFrameUtil.TryInsertQuestLinkForQuestID and ChatFrameUtil.TryInsertQuestLinkForQuestID(id) then
+        return
+    end
+    local focus = C_SuperTrack.GetSuperTrackedQuestID()
+    if focus == id then
+        expanded = (expanded ~= id) and id or nil
+    else
+        C_SuperTrack.SetSuperTrackedQuestID(id)
+    end
+    since = 1
+end
+
+local hits = {}
+local function Hit(c, id)
+    local list = hits[c]
+    if not list then list = {} hits[c] = list end
+    local b = list[id]
+    if not b then
+        b = CreateFrame("Button", nil, cards[c].panel)
+        b:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+        b:SetScript("OnClick", function(self, button) QuestClick(self.id, button) end)
+        b.hl = b:CreateTexture(nil, "BACKGROUND")
+        b.hl:SetAllPoints()
+        b.hl:SetColorTexture(1, 0.82, 0.3, 0.08)
+        b.hl:Hide()
+        b:SetScript("OnEnter", function(self) self.hl:Show() end)
+        b:SetScript("OnLeave", function(self) self.hl:Hide() end)
+        list[id] = b
+    end
+    b.id = id
+    return b
+end
+
+local function PlaceHits(c, content)
+    local card = cards[c]
+    local list = hits[c]
+    local live = {}
+    if content and content.ids and card.panel:IsShown() then
+        for _, id in ipairs(content.ids) do
+            local first, last = card.rows[content.rowOf[id]], card.rows[content.endOf[id]]
+            if first and last and first.ty and last.ty then
+                local b = Hit(c, id)
+                live[id] = true
+                local top, bottom = first.ty + 3, last.ty - (last.h or 14) - 3
+                if b.top ~= top or b.bottom ~= bottom then
+                    b.top, b.bottom = top, bottom
+                    b:ClearAllPoints()
+                    b:SetPoint("TOPLEFT", card.panel, "TOPLEFT", 0, top)
+                    b:SetPoint("TOPRIGHT", card.panel, "TOPRIGHT", 0, top)
+                    b:SetHeight(top - bottom)
+                end
+                b:Show()
+            end
+        end
+    end
+    for id, b in pairs(list or {}) do
+        if not live[id] then b:Hide() end
+    end
+end
+
+-- The estimates of a card's height are rough: the room left between the lowest quest card and the
+-- chat (plus what the cards under take) is measured, and a line added or taken off the budget, a step
+-- each time, until the gap is the one wanted (CHAT_GAP)
+local fit, fitAt = 0, 0
+local function Fit()
+    local chat = _G.ChatFrame1
+    local top = chat and chat:GetTop()
+    if not top or (issecretvalue and issecretvalue(top)) then return end
+    local c = (built[2] and cards[2]) or (built[1] and cards[1])
+    local content = built[2] or built[1]
+    if not (c and content and c.panel:IsShown() and c.panel:GetTop() and c.th) then return end
+    if math.abs((c.height or 0) - c.th) > 1 then return end     -- (still moving to its size)
+    local e = c.panel:GetEffectiveScale()
+    local ui = UIParent:GetEffectiveScale()
+    local want = top * chat:GetEffectiveScale() / e + (CHAT_TAB + CHAT_GAP) * ui / e + TipRoom()
+    local slack = (c.panel:GetTop() - c.th) - want     -- (in the card's own units)
+    local truncated = content.sig:find("|more", 1, true) ~= nil
+    -- (a line added must still fit: its height measured off the card, so the step never undoes itself;
+    -- one step a half second, the cards animating to their new size in between)
+    if GetTime() - fitAt < 0.5 then return end
+    local line = c.th / math.max(1, #content.lines)
+    if slack < -2 then
+        fit, fitAt = math.max(-12, fit - 1), GetTime()
+    elseif truncated and slack > line * 1.15 + 2 then
+        fit, fitAt = math.min(20, fit + 1), GetTime()
+    end
+end
+
 local ticker = CreateFrame("Frame")
 ticker:SetScript("OnUpdate", function(_, elapsed)
     if IF.db and IF.db.peekLog then IF.db.peekLog = nil end     -- (the probe's log, cleared once)
@@ -525,11 +678,26 @@ ticker:SetScript("OnUpdate", function(_, elapsed)
         since = 0
         built.expanded, built.on = expanded, on
         local quests = on and Quests(focus) or {}
+        -- (the top padding gives way, down to MIN_TOP, as far as the quests need the room above)
+        local H, scale = UIParent:GetHeight(), IN.Card.Scale()
+        IN.Card.Squeeze(nil)
+        if #quests > 0 then
+            local keep = Reserve()
+            local firstFull = Build(quests[1], quests[1] == focus, quests[1] == expanded, 200)
+            local need = #firstFull.lines * LINE_H + CHROME + 14
+            if #quests > 1 then
+                local group = BuildGroup(quests, 200, expanded)
+                need = need + #group.lines * LINE_H + CHROME
+            end
+            local top = 1 - (need + keep) * scale / H
+            if top < IN.Card.UserTop() then IN.Card.Squeeze(math.max(MIN_TOP, top)) end
+        end
         -- (the group takes what height is left under the focused quest's card)
-        local avail = UIParent:GetHeight() * (1 - IN.Card.Top()) / IN.Card.Scale() - RESERVE - BOTTOM
-        local first = quests[1] and Build(quests[1], quests[1] == focus, quests[1] == expanded, MaxLines()) or nil
+        local avail = UIParent:GetHeight() * (1 - IN.Card.Top()) / IN.Card.Scale() - Reserve()
+        Fit()
+        local first = quests[1] and Build(quests[1], quests[1] == focus, quests[1] == expanded, MaxLines() + fit) or nil
         built[1] = first
-        local left = math.floor((avail - (first and (#first.lines * LINE_H + CHROME + 14) or 0) - CHROME) / LINE_H)
+        local left = math.floor((avail - (first and (#first.lines * LINE_H + CHROME + 14) or 0) - CHROME) / LINE_H) + fit
         built[2] = (#quests > 1 and left >= 4) and BuildGroup(quests, left, expanded) or nil
     end
     local QA = IN.QuestArrow
@@ -542,5 +710,6 @@ ticker:SetScript("OnUpdate", function(_, elapsed)
         end
         cards[i]:Dock(above[i])
         cards[i]:Update(elapsed, content)
+        PlaceHits(i, content)
     end
 end)
