@@ -164,6 +164,18 @@ function touch.FingerPosition()
     if stick then return stick.x or 0, stick.y or 0 end
 end
 
+-- The corner a key stands for (Steam Input's four keys, CORNER_KEYS), when the keys are in use, else nil
+function touch.CornerOfKey(key)
+    local settings = IF.db and touch.GetSettings()
+    if not (settings and (settings.cornerKeys or IF.PadStyle() == "Shapes")) then return nil end
+    for region, k in pairs(touch.CORNER_KEYS) do
+        if k == key then return region end
+    end
+end
+
+-- Where on the pad a corner is, as the finger reports it (x right, y up)
+touch.CORNER_SPOT = { upleft = { -0.5, 0.5 }, upright = { 0.5, 0.5 }, downleft = { -0.5, -0.5 }, downright = { 0.5, -0.5 } }
+
 -- A slot turned off: a corner's area becomes its sides', another does
 -- nothing when clicked
 touch.CORNERS = { upleft = true, upright = true, downleft = true, downright = true }

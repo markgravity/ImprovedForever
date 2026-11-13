@@ -175,6 +175,15 @@ local function FinishKey(s)
 end
 
 function R.OnKey(key)
+    -- (Steam Input's touchpad areas, each a key: the touchpad click in that corner; a second one
+    -- within the moment asked for makes it a double)
+    local corner = (state == "wait" or state == "again") and IF.Touch and IF.Touch.CornerOfKey
+        and IF.Touch.CornerOfKey(key)
+    if corner then
+        R.OnDown("PADBACK")
+        if info then info.touch = IF.Touch.CORNER_SPOT[corner] end
+        return R.OnUp("PADBACK")
+    end
     if state ~= "wait" then return end
     if key == "ESCAPE" and IF.Binds.ModsNow() == "" then return R.Finish(true) end
     if MODIFIER_KEYS[key] or not (opts and opts.keys and opts.onKey) then return end
