@@ -11,6 +11,7 @@ local IN = IF.Interface
 
 local TT = {}
 IN.Tooltip = TT
+TT.LINES = 9
 
 local function Secret(v)
     return type(issecretvalue) == "function" and issecretvalue(v)
@@ -104,6 +105,8 @@ local function Lines()
             out[#out + 1] = { lt = lt, lr = lr, lg = lg, lb = lb, rt = rt, rr = rr, rg = rg, rb = rb }
         end
     end
+    -- (at most TT.LINES: the quest tracker keeps room for that many under its cards)
+    for i = #out, TT.LINES + 1, -1 do out[i] = nil end
     return #out > 0 and out or nil
 end
 

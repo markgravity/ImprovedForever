@@ -70,15 +70,10 @@ local RESERVE, BOTTOM, LINE_H, CHROME, MIN_STORY = 330, 40, 17, 40, 2
 local CARD_STEP = 80
 local RESERVE_MIN = 40    -- (the least room at the bottom, with no chat to read)
 local CHAT_TAB, CHAT_GAP = 22, 12   -- (the chat's tab over its frame; the gap kept between it and the cards)
--- What the cards under ours showing now (the unit tooltip, the buff notice) take, so they fit above the chat
-local function TipRoom()
-    local room = 0
-    for _, mod in ipairs({ IN.Tooltip, IN.AuraNotice }) do
-        local c = mod and mod.card
-        if c and c:Active() then room = room + (c.th or c.panel:GetHeight() or 0) + 14 end
-    end
-    return room
-end
+-- The room kept for what sits under the cards: the unit tooltip at its tallest (Tooltip.lua keeps it to
+-- TIP_LINES lines), always, so the cards never change size as the tooltip comes and goes
+local TIP_ROOM = 200
+local function TipRoom() return TIP_ROOM end
 local MIN_TOP = 0.03     -- (the least top padding, a share of the screen's height)
 -- The height kept free at the screen's bottom, in the cards' own units: the tooltip's room, or the
 -- chat's (its top, its tab above, and the unit tooltip's room over them), whichever is more
@@ -635,34 +630,6 @@ local function PlaceHits(c, content)
     end
 end
 
--- The estimates of a card's height are rough: the room left between the lowest quest card and the
--- chat (plus what the cards under take) is measured, and a line added or taken off the budget, a step
--- each time, until the gap is the one wanted (CHAT_GAP)
-local fit, fitAt = 0, 0
-local function Fit()
-    local chat = _G.ChatFrame1
-    local top = chat and chat:GetTop()
-    if not top or (issecretvalue and issecretvalue(top)) then return end
-    local c = (built[2] and cards[2]) or (built[1] and cards[1])
-    local content = built[2] or built[1]
-    if not (c and content and c.panel:IsShown() and c.panel:GetTop() and c.th) then return end
-    if math.abs((c.height or 0) - c.th) > 1 then return end     -- (still moving to its size)
-    local e = c.panel:GetEffectiveScale()
-    local ui = UIParent:GetEffectiveScale()
-    local want = top * chat:GetEffectiveScale() / e + (CHAT_TAB + CHAT_GAP) * ui / e + TipRoom()
-    local slack = (c.panel:GetTop() - c.th) - want     -- (in the card's own units)
-    local truncated = content.sig:find("|more", 1, true) ~= nil
-    -- (a line added must still fit: its height measured off the card, so the step never undoes itself;
-    -- one step a half second, the cards animating to their new size in between)
-    if GetTime() - fitAt < 0.5 then return end
-    local line = c.th / math.max(1, #content.lines)
-    if slack < -2 then
-        fit, fitAt = math.max(-12, fit - 1), GetTime()
-    elseif truncated and slack > line * 1.15 + 2 then
-        fit, fitAt = math.min(20, fit + 1), GetTime()
-    end
-end
-
 local ticker = CreateFrame("Frame")
 ticker:SetScript("OnUpdate", function(_, elapsed)
     if IF.db and IF.db.peekLog then IF.db.peekLog = nil end     -- (the probe's log, cleared once)
@@ -694,10 +661,9 @@ ticker:SetScript("OnUpdate", function(_, elapsed)
         end
         -- (the group takes what height is left under the focused quest's card)
         local avail = UIParent:GetHeight() * (1 - IN.Card.Top()) / IN.Card.Scale() - Reserve()
-        Fit()
-        local first = quests[1] and Build(quests[1], quests[1] == focus, quests[1] == expanded, MaxLines() + fit) or nil
+        local first = quests[1] and Build(quests[1], quests[1] == focus, quests[1] == expanded, MaxLines()) or nil
         built[1] = first
-        local left = math.floor((avail - (first and (#first.lines * LINE_H + CHROME + 14) or 0) - CHROME) / LINE_H) + fit
+        local left = math.floor((avail - (first and (#first.lines * LINE_H + CHROME + 14) or 0) - CHROME) / LINE_H)
         built[2] = (#quests > 1 and left >= 4) and BuildGroup(quests, left, expanded) or nil
     end
     local QA = IN.QuestArrow
