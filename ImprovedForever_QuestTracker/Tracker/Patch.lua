@@ -104,7 +104,32 @@ end
 for _, module in ipairs({ IFQuestObjectiveTracker, IFCampaignQuestObjectiveTracker }) do
 	local Build = module.BuildQuestWatchInfos
 	module.BuildQuestWatchInfos = function(self)
-		return IQT.SortWatchInfos(Build(self), self)
+		local infos = IQT.SortWatchInfos(Build(self), self)
+		local listed = {}
+		for _, info in ipairs(infos) do
+			listed[info.quest:GetID()] = true
+		end
+		self.iqtListed = listed
+		return infos
+	end
+	-- The cache puts a turned-in quest's block back where it was last
+	-- layout, before the quest that followed it. Our sort can move that
+	-- quest above it since (the focused quest first, and the turn-in drops
+	-- the focus), and a quest still listed gets its block laid out again:
+	-- anchored under a block anchored to it ("Cannot anchor to a region
+	-- dependent on it"). A cached block whose quest is still listed is left
+	-- to the list, in its new place.
+	local CheckCachedBlocks = module.CheckCachedBlocks
+	module.CheckCachedBlocks = function(self, upcomingBlock)
+		local order, listed = self.cachedOrderList, self.iqtListed
+		if order and listed then
+			for i, item in ipairs(order) do
+				if type(item) == "table" and listed[item.id] then
+					order[i] = item.id
+				end
+			end
+		end
+		return CheckCachedBlocks(self, upcomingBlock)
 	end
 	-- (/if quests debug rows: each quest's place and distance on its header)
 	local GetBlock = module.GetBlock
