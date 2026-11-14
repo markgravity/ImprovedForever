@@ -934,6 +934,7 @@ function V.Fire(eventKey)
     if not IF.db then return end
     local s = V.Settings()
     local pattern = V.EventPattern(eventKey)
+    if V.PLog then V.PLog("Fire", eventKey, pattern, "enabled=" .. tostring(s.enabled)) end
     if not (s.enabled and pattern) then return end
     if EVENT[eventKey].loop then
         V.EndLoop(eventKey)
@@ -948,7 +949,10 @@ function V.Fire(eventKey)
     local now = GetTime()
     local combo = EVENT[eventKey].combo
     local since = last[eventKey] and now - last[eventKey]
-    if since and since < (EVENT[eventKey].gap or (combo and 0.15 or 0.4)) then return end
+    if since and since < (EVENT[eventKey].gap or (combo and 0.15 or 0.4)) then
+        if V.PLog then V.PLog("Fire gap", eventKey) end
+        return
+    end
     last[eventKey] = now
     local shape = combo and ComboShape(eventKey, since ~= nil and since < COMBO_WINDOW) or nil
     V.Play(pattern, false, shape)
@@ -1176,8 +1180,31 @@ local function Shooting()
     return ranged.auto or GetTime() - ranged.shot < RANGED_WINDOW
 end
 
+-- PROBE (crit): every UNIT_COMBAT, shooting state, the crit's route and
+-- what V.Fire did, into IF.db.critLog (a fresh log per session)
+local function PShow(v)
+    if secret(v) then return "<hidden>" end
+    return tostring(v)
+end
+local probeFresh = false
+local function PLog(...)
+    if not IF.db then return end
+    if not probeFresh then
+        probeFresh = true
+        IF.db.critLog = { date("%Y-%m-%d %H:%M:%S") .. " hasCombatLog=" .. tostring(type(CombatLogGetCurrentEventInfo) == "function") }
+        print("|cff88ccffIF crit probe:|r logging")
+    end
+    local log = IF.db.critLog
+    if #log >= 600 then return end
+    local parts = { string.format("%.2f", GetTime() % 1000) }
+    for i = 1, select("#", ...) do parts[#parts + 1] = PShow((select(i, ...))) end
+    log[#log + 1] = table.concat(parts, " ")
+end
+V.PLog = PLog
+
 -- Your crit: melee, or ranged (a shot, a spell, a heal)
 local function YourCrit(isRanged)
+    PLog("YourCrit", isRanged and "critRanged" or "crit", "auto=" .. tostring(ranged.auto), "sinceShot=" .. string.format("%.2f", GetTime() - ranged.shot))
     V.Fire(isRanged and "critRanged" or "crit")
 end
 
@@ -1208,7 +1235,8 @@ end
 
 -- (a wound's school, unless hidden: physical is a swing's or a shot's,
 -- any other a spell's)
-local function UnitCombat(unit, action, flag, _, school)
+local function UnitCombat(unit, action, flag, amount, school)
+    PLog("UNIT_COMBAT", unit, action, flag, amount, school)
     if secret(action) or secret(flag) or flag ~= "CRITICAL" then return end
     if secret(school) then school = nil end
     if unit == "player" then
@@ -1508,6 +1536,7 @@ events:SetScript("OnEvent", function(_, event, ...)
         if last.instant and GetTime() - last.instant < 0.3 then return end
         V.Fire("autoAttack")
     elseif event == "START_AUTOREPEAT_SPELL" or event == "STOP_AUTOREPEAT_SPELL" then
+        PLog(event)
         -- (stopped: its last shot may still be flying)
         ranged.auto = event == "START_AUTOREPEAT_SPELL"
         ranged.shot = GetTime()
