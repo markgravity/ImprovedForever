@@ -180,8 +180,34 @@ end
 local MODULES = { "IFCampaignQuestObjectiveTracker", "IFQuestObjectiveTracker" }
 local tried
 
+-- Not while the map is open either: each watch taken off or added fires
+-- QUEST_WATCH_LIST_CHANGED, and the open map rebuilds its quest log
+-- (QuestMapFrame_UpdateAll) and its quest pins (QuestDataProvider) on each,
+-- so a quest tracked from the log, put first, froze the game for seconds
+-- while the whole list was watched again. Synced once the map closes,
+-- polled from a ticker of ours: no hook on the game's map frame.
+local waitingForMap
+
+local function MapOpen()
+	return WorldMapFrame and WorldMapFrame:IsShown() or false
+end
+
+local function AfterMap()
+	if waitingForMap then return end
+	waitingForMap = C_Timer.NewTicker(0.25, function(ticker)
+		if MapOpen() then return end
+		ticker:Cancel()
+		waitingForMap = nil
+		IQT.SyncWatchOrder()
+	end)
+end
+
 function IQT.SyncWatchOrder()
 	if IQT.padHeld or not IQT.IsActive() or InCombatLockdown() then return end
+	if MapOpen() then
+		AfterMap()
+		return
+	end
 	if not (C_QuestLog.RemoveQuestWatch and C_QuestLog.AddQuestWatch) then return end
 	local current, watched = {}, {}
 	for i = 1, C_QuestLog.GetNumQuestWatches() do
