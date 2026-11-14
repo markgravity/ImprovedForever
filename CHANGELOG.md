@@ -1,5 +1,27 @@
 # Changelog
 
+## Immersion 0.13.0
+
+- Party casting: pick each slot's spell in the settings, under Party spells (or drag one onto a slot).
+- With a party spell picked and L1 held, a card of a member out of its reach goes grey and fainter.
+- Team colours on player nameplates: your party and raid show in a bright green of their own.
+- The quest sidebar keeps a fixed room for the tallest tooltip, so it stops jumping; it clears the chat, and quests take a click and a right-click menu.
+- The sidebar cards hide while the Fishing module is in fishing mode, and keep below its guide line.
+- Settings: the party cards' position sits in its own Party/Position section.
+
+## Fishing 0.2.3
+
+- The Immersion sidebar keeps below the guide line.
+
+## Auction 0.10.1
+
+- Buy tab: the filters reset when you pick a new main category.
+- Buy tab: Hold to Buy shows "Buying..." with a sweeping bar, and Refresh shows "Loading...".
+
+## Core 0.19.0
+
+- Touchpad corners from four numpad keys, for Steam Input on SteamOS (`/if cornerkeys`); the bind editor takes those keys as the touchpad click in that corner.
+
 ## Immersion 0.12.0
 
 - With "Square shoots the wand" on, Square's tile shows Shoot's icon while an enemy is targeted, and blinks while the wand fires.
