@@ -147,6 +147,11 @@ local ITEMS = {
             .. "and the line in the game's friend or foe colour. Needs the nameplates on.",
     }, Toggle("nameplateClassColors", "Class colours on player nameplates", function() IN.Nameplates.Apply() end)),
     Item({
+        key = "nameplateGroupColors", group = "top", section = "Nameplates", label = "Team colours on player nameplates",
+        tip = "Your party and raid's name and health line in a bright green of their own, so you can tell "
+            .. "who's with you. Other players keep their class colour. Needs the nameplates on.",
+    }, Toggle("nameplateGroupColors", "Team colours on player nameplates", function() IN.Nameplates.Apply() end)),
+    Item({
         key = "nameplateHideBar", group = "top", section = "Nameplates", label = "Hide friendly NPC health bar",
         tip = "Hides the thin health line and the level circle on the nameplates of friendly NPCs (vendors, "
             .. "trainers, guards): the name alone, in the line's place. Mobs you can attack keep theirs. "
@@ -290,11 +295,6 @@ local ITEMS = {
     Place("playerY", "Player frame: up", "Moves the player frame up (down with a minus), in pixels.", -50, 700, 10),
     Place("playerScale", "Player frame: size", "How big the player frame is, in percent. The pet and party "
         .. "cards stay the same size and follow it.", 50, 150, 5, Percent),
-    WithReset(Slide("partyX", "bottom", "Party cards", "Party cards: right", "Moves the party's cards (and the party spells' "
-        .. "diamond) to the right (left with a minus), in pixels.", -700, 700, 10, nil,
-        function() IN.PartyCards.Apply() end)),
-    Slide("partyY", "bottom", "Party cards", "Party cards: up", "Moves the party's cards up (down with a minus), in "
-        .. "pixels.", -50, 500, 10, nil, function() IN.PartyCards.Apply() end),
     -- (each piece on its own, for those who want the action bar without the rest)
     Item({
         key = "player", group = "bottom", section = "Player frame", label = "Player card and ring",
@@ -426,8 +426,14 @@ local ITEMS = {
     Item({
         key = "partyPad", group = "bottom", section = "Party", label = "Party casting (L1, experiment)",
         tip = "An experiment. L1 held: the D-pad picks a party spell, a face button casts it on party "
-            .. "member 1 to 4. Out of combat only; off or alone, L1 is the game's.",
+            .. "member 1 to 4. Set each slot's spell under Party spells below (or drag one onto a slot). "
+            .. "Off or alone, L1 is the game's.",
     }, Toggle("partyPad", "Party casting (L1, experiment)", function() IN.PartyCards.Apply() end)),
+    WithReset(Slide("partyX", "bottom", "Party/Position", "Party cards: right", "Moves the party's cards (and the party spells' "
+        .. "diamond) to the right (left with a minus), in pixels.", -700, 700, 10, nil,
+        function() IN.PartyCards.Apply() end)),
+    Slide("partyY", "bottom", "Party/Position", "Party cards: up", "Moves the party's cards up (down with a minus), in "
+        .. "pixels.", -50, 500, 10, nil, function() IN.PartyCards.Apply() end),
     Item({
         key = "castBar", group = "body", section = "Cast bar", label = "Cast bar",
         tip = "Your casts as a long thin line over the party cards, filling out from the middle. Yellow "
@@ -559,6 +565,65 @@ for i = 1, 120 do
         choose = function(action)
             local spell = Book()[i]
             if spell then IN.SpellTracker.SetMode(spell, action) end
+        end,
+    })
+    ITEMS[#ITEMS + 1] = row
+end
+
+-- (party casting's slots, as the Spell tracker's rows: one per slot (L1 + its D-pad direction), its spell
+-- picked from your spellbook, by tab. Shown while party casting is on. An item or macro dragged onto a
+-- slot shows by its name)
+local function PartySpells()
+    local list, tab = { { action = "off", name = "Empty" } }, nil
+    for _, spell in ipairs(Book()) do
+        if spell.tab ~= tab then
+            tab = spell.tab
+            list[#list + 1] = { header = tab or "" }
+        end
+        list[#list + 1] = { action = spell.name, name = (spell.icon and ("|T" .. spell.icon .. ":16|t ") or "") .. spell.name }
+    end
+    return list
+end
+
+local function BookSpell(name)
+    for _, spell in ipairs(Book()) do
+        if spell.name == name then return spell end
+    end
+end
+
+for i = 1, 4 do
+    local row
+    row = Item({
+        key = "partySlot" .. i, peek = false, group = "bottom", section = "Party/Party spells", label = "",
+        hidden = function()
+            row.label = IN.PartyPad.SlotText(i, 16)
+            return not IN.Settings().partyPad
+        end,
+        value = function()
+            local action, name = IN.PartyPad.Slot(i)
+            if not action then return "off" end
+            return action:match("^spell:") and name or action
+        end,
+        text = function()
+            local action, name, icon = IN.PartyPad.Slot(i)
+            if not action then return "Empty" end
+            return (icon and ("|T" .. icon .. ":16|t ") or "") .. (name or action)
+        end,
+        tip = function()
+            local action = IN.PartyPad.Slot(i)
+            local id = action and tonumber(action:match("^spell:(%d+)$"))
+            local get = C_Spell and C_Spell.GetSpellDescription
+            local ok, text = pcall(get or function() end, id)
+            return "Hold L1 and press this D-pad direction to pick this slot, then L1 + a face button casts its "
+                .. "spell on that party member (Square 1, Circle 2, Triangle 3, Cross 4). Out of combat only."
+                .. (id and ok and type(text) == "string" and text ~= "" and ("\n\n" .. text) or "")
+        end,
+        cycle = false,
+        options = PartySpells,
+        choose = function(action)
+            if action == "off" then return IN.PartyPad.SetSlot(i, nil) end
+            local spell = BookSpell(action)
+            if spell then IN.PartyPad.SetSlot(i, "spell:" .. spell.spellID) end
         end,
     })
     ITEMS[#ITEMS + 1] = row

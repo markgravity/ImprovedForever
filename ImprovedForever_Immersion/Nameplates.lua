@@ -325,9 +325,23 @@ local function Title(unit)
     return ok and t or nil
 end
 
+-- In your party or raid
+local function Teammate(unit)
+    return Flag(function(u) return UnitInParty(u) == true or (UnitInRaid(u) or nil) ~= nil end, unit)
+end
+
+-- (team colours on: your party and raid's plates in this green, name and
+-- line, kept bright off target too, so the team stands out)
+local TEAM = { 0.2, 1, 0.6 }
+local function Team(unit)
+    return IN.Settings().nameplateGroupColors ~= false and Flag(UnitIsPlayer, unit) and Teammate(unit)
+end
+
 -- The name's colour: NPCs and mobs in the header's gold, other players in
--- their class colour (white when it can't be read; gold with the setting off).
+-- their class colour (white when it can't be read; gold with the setting
+-- off), your party and raid in the team green.
 local function NameColor(unit)
+    if Team(unit) then return TEAM[1], TEAM[2], TEAM[3] end
     if IN.Settings().nameplateClassColors == false or not Flag(UnitIsPlayer, unit) then return HS.GOLD[1], HS.GOLD[2], HS.GOLD[3] end
     local ok, r, g, b = pcall(function()
         local _, class = UnitClass(unit)
@@ -354,7 +368,7 @@ local function Refresh(p)
         p.name:SetTextColor(0.5, 0.5, 0.5)
     else
         local r, g, b = NameColor(unit)
-        if not target then r, g, b = Mute(r, g, b) end
+        if not (target or Team(unit)) then r, g, b = Mute(r, g, b) end
         p.name:SetTextColor(r, g, b)
     end
     -- (the health line off, for NPCs and players apart: the name alone)
@@ -406,7 +420,9 @@ local function Refresh(p)
         p.bar:SetValue(0)
     end
     local r, g, b = TH.NameplateColor(unit, IN.Settings().nameplateClassColors == false)
-    if not target then r, g, b = Mute(r, g, b) end
+    local team = Team(unit)
+    if team then r, g, b = TEAM[1], TEAM[2], TEAM[3] end
+    if not (target or team) then r, g, b = Mute(r, g, b) end
     p.bar:SetStatusBarColor(r, g, b)
     if showBar then
         Level(p, unit)

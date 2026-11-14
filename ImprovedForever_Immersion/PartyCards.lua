@@ -9,7 +9,8 @@
 -- its name over its health and power in our bars (the casting bar's
 -- frame, as the player's). Its role's icon at its top right, as the game's
 -- party frames show it (a minion's paw); a minion's card smaller. Faint
--- when out of range.
+-- when out of range; grey and fainter, while L1 is held for party casting,
+-- out of the picked spell's reach.
 -- /if cards previews every slot (Preview).
 -- Each card is a secure unit button (a click targets, a right click opens
 -- the unit's menu) in a place of its own, shown by the game's state
@@ -376,10 +377,23 @@ local function PadGlyph(b)
     b.pickGlyph:SetShown(atlas and true or false)
 end
 
+-- Picking, the picked party spell out of a member's reach (PartyPad.lua):
+-- its card grey and fainter (b.far, looked at by the picker below)
+local FAR_ALPHA = 0.4
+local function Far(b)
+    return b.isParty and not b.sample and PC.Picking() and IN.PartyPad.OutOfRange(b.member) == true
+end
+
+local function CardAlpha(b)
+    if b.far then return FAR_ALPHA end
+    return (b.sample or Near(b.unit)) and 1 or 0.55
+end
+
 local function Refresh(b)
     local unit = b.unit
     if not UnitExists(unit) then return end
     PadGlyph(b)
+    if b.pickGlyph then b.pickGlyph:SetDesaturated(b.far and true or false) end
     Focus(b)
     if b.sample then
         UF.AvatarUnit(b.avatar, unit)
@@ -392,12 +406,12 @@ local function Refresh(b)
     UF.AvatarUnit(b.avatar, unit)
     Try(b.name.SetText, b.name, IN.DisplayName(unit))
     UF.NameColor(b)
-    local c = CardColor(b)
+    local c = b.far and UF.GREY or CardColor(b)
     UF.AvatarLook(b.avatar, unit, c, c == UF.GREY)
     UF.FillHealth(b)
     UF.FillPower(b)
     SetRole(b, Role(b))
-    b:SetAlpha(Near(unit) and 1 or 0.55)
+    b:SetAlpha(CardAlpha(b))
 end
 
 local MODEL_EVENTS = UF.MODEL_EVENTS
@@ -576,7 +590,7 @@ local function Watch()
     for _, list in ipairs({ minions, party }) do
         for _, b in ipairs(list) do
             if b:IsShown() then
-                b:SetAlpha(edit and 0 or ((b.sample or Near(b.unit)) and 1 or 0.55))
+                b:SetAlpha(edit and 0 or CardAlpha(b))
             end
         end
     end
@@ -592,9 +606,22 @@ IN.Watcher("cards", 0.2, Watch)
 -- big in its middle, eased in and out (its picture scaled from its foot:
 -- the secure button stays as it is)
 local picker = CreateFrame("Frame")
+local RANGE_EVERY, rangeSince = 0.1, 0
 picker:SetScript("OnUpdate", function(_, elapsed)
     if not IF.db then return end
     local want = PC.Picking() and 1 or 0
+    -- (each member out of the picked spell's reach greyed, a few times a second)
+    rangeSince = rangeSince + elapsed
+    if rangeSince >= RANGE_EVERY then
+        rangeSince = 0
+        for _, b in ipairs(party) do
+            local far = b:IsShown() and Far(b) or false
+            if far ~= (b.far or false) then
+                b.far = far
+                Refresh(b)
+            end
+        end
+    end
     for _, b in ipairs(party) do
         -- (the highlight's glow: shown, its birth played, as picking starts)
         local glow = want == 1 and b:IsShown() and b.pickGlyph:IsShown() and b.alertGlow ~= nil

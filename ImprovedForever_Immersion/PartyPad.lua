@@ -200,6 +200,50 @@ local function SetMembers()
     end
 end
 
+-- The picked slot out of reach of a member (PartyCards greys its card
+-- while L1 is held): true; false in reach; nil when it can't tell (an
+-- empty slot, a spell with no range, a secret answer). A tank's: the
+-- monster that member is fighting, as its cast goes, else the member; a
+-- preview's: you.
+local function Secret(v)
+    return type(issecretvalue) == "function" and issecretvalue(v)
+end
+
+local function RangeOf(action)
+    local kind, value = (action or ""):match("^(%a+):(.+)$")
+    if kind == "macro" then
+        local ok, id = pcall(GetMacroSpell, value)
+        if ok and id and not Secret(id) then return "spell", id end
+        return nil
+    end
+    return kind, tonumber(value)
+end
+
+function PP.OutOfRange(member)
+    local kind, id = RangeOf(Slots()[Picked()])
+    if not id then return nil end
+    local unit = IN.PartyCards.Previewing() and "player" or ("party" .. member)
+    if Mode() == "tank" then
+        local t = unit .. "target"
+        local ok, foe = pcall(function()
+            return UnitExists(t) and UnitCanAttack("player", t) and not UnitIsDead(t)
+        end)
+        if ok and foe == true then unit = t end
+    end
+    local ok, r = pcall(function()
+        if kind == "spell" then
+            if C_Spell and C_Spell.IsSpellInRange then return C_Spell.IsSpellInRange(id, unit) end
+            local name = GetSpellInfo(id)
+            return name and IsSpellInRange(name, unit)
+        elseif kind == "item" then
+            local inRange = C_Item and C_Item.IsItemInRange or IsItemInRange
+            return inRange and inRange(id, unit)
+        end
+    end)
+    if not ok or r == nil or Secret(r) then return nil end
+    return r == false or r == 0
+end
+
 local CursorAction, Pickup = IF.Actions.FromCursor, IF.Actions.Pickup
 
 ---------------------------------------------------------------------------
@@ -353,6 +397,31 @@ local function DragOff(i)
     Render()
 end
 
+-- (the Immersion tab's Party spells, as its Spell tracker: a row per
+-- slot, its spell picked there)
+-- What a slot holds ("spell:<id>", "item:<id>", "macro:<name>"), its name
+-- and icon; nil: empty
+function PP.Slot(i)
+    local action = Slots()[i]
+    if not action then return nil end
+    return action, Name(action), Icon(action)
+end
+
+-- A slot's action set (nil: emptied). Out of combat.
+function PP.SetSlot(i, action)
+    if IF.InCombat() then return IF.Print("not in a fight.") end
+    Slots()[i] = action
+    SetMembers()
+    Render()
+end
+
+-- A slot's press: L1's glyph + the D-pad direction's, its name ("Left")
+local SLOT_NAMES = { "Left", "Up", "Right", "Down" }
+function PP.SlotText(i, size)
+    local key = SlotKey(i) or ({ "PADDLEFT", "PADDUP", "PADDRIGHT", "PADDDOWN" })[i]
+    return IF.GlyphText(L1Key(), size) .. " + " .. IF.GlyphText(key, size) .. " " .. SLOT_NAMES[i]
+end
+
 for i, dir in ipairs(DIRS) do
     local b = GB.Tile(center, center, D, dir)
     -- (picked: the game's selected border (Mirror), the diamond lit gold
@@ -377,8 +446,9 @@ for i, dir in ipairs(DIRS) do
             GameTooltip:SetText(value)
         else
             GameTooltip:SetText("Party spell " .. i)
-            GameTooltip:AddLine("Drag a spell, item or macro here. L1 + this direction picks it; then L1 + "
-                .. "a face button casts it on that party member, your target left as it is.", 1, 1, 1, true)
+            GameTooltip:AddLine("Drag a spell, item or macro here, or set it in the Immersion tab "
+                .. "(Party spells). L1 + this direction picks it; then L1 + a face button casts it on that "
+                .. "party member, your target left as it is.", 1, 1, 1, true)
         end
         GameTooltip:Show()
     end)

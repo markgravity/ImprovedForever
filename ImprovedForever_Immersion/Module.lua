@@ -103,6 +103,7 @@ local DEFAULTS = {
     nameplateNameSize = 17, -- and its size
     nameplateHideBar = true, -- the friendly NPCs' nameplate health line and level badge hidden: the name alone
     nameplateClassColors = true, -- other players' name and health line in their class colour
+    nameplateGroupColors = true, -- your party / raid's nameplates in a green of their own (Nameplates.lua: TEAM)
     nameplateHideBarPlayers = false, -- the same for other players' nameplates
     nameplateHideFarNames = true, -- the game's own tiny names over units too far for a plate hidden (so no mix of its and our look)
     nameplateFriendlyNPCs = true, -- friendly NPCs get a plate too (turns the game's nameplateShowFriendlyNPCs on)
