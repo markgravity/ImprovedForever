@@ -1,11 +1,11 @@
 -- The item verdict: what a bag item is for, the one answer every module
 -- asks (Junk's bag marks, vendor selling and Destroy panel; the auction
 -- window's Sell tab). A verdict, in this order:
---   keep: marked "keep" by the player; needed for a quest in the log (a
---     junk mark doesn't count while it is: marked junk only once done), or
+--   keep: marked "keep" by the player; needed for a quest in the log, or
 --     for one the character can still do (not done, its race and class,
 --     not shut out by a choice made: QuestieDB, GameData.lua), or one it
---     starts; an upgrade (Upgrades.lua); a container, a reagent,
+--     starts (a junk mark doesn't count while the quest is in the log or at
+--     or above the character's level: one below it, the mark wins); an upgrade (Upgrades.lua); a container, a reagent,
 --     ammunition, a key; a reagent, a recipe or a tool for a profession
 --     the character has, or its class's tool (RecipeData.lua); can't be sold;
 --   junk: marked "junk" by the player; grey; gear and odds and ends that
@@ -164,30 +164,47 @@ local function QuestTitle(questID)
     return title and ("\"" .. title .. "\"") or "a quest"
 end
 
--- Why the item is kept for a quest, or nil
+-- A quest not in the log blocks the player's junk mark only while it's at
+-- or above the character's level (its level unknown: blocks, to be safe)
+local function Current(questID)
+    local level = IF.GameData and IF.GameData.QuestLevel(questID)
+    return not level or level >= (UnitLevel("player") or 0)
+end
+
+-- Why the item is kept for a quest, or nil; then blocks: true when the
+-- player can't mark it junk (the game's quest item, a quest in the log, a
+-- quest still to do at or above the character's level)
 local function QuestReason(itemID, name, bag, slot)
     if bag and C_Container and C_Container.GetContainerItemQuestInfo then
         local q = C_Container.GetContainerItemQuestInfo(bag, slot)
-        if q and q.questID and not Done(q.questID) then return "Starts " .. QuestTitle(q.questID) end
-        if q and q.isQuestItem and q.isActive ~= false then return "Needed for a quest" end
+        if q and q.questID and not Done(q.questID) then return "Starts " .. QuestTitle(q.questID), true end
+        if q and q.isQuestItem and q.isActive ~= false then return "Needed for a quest", true end
     end
     if name then
         local lower = name:lower()
         for text, title in pairs(QuestNeeds()) do
-            if text:find(lower, 1, true) then return "Needed for \"" .. title .. "\"" end
+            if text:find(lower, 1, true) then return "Needed for \"" .. title .. "\"", true end
         end
     end
     local GD = IF.GameData
     if not GD then return nil end
     local starts, related = GD.ItemQuests(itemID)
-    if starts and not InLog(starts) and GD.QuestOpen(starts) then return "Starts " .. QuestTitle(starts) end
     for _, q in ipairs(related or {}) do
-        if InLog(q) then return "Needed for " .. QuestTitle(q) end
+        if InLog(q) then return "Needed for " .. QuestTitle(q), true end
     end
-    -- (a quest still to do: not done, for this race and class)
+    -- (a quest still to do: not done, for this race and class; one at or
+    -- above the character's level first, as it blocks the junk mark)
+    local startsOpen = starts and not InLog(starts) and GD.QuestOpen(starts)
+    if startsOpen and Current(starts) then return "Starts " .. QuestTitle(starts), true end
+    local low
     for _, q in ipairs(related or {}) do
-        if GD.QuestOpen(q) then return "For " .. QuestTitle(q) .. ", a quest still to do" end
+        if GD.QuestOpen(q) then
+            if Current(q) then return "For " .. QuestTitle(q) .. ", a quest still to do", true end
+            low = low or q
+        end
     end
+    if startsOpen then return "Starts " .. QuestTitle(starts), false end
+    if low then return "For " .. QuestTitle(low) .. ", a quest still to do", false end
 end
 
 -- An item anywhere (the loot window, a link): the quest it's kept for, or nil
@@ -382,10 +399,13 @@ function IV.Judge(bag, slot, opts)
     end
 
     if e.mark == "keep" then return done("keep", "Kept by you", "Marked") end
-    -- (a quest's item before the player's junk mark: never junk while needed)
-    local quest = QuestReason(id, name, bag, slot)
-    if quest then return done("keep", quest, "Quest") end
+    -- (a quest's item before the player's junk mark while the quest blocks
+    -- it: in the log, or still to do at or above the character's level)
+    local quest, blocks = QuestReason(id, name, bag, slot)
+    e.questBlocks = quest and blocks or nil
+    if quest and blocks then return done("keep", quest, "Quest") end
     if e.mark == "junk" then return done("junk", "Marked as junk by you", "Marked", 0) end
+    if quest then return done("keep", quest, "Quest") end
     if IF.Upgrades and e.link and IF.Upgrades.IsUpgrade(e.link, bag, slot, true) then
         local _, needLevel = IF.Upgrades.Gain(e.link, bag, slot, true)
         return done("keep", needLevel and ("An upgrade for you at level " .. needLevel) or "An upgrade for you",
@@ -501,8 +521,8 @@ end
 function IV.Toggle(bag, slot)
     local e = IV.Judge(bag, slot)
     if not e then return nil end
-    -- (a quest's item: never marked junk while needed)
-    if e.tag == "Quest" then return e end
+    -- (a quest's item: never marked junk while its quest blocks it)
+    if e.questBlocks then return e end
     local wasJunk, marks = e.verdict == "junk", Marks()
     marks[e.itemID] = nil
     wipe(cache)

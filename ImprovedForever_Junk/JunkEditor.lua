@@ -54,8 +54,9 @@ local ITEMS = {
     {
         key = "markKey", group = "junk", label = "Mark junk",
         tip = "The press that marks the bag item the cursor is on as junk, or no longer junk. Remembered for"
-            .. " this character, by item: a mistaken verdict stays corrected. An item a quest needs (in your"
-            .. " log or still to do) can't be marked junk. Watched, not taken: the button"
+            .. " this character, by item: a mistaken verdict stays corrected. An item a quest needs can't be"
+            .. " marked junk while the quest is in your log, or still to do at or above your level. Watched,"
+            .. " not taken: the button"
             .. " keeps its own action. In the Destroy panel, R1 does the same.",
         -- (the mouse's way, while it's the one in hand)
         note = function()

@@ -383,7 +383,7 @@ function J.Toggle(bag, slot)
     local e = IV.Toggle(bag, slot)
     if not e then return end
     local name = e.link or e.name or "item"
-    if e.tag == "Quest" then
+    if e.questBlocks then
         IF.Print(name .. ": " .. e.why .. ", never junk while it is.")
         return e
     end
