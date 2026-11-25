@@ -948,10 +948,19 @@ local function EntryCooldown(entry)
     end
 end
 
+local function Secret(v)
+    return type(issecretvalue) == "function" and issecretvalue(v)
+end
+
 -- Its swipe (not the global cooldown's)
 local function ShowCooldown(cooldown, entry)
     local start, duration = EntryCooldown(entry or {})
-    if entry and start and duration and start > 0 and duration > 1.5 then
+    -- (in combat a spell's cooldown can be a secret value: comparing it
+    -- errors, which aborted RefreshVisuals and left the previous wheel's art
+    -- up. A secret one is simply not shown.)
+    if Secret(start) or Secret(duration) then
+        cooldown:Hide()
+    elseif entry and start and duration and start > 0 and duration > 1.5 then
         cooldown:SetCooldown(start, duration)
         cooldown:Show()
     else
