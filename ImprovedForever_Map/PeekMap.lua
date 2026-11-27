@@ -123,6 +123,25 @@ local function Apply()
     end
     for _, region in ipairs({ map:GetRegions() }) do Fade(region) end
     for i = 1, scroll:GetNumPoints() do saved.points[i] = { scroll:GetPoint(i) } end
+    saved.areaLabels = {}
+    saved.strata = scroll:GetFrameStrata()
+    saved.fixedStrata = scroll:HasFixedFrameStrata()
+    -- AreaLabelDataProvider pins its zone/POI names to HIGH, even though
+    -- they belong to the canvas. Keep them above the raised map artwork.
+    for provider in pairs(map.dataProviders or {}) do
+        local label = provider.Label
+        if label and type(provider.OnSetAreaLabel) == "function" then
+            saved.areaLabels[label] = { strata = label:GetFrameStrata(), fixed = label:HasFixedFrameStrata() }
+            label:SetFixedFrameStrata(false)
+            label:SetFrameStrata("FULLSCREEN")
+            label:SetFixedFrameStrata(true)
+        end
+    end
+    -- The faded quest sidebar is HIGH. Keep the visible canvas above it
+    -- so its pins receive mouse input without changing the sidebar controls.
+    scroll:SetFixedFrameStrata(false)
+    scroll:SetFrameStrata("DIALOG")
+    scroll:SetFixedFrameStrata(true)
     Layout()
     scroll:SetAlpha(PeekMap.Settings().alpha)
 end
@@ -152,6 +171,16 @@ local function Restore()
         scroll:ClearAllPoints()
         for _, point in ipairs(saved.points) do scroll:SetPoint(unpack(point)) end
         scroll:SetAlpha(saved.alpha)
+    end
+    if scroll then
+        scroll:SetFixedFrameStrata(false)
+        scroll:SetFrameStrata(saved.strata)
+        if saved.fixedStrata then scroll:SetFixedFrameStrata(true) end
+    end
+    for label, original in pairs(saved.areaLabels) do
+        label:SetFixedFrameStrata(false)
+        label:SetFrameStrata(original.strata)
+        if original.fixed then label:SetFixedFrameStrata(true) end
     end
     saved = nil
 end
