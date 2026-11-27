@@ -86,7 +86,7 @@ local ITEMS = {
     }, OnOff(function() return S().labels end, function(on) S().labels = on end, "Quest names")),
     Item({
         key = "legend", group = "look", label = "Button legend",
-        tip = "The buttons' prompts below the map while it's held (L2 / R2 change quest, L1 / R1 resize), shown"
+        tip = "The buttons' prompts below the map while it's held (L2 / R2 change quest), shown"
             .. " with the controller.",
     }, OnOff(function() return S().legend end, function(on)
         S().legend = on

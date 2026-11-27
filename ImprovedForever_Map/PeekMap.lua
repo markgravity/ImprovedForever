@@ -51,10 +51,9 @@ end
 -- The look: while the map is open for a peek, every part of the window but
 -- its map (ScrollContainer) faded out, the map moved and scaled onto a
 -- frame of ours placed by the settings. Put back as it closes.
--- Only looks change: no size of the map's (that would refit its canvas
--- from our code, and the values it then holds would taint the map's own
--- secure work, closing it included). The map keeps its size; one anchor
--- (its centre) and a scale put it in place.
+-- The outer map supplies the scale, matching its canvas so native cursor
+-- conversion remains correct. An addon-owned secure handler applies and
+-- restores geometry; no native Lua method is replaced.
 ---------------------------------------------------------------------------
 local place = K.NewFrame("Frame", "ImprovedForeverPeekMapPlace", UIParent)
 place:SetSize(1, 1)
@@ -71,7 +70,9 @@ end
 
 local peeking = false      -- the open map is a peek
 local legend               -- the button prompts, on the map
-local saved                -- what the look changed: { alphas, points, scale, alpha }
+local saved                -- what the look changed: fades, anchors, scale and layers
+local restorePending = false
+local hold                -- the secure map-opening button, also used for layout
 
 -- The map's size and place on the screen, for the player's map
 local function Place()
@@ -90,25 +91,80 @@ local function Place()
 end
 
 local function Fade(region)
-    saved.alphas[region] = region:GetAlpha()
-    region:SetAlpha(0)
+    saved.faded[region] = true
+    IF.Focus.Fade(region, true)
 end
 
 -- The map scaled to the place's height, centred on it (offsets in the map's
 -- own scaled units, from the screen's bottom left)
 local function Layout()
+    local map = WorldMapFrame
     local scroll = WorldMapFrame.ScrollContainer
     local w, h = scroll:GetSize()
     Place()
     local px, py = place:GetCenter()
     local placeScale = place:GetEffectiveScale()
-    local parentScale = scroll:GetEffectiveScale() / scroll:GetScale()
-    scroll:SetScale((place:GetHeight() * placeScale) / (h * parentScale))
-    scroll:ClearAllPoints()
-    scroll:SetSize(w, h)
-    local mapScale = scroll:GetEffectiveScale()
-    scroll:SetPoint("CENTER", UIParent, "BOTTOMLEFT", px * placeScale / mapScale, py * placeScale / mapScale)
+    local mapScale = (place:GetHeight() * placeScale) / h
+    local parentScale = map:GetEffectiveScale() / map:GetScale()
+    hold:SetAttribute("scale", mapScale / parentScale)
+    -- Keep alpha animations off the scrolling map canvas. The restricted
+    -- setter changes opacity without running a native layout in addon Lua.
+    hold:SetAttribute("alpha", PeekMap.Settings().alpha)
+    hold:SetAttribute("w", w); hold:SetAttribute("h", h)
+    hold:SetAttribute("x", px * placeScale / mapScale)
+    hold:SetAttribute("y", py * placeScale / mapScale)
+    hold:Execute([[
+        local map, scroll = self:GetFrameRef("map"), self:GetFrameRef("map-scroll")
+        map:SetScale(self:GetAttribute("scale"))
+        scroll:SetScale(1)
+        scroll:SetAlpha(self:GetAttribute("alpha"))
+        scroll:ClearAllPoints()
+        scroll:SetWidth(self:GetAttribute("w")); scroll:SetHeight(self:GetAttribute("h"))
+        scroll:SetPoint("CENTER", self:GetFrameRef("ui"), "BOTTOMLEFT", self:GetAttribute("x"), self:GetAttribute("y"))
+    ]])
     PeekMap.PlaceLegend()
+end
+
+-- Restricted SetPoint accepts only explicitly protected relative handles.
+-- Keep the original anchors responsive through protected frames of ours,
+-- without reparenting or explicitly protecting native map frames.
+local anchorProxies = {}
+local function AnchorReference(relative)
+    local _, explicit = relative:IsProtected()
+    if explicit then return relative end
+    local proxy = anchorProxies[relative]
+    if not proxy then
+        proxy = CreateFrame("Frame", nil, UIParent, "SecureHandlerBaseTemplate")
+        proxy:SetAllPoints(relative)
+        proxy:EnableMouse(false)
+        anchorProxies[relative] = proxy
+    end
+    return proxy
+end
+
+local function RestoreGeometry(scroll)
+    hold:SetAttribute("scale", saved.mapScale)
+    hold:SetAttribute("scrollScale", saved.scale)
+    hold:SetAttribute("alpha", saved.alpha)
+    hold:SetAttribute("points", #saved.points)
+    for i, point in ipairs(saved.points) do
+        hold:SetAttribute("point" .. i, point[1])
+        hold:SetFrameRef("relative" .. i, AnchorReference(point[2] or scroll:GetParent()))
+        hold:SetAttribute("relativePoint" .. i, point[3])
+        hold:SetAttribute("x" .. i, point[4] or 0)
+        hold:SetAttribute("y" .. i, point[5] or 0)
+    end
+    hold:Execute([[
+        local map, scroll = self:GetFrameRef("map"), self:GetFrameRef("map-scroll")
+        map:SetScale(self:GetAttribute("scale"))
+        scroll:SetScale(self:GetAttribute("scrollScale"))
+        scroll:SetAlpha(self:GetAttribute("alpha"))
+        scroll:ClearAllPoints()
+        for i = 1, self:GetAttribute("points") do
+            scroll:SetPoint(self:GetAttribute("point" .. i), self:GetFrameRef("relative" .. i),
+                self:GetAttribute("relativePoint" .. i), self:GetAttribute("x" .. i), self:GetAttribute("y" .. i))
+        end
+    ]])
 end
 
 local function Apply()
@@ -117,14 +173,13 @@ local function Apply()
     if not scroll or saved then return end
     local w, h = scroll:GetSize()
     if not (w and h and w > 0 and h > 0) then return end
-    saved = { alphas = {}, points = {}, scale = scroll:GetScale(), alpha = scroll:GetAlpha() }
+    saved = { faded = {}, points = {}, scale = scroll:GetScale(), mapScale = map:GetScale(), alpha = scroll:GetAlpha() }
     for _, child in ipairs({ map:GetChildren() }) do
         if child ~= scroll then Fade(child) end
     end
     for _, region in ipairs({ map:GetRegions() }) do Fade(region) end
     for i = 1, scroll:GetNumPoints() do saved.points[i] = { scroll:GetPoint(i) } end
     Layout()
-    scroll:SetAlpha(PeekMap.Settings().alpha)
 end
 
 -- Spoken's place story panel and its side tab: under the gamepad UI they are
@@ -146,14 +201,13 @@ local function Restore()
     if not saved then return end
     IF.Focus.DimNative(place, false)
     PeekMap.Keys(false)
-    for region, alpha in pairs(saved.alphas) do region:SetAlpha(alpha) end
+    for region in pairs(saved.faded) do IF.Focus.Fade(region, false) end
+    if IF.InCombat() then restorePending = true; return end
     if scroll then
-        scroll:SetScale(saved.scale)
-        scroll:ClearAllPoints()
-        for _, point in ipairs(saved.points) do scroll:SetPoint(unpack(point)) end
-        scroll:SetAlpha(saved.alpha)
+        RestoreGeometry(scroll)
     end
     saved = nil
+    restorePending = false
 end
 
 -- (parts of the window it shows later, a footer, faded too while a peek;
@@ -161,10 +215,16 @@ end
 -- the first one, or in combat, Focus.lua)
 local refade = CreateFrame("Frame")
 refade:SetScript("OnUpdate", function()
-    if not (peeking and saved and WorldMapFrame) then return end
+    if not (peeking and WorldMapFrame and WorldMapFrame:IsShown()) then return end
+    -- The first window opening can finish its layout after PostClick.
+    -- Retry here once it has dimensions, without restarting map loading.
+    if not saved then
+        if not IF.InCombat() then Apply() end
+        if not saved then return end
+    end
     FadeSpoken(true)
     for _, child in ipairs({ WorldMapFrame:GetChildren() }) do
-        if child ~= WorldMapFrame.ScrollContainer and saved.alphas[child] == nil then Fade(child) end
+        if child ~= WorldMapFrame.ScrollContainer and saved.faded[child] == nil then Fade(child) end
     end
     local pointer = _G.SmartNavigation and SmartNavigation.Pointer
     if pointer and pointer:GetAlpha() > 0 then IF.Focus.DimNative(place, true) end
@@ -184,9 +244,7 @@ IF.OnLogin(function()
 end)
 
 ---------------------------------------------------------------------------
--- While peeking: L1 / R1 zoom the map out / in (sub-zone <-> zone <-> continent
--- <-> world), L2 /
--- R2 move the focus (the super-tracked quest) to the previous / next
+-- While peeking: L2 / R2 move the focus (the super-tracked quest) to the previous / next
 -- tracked quest. Override bindings on a
 -- button of ours, only while the game has the pad (not when the map took it
 -- as a window: a window keeps its buttons), out of combat.
@@ -241,49 +299,16 @@ local function MoveFocus(step)
     C_SuperTrack.SetSuperTrackedQuestID(ids[target])
 end
 
--- The map's own level, out (parent map) / in (the child map the player is
--- in, else the one we came out of). Native SetMapID, as its nav bar does.
-local cameFrom = {}   -- map left going out -> the map to go back in to
-
-local function ZoomMap(out)
-    local map = WorldMapFrame
-    if not (map and map.GetMapID and map.SetMapID) then return end
-    local id = map:GetMapID()
-    if not id then return end
-    local target
-    if out then
-        local info = C_Map.GetMapInfo(id)
-        local parent = info and info.parentMapID
-        if parent and parent > 0 then
-            cameFrom[parent] = id
-            target = parent
-        end
-    else
-        local back = cameFrom[id]
-        if back then
-            target = back
-        else
-            for _, child in ipairs(C_Map.GetMapChildrenInfo(id) or {}) do
-                local pos = C_Map.GetPlayerMapPosition(child.mapID, "player")
-                if pos and pos.GetXY and pos:GetXY() then
-                    target = child.mapID
-                    break
-                end
-            end
-        end
-    end
-    if target then map:SetMapID(target) end
-end
-
+-- Use the native mouse and navbar handlers for map navigation. Calling
+-- SetMapID from this addon callback taints native map state. Consume the
+-- shoulder presses too, so they do not trigger gameplay while peeking.
 local catch = CreateFrame("Button", "ImprovedForeverPeekMapCatch", UIParent)
 catch:RegisterForClicks("AnyDown")
 catch:SetScript("OnClick", function(_, key)
     local action = KEYS[key]
     if not (peeking and action) then return end
-    if action == "out" then ZoomMap(true)
-    elseif action == "in" then ZoomMap(false)
-    elseif action == "prev" then MoveFocus(-1)
-    else MoveFocus(1) end
+    if action == "prev" then MoveFocus(-1)
+    elseif action == "next" then MoveFocus(1) end
 end)
 
 local keysOn = false
@@ -488,7 +513,6 @@ end
 legend = IF.InputLegend(labelFrame)
 local LEGEND = {
     { { "PADLTRIGGER", "PADRTRIGGER" }, { "PADLTRIGGER", "PADRTRIGGER" }, "Change quest" },
-    { { "PADLSHOULDER", "PADRSHOULDER" }, { "PADLSHOULDER", "PADRSHOULDER" }, "Zoom map out / in" },
 }
 
 function PeekMap.ShowLegend()
@@ -518,6 +542,7 @@ end)
 -- A click of ours has just opened the map (the hold button, a touchpad
 -- corner): shown as the peek map
 function PeekMap.Opened()
+    if IF.InCombat() or restorePending then return end
     if peeking or not (WorldMapFrame and WorldMapFrame:IsShown()) then return end
     peeking = true
     Apply()
@@ -525,7 +550,7 @@ function PeekMap.Opened()
     if PeekMap.debug then
         local scroll = WorldMapFrame.ScrollContainer
         local n = 0
-        for _ in pairs(saved and saved.alphas or {}) do n = n + 1 end
+        for _ in pairs(saved and saved.faded or {}) do n = n + 1 end
         local cx, cy = scroll:GetCenter()
         PeekMap.Say(("peek: shown, look applied: %s, map %dx%d, scale %.3f, centre %s, %s, alpha %.2f,"
             .. " visible: %s, frame alpha %.2f, frame scale %.3f, %d parts faded"):format(tostring(saved ~= nil),
@@ -540,8 +565,9 @@ end
 -- release closes it (if open), each on its own phase whatever
 -- ActionButtonUseKeyDown says
 ---------------------------------------------------------------------------
-local hold = CreateFrame("Button", "ImprovedForeverPeekMapHold", UIParent,
+hold = CreateFrame("Button", "ImprovedForeverPeekMapHold", UIParent,
     "SecureActionButtonTemplate,SecureHandlerBaseTemplate")
+hold:SetFrameRef("ui", UIParent)
 hold:SetSize(1, 1)
 hold:SetPoint("TOPLEFT", UIParent, "TOPLEFT", -20, 20)
 hold:RegisterForClicks("AnyDown", "AnyUp")
@@ -673,6 +699,7 @@ end
 local events = CreateFrame("Frame")
 events:RegisterEvent("PLAYER_REGEN_ENABLED")
 events:SetScript("OnEvent", function()
+    if restorePending then Restore() end
     if pending then PeekMap.Apply() end
     -- (the peek's buttons, left bound when it ended in combat)
     if not peeking then PeekMap.Keys(false) end
@@ -686,7 +713,7 @@ B.Add({
     icon = IF.TEX .. "ic_fn_peekmap", context = "world", order = 31,
     desc = "Held: a see-through map; let go and it closes",
     tip = "Held: the game's Map & Quest Log shows with only its map, see-through (placed and sized in"
-        .. " the Map tab); let go and it closes. Works in combat. Takes the press over while bound, and"
+        .. " the Map tab); let go and it closes. In combat, opens the normal map. Takes the press over while bound, and"
         .. " while held the map has the controller, as it always does. A touchpad corner can open it too"
         .. " (its Interface list).",
     -- (an override binding: a press one can go on)
