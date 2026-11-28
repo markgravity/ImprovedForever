@@ -1,5 +1,20 @@
 # Changelog
 
+## Immersion 0.15.0
+
+- New: Sidebar: right (Body tab). Moves the quest, tooltip and buff cards away from the screen's left edge, for ultrawide screens where they started far from the middle.
+- Fixed: in a dungeon the game's tooltip covered the spell diamonds. It now sits just above the bar there.
+- Fixed: a Lua error flood in combat when the target's name width is hidden by the game (the raid marker beside the name).
+- Fixed: the first-time tour's window kept trying to hide itself in combat, which the game blocks (a chat error repeated thousands of times).
+
+## Auction 0.10.3
+
+- Fixed: the controller stopped working in the world after closing the auction house (the game blamed another addon). The Buy window no longer changes the game's own auction window and cursor directly.
+
+## Wiki 0.10.0
+
+- Changed: "Show on Map" now draws the zone in a window of the Wiki's own (its art, the explored areas, where the thing is found, a pin) and sets the game's waypoint, instead of opening the game's world map. That map opened from the Wiki made the game block the controller later. The game's quest markers are not on this map. B or Esc closes it and the book comes back on the same page.
+
 ## Core 0.21.0
 
 - New: "Square shoots the wand only in combat" (General tab, off by default). With "Square shoots the wand" on, Square shoots only while you are in combat; out of combat it stays the game's own press, so looting after a fight with a mob targeted never pulls it.
