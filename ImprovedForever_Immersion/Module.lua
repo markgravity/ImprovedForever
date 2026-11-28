@@ -112,6 +112,7 @@ local DEFAULTS = {
     castX = 0, castY = 0, -- the cast bar's place (px right, px up)
     gcd = false,        -- the global cooldown's swipe on the gamepad bar's tiles
     playerX = 0, playerY = 0, playerScale = 100, -- the player frame's place (px right, px up) and size (%)
+    sidebarX = 0,       -- the sidebar's cards (top left): px right of the screen's edge (an ultrawide)
     headerX = 0, headerY = 0, -- the header's (target, banners, quest arrow) place, px right / up
     nameplateCast = true, -- the unit's cast under its nameplate's line (its spell's name and icon)
     nameplateDebuffs = true, -- your debuffs on the mob, under its nameplate (the game fills them, in a fight too)

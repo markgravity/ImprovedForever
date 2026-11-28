@@ -328,7 +328,7 @@ local function PlaceLegend()
         f:ClearAllPoints()
         local scale = IN.Card.Scale()
         f:SetScale(scale)
-        f:SetPoint("BOTTOMLEFT", UIParent, "TOPLEFT", (IN.Card.CORNER_X - 6) / scale, (-h * IN.Card.Top() + 18) / scale)
+        f:SetPoint("BOTTOMLEFT", UIParent, "TOPLEFT", (IN.Card.Left() - 6) / scale, (-h * IN.Card.Top() + 18) / scale)
     end
 end
 PlaceLegend()

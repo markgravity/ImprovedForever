@@ -80,13 +80,14 @@ local function Slide(key, group, section, label, tip, min, max, step, format, ap
 end
 
 -- Every place and size put back to its default (the sliders' own reset buttons do one each)
-local PLACED = { "playerX", "playerY", "playerScale", "padX", "padY", "padScale", "partyX", "partyY", "headerX",
+local PLACED = { "sidebarX", "playerX", "playerY", "playerScale", "padX", "padY", "padScale", "partyX", "partyY", "headerX",
     "headerY", "headerScale", "hudWidth", "lineHeight", "headerLine", "plateLine" }
 local function ResetPlaces()
     local s = IN.Settings()
     for _, key in ipairs(PLACED) do s[key] = IN.DEFAULTS[key] end
     s.hudPlaced = nil
     ApplyBottom()
+    IN.Card.ApplySidebar()
     IN.HeaderSlot.ApplyScale()
     IN.HeaderSlot.Place()
     IN.TargetHeader.ApplyLine()
@@ -139,6 +140,9 @@ local ITEMS = {
     Slide("sidebarTop", "body", "Sidebar", "Sidebar: top padding", "How far down the cards at the screen's top left (your "
         .. "quests, the unit / object tooltip, buffs and debuffs) start, as a share of the screen's height.",
         0, 50, 1, Percent, function() IN.Card.ApplySidebar() end),
+    Slide("sidebarX", "body", "Sidebar", "Sidebar: right", "Moves those cards to the right, in pixels, away from the "
+        .. "screen's left edge: on an ultrawide screen they start far from the middle.",
+        0, 2500, 20, nil, function() IN.Card.ApplySidebar() end),
     Slide("sidebarScale", "body", "Sidebar", "Sidebar: size", "How big those cards are.",
         50, 150, 5, Percent, function() IN.Card.ApplySidebar() end),
     Slide("headerScale", "top", "Header position", "Header: size", "How big the header is (the target, quest arrow, "

@@ -323,6 +323,11 @@ function Card.Scale()
     local s = IF.db and IN.Settings()
     return math.max(0.5, math.min(1.5, (tonumber(s and s.sidebarScale) or 100) / 100))
 end
+-- (the cards' left edge: the corner, and the player's own px right of it, for an ultrawide screen)
+function Card.Left()
+    local s = IF.db and IN.Settings()
+    return CORNER_X + math.max(0, math.min(3000, tonumber(s and s.sidebarX) or 0))
+end
 Card.CORNER_TOP = CORNER_TOP     -- (the default)
 function Card.ApplySidebar() sidebarRev = sidebarRev + 1 end
 
@@ -353,7 +358,7 @@ function Card:Dock(above)
         self.panel:SetPoint("TOPLEFT", anchor.panel, "BOTTOMLEFT", 0, -STACK_GAP)
     else
         -- (offsets in the card's own scale)
-        self.panel:SetPoint("TOPLEFT", UIParent, "TOPLEFT", CORNER_X / scale, -h * Card.Top() / scale)
+        self.panel:SetPoint("TOPLEFT", UIParent, "TOPLEFT", Card.Left() / scale, -h * Card.Top() / scale)
     end
 end
 
