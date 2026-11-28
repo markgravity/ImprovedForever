@@ -1,12 +1,12 @@
--- The Wiki on the world map: a creature, a node, a chest, a place
--- (Cross on a zone, Square on an entry) opens the game's map and quest panel
--- at its zone, its areas drawn as the quest areas are (a soft blue fill, a
--- lit rim: its spawns, near ones together), the game's own waypoint at the
--- nearest spawn (its pin, the arrow in the world). The book it's shown from
--- (the Wiki's, the Journal's) steps aside while the map is up and comes
--- back, on the same page, once it's closed.
--- The areas are drawn on the map's canvas by a data provider of ours (no pin
--- templates or the map's own pin pools: HereBeDragons' way).
+-- The Wiki on a map: a creature, a node, a chest, a place (Cross on a zone,
+-- Square on an entry) shows its zone's map in a window of ours, its areas drawn
+-- (a soft blue fill: its spawns, near ones together), the game's own waypoint set
+-- at the nearest spawn (the arrow in the world). The book it's shown from (the
+-- Wiki's, the Journal's) steps aside while the map is up and comes back, on the
+-- same page, once it's closed.
+-- The game's own WorldMapFrame is never opened or touched: OpenWorldMap() from
+-- addon code taints the gamepad UI (SetPreferredGamepadInteractTarget forbidden
+-- when a window closes, #29). The zone's art is drawn from C_Map as the Journal does.
 local IF = ImprovedForever
 
 local LB = IF.Wiki
@@ -59,66 +59,139 @@ local function Clusters(points)
 end
 
 ---------------------------------------------------------------------------
--- Drawing them on the map's canvas, while it shows their zone
+-- The window: the zone's art (its base tiles, the areas explored), the areas over it
 ---------------------------------------------------------------------------
-local shown                    -- { map = uiMapID, boxes } (what to draw)
-local holder, textures         -- (made the first time the map is opened)
-local provider
+local ART_W = 760
+local win, art, areas, pin, catcher, escape
+local tiles, explored, boxTex = {}, {}, {}
+local away                     -- the book stepped aside for the map
 
-local function Draw()
-    if not holder then return end
-    for _, t in ipairs(textures) do t:Hide() end
-    local map = WorldMapFrame
-    if not (shown and map and map:GetMapID() == shown.map) then return end
-    local canvas = map:GetCanvas()
-    local w, h = canvas:GetWidth(), canvas:GetHeight()
-    for i, box in ipairs(shown.boxes) do
-        local t = textures[i]
-        if not t then
-            t = holder:CreateTexture(nil, "ARTWORK")
-            t:SetTexture(AREA)
-            t:SetVertexColor(AREA_COLOR[1], AREA_COLOR[2], AREA_COLOR[3], AREA_COLOR[4])
-            textures[i] = t
-        end
-        t:ClearAllPoints()
-        t:SetPoint("CENTER", canvas, "TOPLEFT", box[1] * w, -box[2] * h)
-        t:SetSize(box[3] * w, box[4] * h)
-        t:Show()
+local function Pool(list, i)
+    local t = list[i]
+    if not t then
+        t = art:CreateTexture(nil, list == tiles and "BACKGROUND" or "BORDER")
+        list[i] = t
     end
+    return t
 end
 
-local function Hook()
-    if provider or not (WorldMapFrame and WorldMapFrame.AddDataProvider) then return provider ~= nil end
-    local canvas = WorldMapFrame:GetCanvas()
-    holder = CreateFrame("Frame", nil, canvas)
-    holder:SetAllPoints(canvas)
-    -- (under the map's pins: its quests, the waypoint)
-    holder:SetFrameLevel(canvas:GetFrameLevel() + 1)
-    textures = {}
-    provider = CreateFromMixins and MapCanvasDataProviderMixin and CreateFromMixins(MapCanvasDataProviderMixin) or {}
-    provider.RefreshAllData = function() Draw() end
-    provider.RemoveAllData = function()
-        for _, t in ipairs(textures) do t:Hide() end
+local function FileSize(pixels)
+    local size = 16
+    while size < pixels do size = size * 2 end
+    return size
+end
+
+-- One file over x..x+w, y..y+h of the layer's pixels (fw by fh of them in the file)
+local function Piece(list, n, file, x, y, w, h, fw, fh, scale)
+    local t = Pool(list, n)
+    t:SetTexture(file)
+    t:SetTexCoord(0, w / fw, 0, h / fh)
+    t:ClearAllPoints()
+    t:SetPoint("TOPLEFT", art, "TOPLEFT", x * scale, -y * scale)
+    t:SetSize(w * scale, h * scale)
+    t:Show()
+end
+
+local function AddArea(n, AW, AH, x, y, files, TW, TH, scale)
+    local wide, tall = math.ceil(AW / TW), math.ceil(AH / TH)
+    for j = 1, tall do
+        local h = j < tall and TH or AH - (tall - 1) * TH
+        local fh = j < tall and TH or FileSize(h)
+        for k = 1, wide do
+            local file = files[(j - 1) * wide + k]
+            if file then
+                local w = k < wide and TW or AW - (wide - 1) * TW
+                n = n + 1
+                Piece(explored, n, file, x + (k - 1) * TW, y + (j - 1) * TH, w, h, k < wide and TW or FileSize(w), fh, scale)
+            end
+        end
     end
-    provider.OnMapChanged = function() Draw() end
-    provider.OnCanvasSizeChanged = function() Draw() end
-    WorldMapFrame:AddDataProvider(provider)
+    return n
+end
+
+-- The map's art in the art frame, -> false: the client has none for it
+local function DrawArt(map)
+    if not (C_Map.GetMapArtLayers and C_Map.GetMapArtLayerTextures) then return false end
+    local layers = C_Map.GetMapArtLayers(map)
+    local layer = layers and layers[1]
+    local files = C_Map.GetMapArtLayerTextures(map, 1)
+    if not (layer and layer.layerWidth and layer.layerWidth > 0 and files and #files > 0) then return false end
+    local scale = ART_W / layer.layerWidth
+    art:SetSize(ART_W, layer.layerHeight * scale)
+    local TW, TH = layer.tileWidth, layer.tileHeight
+    local cols, rows = math.ceil(layer.layerWidth / TW), math.ceil(layer.layerHeight / TH)
+    local n = 0
+    for row = 1, rows do
+        for col = 1, cols do
+            local file = files[(row - 1) * cols + col]
+            if file then
+                n = n + 1
+                Piece(tiles, n, file, (col - 1) * TW, (row - 1) * TH, TW, TH, TW, TH, scale)
+            end
+        end
+    end
+    for i = n + 1, #tiles do tiles[i]:Hide() end
+    local e = 0
+    local Explored = C_MapExplorationInfo and C_MapExplorationInfo.GetExploredMapTextures
+    for _, area in ipairs(Explored and Explored(map) or {}) do
+        local f, AW, AH = area.fileDataIDs, area.textureWidth, area.textureHeight
+        if f and not area.isShownByMouseOver and AW and AW > 0 and AH and AH > 0 then
+            e = AddArea(e, AW, AH, area.offsetX, area.offsetY, f, TW, TH, scale)
+        end
+    end
+    for i = e + 1, #explored do explored[i]:Hide() end
     return true
 end
 
--- The map closed: the areas gone, the book back
-local hooked = false
-local away                     -- the book stepped aside for the map
-local function WatchMap()
-    if hooked or not WorldMapFrame then return end
-    hooked = true
-    WorldMapFrame:HookScript("OnHide", function()
-        shown = nil
-        Draw()
+local function Build()
+    if win then return end
+    local K, UI = IF.ConfigKit, IF.UI
+    win = UI.Window("ImprovedForeverWikiMap", ART_W + 24, 560, true)
+    art = CreateFrame("Frame", nil, win)
+    art:SetPoint("TOP", 0, -34)
+    areas = CreateFrame("Frame", nil, art)
+    areas:SetAllPoints(art)
+    areas:SetFrameLevel(art:GetFrameLevel() + 3)
+    pin = areas:CreateTexture(nil, "OVERLAY")
+    pin:SetSize(22, 22)
+    if not pcall(pin.SetAtlas, pin, "Waypoint-MapPin-Untracked") then pin:SetColorTexture(1, 0.82, 0, 1) end
+    pin:Hide()
+    local function Close() win:Hide() end
+    win.onClose = Close
+    IF.Focus.Dock(win)
+    -- (the pad: B closes; the catcher is off until it is wanted)
+    catcher = CreateFrame("Frame", nil, win)
+    catcher:SetAllPoints(win)
+    if catcher.EnableGamePadButton then
+        catcher:SetScript("OnGamePadButtonDown", function(_, button)
+            if button == "PAD2" or button == "PADBACK" then Close() end
+        end)
+        catcher:EnableGamePadButton(false)
+    end
+    -- (Esc: an override binding while shown, to a button of ours; never UISpecialFrames)
+    escape = CreateFrame("Button", "ImprovedForeverWikiMapEscape")
+    escape:RegisterForClicks("AnyUp")
+    escape:SetScript("OnClick", Close)
+    win:SetScript("OnShow", function()
+        if IF.InCombat() then return win:Hide() end
+        if catcher.EnableGamePadButton then catcher:EnableGamePadButton(true) end
+        ClearOverrideBindings(win)
+        SetOverrideBindingClick(win, true, "ESCAPE", escape:GetName())
+        IF.Focus.Glow(win, true)
+        IF.Focus.DimNative(win, true)
+    end)
+    win:SetScript("OnHide", function()
+        if catcher.EnableGamePadButton and not IF.InCombat() then catcher:EnableGamePadButton(false) end
+        if not IF.InCombat() then ClearOverrideBindings(win) end
+        IF.Focus.Glow(win, false)
+        IF.Focus.DimNative(win, false)
         local book = away
         away = nil
         if book then book:Resume() end
     end)
+    local watch = CreateFrame("Frame")
+    watch:RegisterEvent("PLAYER_REGEN_DISABLED")
+    watch:SetScript("OnEvent", function() if win:IsShown() then win:Hide() end end)
 end
 
 ---------------------------------------------------------------------------
@@ -145,23 +218,42 @@ function LB.ShowOnMap(line, book)
         IF.Print((line.plain or "it") .. ": nowhere on the map (inside an instance?)")
         return false
     end
-    if not WorldMapFrame and C_AddOns and C_AddOns.LoadAddOn then pcall(C_AddOns.LoadAddOn, "Blizzard_WorldMap") end
-    if not (OpenWorldMap and Hook()) then return false end
-    WatchMap()
-    shown = { map = map, boxes = Clusters(points) }
+    Build()
+    if not DrawArt(map) then
+        IF.Print((line.plain or "it") .. ": the game has no map art for this zone")
+        return false
+    end
+    local boxes = Clusters(points)
+    local w, h = art:GetSize()
+    for i, box in ipairs(boxes) do
+        local t = boxTex[i]
+        if not t then
+            t = areas:CreateTexture(nil, "ARTWORK")
+            t:SetTexture(AREA)
+            t:SetVertexColor(AREA_COLOR[1], AREA_COLOR[2], AREA_COLOR[3], AREA_COLOR[4])
+            boxTex[i] = t
+        end
+        t:ClearAllPoints()
+        t:SetPoint("CENTER", art, "TOPLEFT", box[1] * w, -box[2] * h)
+        t:SetSize(box[3] * w, box[4] * h)
+        t:Show()
+    end
+    for i = #boxes + 1, #boxTex do boxTex[i]:Hide() end
+    local spot = line.spot
+    if spot then
+        pin:ClearAllPoints()
+        pin:SetPoint("BOTTOM", art, "TOPLEFT", spot.x / 100 * w, -spot.y / 100 * h)
+        pin:Show()
+    else
+        pin:Hide()
+    end
+    local info = C_Map.GetMapInfo and C_Map.GetMapInfo(map)
+    win:SetTitle(info and info.name or "Map")
+    win:SetHeight(h + 46)
     LB.Waypoint(line)
     if IF.Vibe and IF.Vibe.Confirm then IF.Vibe.Confirm() end
     away = book or LB.book
-    away:Suspend()
-    OpenWorldMap(map)
-    Draw()
+    if away then away:Suspend() end
+    win:Show()
     return true
 end
-
-local load = CreateFrame("Frame")
-load:RegisterEvent("ADDON_LOADED")
-load:RegisterEvent("PLAYER_LOGIN")
-load:SetScript("OnEvent", function()
-    WatchMap()
-    if hooked then load:UnregisterAllEvents() end
-end)
