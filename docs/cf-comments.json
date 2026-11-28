@@ -1,4 +1,39 @@
 {
+ "100005364": {
+  "date": "2026-11-28",
+  "note": "answered 2026-11-28",
+  "project": "improved-forever",
+  "seen": 100026581,
+  "status": "resolved"
+ },
+ "100005917": {
+  "date": "2026-11-28",
+  "note": "answered 2026-11-28",
+  "project": "improved-forever",
+  "seen": 100026584,
+  "status": "resolved"
+ },
+ "100006430": {
+  "date": "2026-11-28",
+  "note": "answered 2026-11-28",
+  "project": "improved-forever",
+  "seen": 100026583,
+  "status": "resolved"
+ },
+ "100007748": {
+  "date": "2026-11-28",
+  "note": "answered 2026-11-28",
+  "project": "improved-forever",
+  "seen": 100026582,
+  "status": "resolved"
+ },
+ "100021425": {
+  "date": "2026-11-28",
+  "note": "answered 2026-11-28",
+  "project": "improved-forever",
+  "seen": 100026585,
+  "status": "resolved"
+ },
  "8649281": {
   "date": "2026-11-17",
   "note": "wheel size slider shipped in Wheel 0.11.0, they thanked us",
@@ -530,6 +565,13 @@
   "project": "improved-forever",
   "seen": 100005535,
   "status": "noted"
+ },
+ "8775706": {
+  "date": "2026-11-28",
+  "note": "answered 2026-11-28",
+  "project": "improved-forever",
+  "seen": 100026580,
+  "status": "resolved"
  },
  "8779713": {
   "date": "2026-11-25",
