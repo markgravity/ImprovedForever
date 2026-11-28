@@ -2499,15 +2499,17 @@ end
 local pointer
 local function SyncNative()
     local ah = _G.AuctionHouseFrame
-    if ah then ah:SetAlpha(win:IsShown() and A.IsOpen() and 0 or 1) end
+    -- (an animation of ours aimed at it, never SetAlpha: that taints the game's frame, and
+    -- closing the auction house later got SetPreferredGamepadInteractTarget forbidden)
+    if ah then IF.Focus.Fade(ah, win:IsShown() and A.IsOpen()) end
     local nav = _G.SmartNavigation
     if win:IsShown() then
         if nav and nav.Pointer and not pointer then
             pointer = nav.Pointer
-            pointer:SetAlpha(0)
+            IF.Focus.Fade(pointer, true)
         end
     elseif pointer then
-        pointer:SetAlpha(1)
+        IF.Focus.Fade(pointer, false)
         pointer = nil
     end
 end

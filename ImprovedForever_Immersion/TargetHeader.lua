@@ -117,7 +117,10 @@ local function Mark(unit)
     local set = ok and SetRaidTargetIconTexture and pcall(SetRaidTargetIconTexture, mark, index)
     mark:SetShown(set and true or false)
     if set then
-        local width = (name:GetStringWidth() or 0) * (name.GetTextScale and name:GetTextScale() or 1)
+        -- (in combat the name's width can be secret: the mark stays where it was placed)
+        local w, scale = name:GetStringWidth(), name.GetTextScale and name:GetTextScale() or 1
+        if issecretvalue and (issecretvalue(w) or issecretvalue(scale)) then return end
+        local width = (w or 0) * scale
         mark:ClearAllPoints()
         mark:SetPoint("LEFT", name, "CENTER", width / 2 + 12, 0)
     end
