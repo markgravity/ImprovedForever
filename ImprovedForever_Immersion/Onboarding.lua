@@ -585,8 +585,11 @@ local function Step(elapsed)
     presence = want and math.min(1, presence + elapsed / FADE) or math.max(0, presence - elapsed / FADE)
     TakePad(want and presence >= 0.5)
     if presence <= 0 then
-        root:Hide()
-        head:Hide()
+        -- (only when shown, and never in combat: a hide the game blocks there was tried every frame)
+        if not IF.InCombat() then
+            if root:IsShown() then root:Hide() end
+            if head:IsShown() then head:Hide() end
+        end
         OB.StopDemos()
         return
     end
@@ -633,9 +636,11 @@ driver:SetScript("OnUpdate", function(_, elapsed)
     local ok, err = pcall(Step, elapsed)
     if not ok then
         broken, goal = true, 0
-        root:Hide()
-        head:Hide()
-        escape:Hide()
+        if not IF.InCombat() then
+            root:Hide()
+            head:Hide()
+            escape:Hide()
+        end
         TakePad(false)
         IF.Print("Immersion: the tour stopped after an error: " .. tostring(err))
     end
