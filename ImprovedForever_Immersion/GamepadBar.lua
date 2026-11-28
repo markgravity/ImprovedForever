@@ -2169,9 +2169,14 @@ end
 -- With our tooltip off (setting tooltipOurs, Tooltip.lua) the game's own one (bottom right) would
 -- cover the bar: it sits just above it, its right edge on the bar's, fading in. Only its own
 -- anchor, as the game sets it; one anchored to something else is left alone. The fade is an
--- animation of ours (Focus.FadeIn), never its alpha.
+-- animation of ours (Focus.FadeIn), never its alpha. In an instance too: its text is secret there,
+-- our card can't read it and the game's one stays (#34).
 hooksecurefunc("GameTooltip_SetDefaultAnchor", function(tooltip, parent)
-    if tooltip ~= GameTooltip or parent ~= UIParent or not IF.db or IN.Settings().tooltipOurs ~= false then return end
+    if tooltip ~= GameTooltip or parent ~= UIParent or not IF.db then return end
+    if IN.Settings().tooltipOurs ~= false then
+        local ok, inInstance = pcall(IsInInstance)
+        if not (ok and inInstance) then return end
+    end
     pcall(function()
         local _, _, r, t = GB.Rect()
         if not r then return end
