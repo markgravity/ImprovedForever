@@ -1,4 +1,11 @@
 {
+ "100004515": {
+  "date": "2026-11-28",
+  "note": "answered, Immersion 0.15.0",
+  "project": "improved-forever",
+  "seen": 100026778,
+  "status": "resolved"
+ },
  "100005364": {
   "date": "2026-11-28",
   "note": "answered 2026-11-28",
@@ -26,6 +33,20 @@
   "project": "improved-forever",
   "seen": 100026582,
   "status": "resolved"
+ },
+ "100008166": {
+  "date": "2026-11-28",
+  "note": "answered, Immersion 0.15.0",
+  "project": "improved-forever",
+  "seen": 100026779,
+  "status": "resolved"
+ },
+ "100014985": {
+  "date": "2026-11-28",
+  "note": "Tour fixed 0.15.0; asked taint log for QuestTracker",
+  "project": "improved-forever",
+  "seen": 100026780,
+  "status": "noted"
  },
  "100021425": {
   "date": "2026-11-28",
